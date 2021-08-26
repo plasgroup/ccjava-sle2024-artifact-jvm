@@ -382,6 +382,9 @@ void MemAllocator::mem_clear(HeapWord* mem) const {
 
 oop MemAllocator::finish(HeapWord* mem) const {
   assert(mem != NULL, "NULL object pointer");
+#ifdef OUR_PERSIST
+  nvmHeader::set_header(mem, nvmHeader::zero());
+#endif // OUR_PERSIST
   if (UseBiasedLocking) {
     oopDesc::set_mark(mem, _klass->prototype_header());
   } else {

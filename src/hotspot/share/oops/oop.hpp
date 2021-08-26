@@ -30,6 +30,9 @@
 #include "oops/access.hpp"
 #include "oops/markWord.hpp"
 #include "oops/metadata.hpp"
+#ifdef OUR_PERSIST
+#include "oops/nvmHeader.hpp"
+#endif // OUR_PERSIST
 #include "runtime/atomic.hpp"
 #include "utilities/macros.hpp"
 
@@ -51,6 +54,11 @@ class oopDesc {
   friend class VMStructs;
   friend class JVMCIVMStructs;
  private:
+
+#ifdef OUR_PERSIST
+  nvmHeader _nvm_header;
+#endif // OUR_PERSIST
+
   volatile markWord _mark;
   union _metadata {
     Klass*      _klass;
@@ -58,6 +66,11 @@ class oopDesc {
   } _metadata;
 
  public:
+#ifdef OUR_PERSIST
+  inline nvmHeader  nvm_header()      const;
+  inline nvmHeader* nvm_header_addr() const;
+#endif // OUR_PERSIST
+
   inline markWord  mark()          const;
   inline markWord* mark_addr() const;
 
@@ -301,6 +314,9 @@ class oopDesc {
   static bool has_klass_gap();
 
   // for code generation
+#ifdef OUR_PERSIST
+  static int nvm_header_offset_in_bytes(){ return offset_of(oopDesc, _nvm_header); }
+#endif // OUR_PERSIST
   static int mark_offset_in_bytes()      { return offset_of(oopDesc, _mark); }
   static int klass_offset_in_bytes()     { return offset_of(oopDesc, _metadata._klass); }
   static int klass_gap_offset_in_bytes() {

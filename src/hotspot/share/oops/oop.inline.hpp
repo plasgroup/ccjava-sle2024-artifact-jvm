@@ -32,6 +32,9 @@
 #include "oops/arrayOop.hpp"
 #include "oops/compressedOops.inline.hpp"
 #include "oops/markWord.inline.hpp"
+#ifdef OUR_PERSIST
+#include "oops/nvmHeader.inline.hpp"
+#endif // OUR_PERSIST
 #include "oops/oop.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/os.hpp"
@@ -40,6 +43,16 @@
 
 // Implementation of all inlined member functions defined in oop.hpp
 // We need a separate file to avoid circular references
+
+#ifdef OUR_PERSIST
+nvmHeader oopDesc::nvm_header() const {
+  return _nvm_header;
+}
+
+nvmHeader* oopDesc::nvm_header_addr() const {
+  return (nvmHeader*)&_nvm_header;
+}
+#endif // OUR_PERSIST
 
 markWord oopDesc::mark() const {
   uintptr_t v = HeapAccess<MO_RELAXED>::load_at(as_oop(), mark_offset_in_bytes());

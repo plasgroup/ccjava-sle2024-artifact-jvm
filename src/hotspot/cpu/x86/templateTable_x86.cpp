@@ -4097,6 +4097,10 @@ void TemplateTable::_new() {
 
     // initialize object header only.
     __ bind(initialize_header);
+#ifdef OUR_PERSIST
+    __ xorl(rsi, rsi);
+    __ movptr(Address(rax, oopDesc::nvm_header_offset_in_bytes()), rsi);
+#endif
     if (UseBiasedLocking) {
       __ pop(rcx);   // get saved klass back in the register.
       __ movptr(rbx, Address(rcx, Klass::prototype_header_offset()));

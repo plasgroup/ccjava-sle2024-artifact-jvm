@@ -42,5 +42,8 @@
 #if INCLUDE_ZGC
 #include "gc/z/zBarrierSet.inline.hpp"
 #endif
+#ifdef OUR_PERSIST
+#include "gc/nvm_card/nvmCardTableBarrierSet.hpp"
+#endif // OUR_PERSIST
 
 #endif // SHARE_GC_SHARED_BARRIERSETCONFIG_INLINE_HPP

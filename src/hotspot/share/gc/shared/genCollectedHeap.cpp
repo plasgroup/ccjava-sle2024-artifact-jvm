@@ -126,7 +126,12 @@ jint GenCollectedHeap::initialize() {
 
   _rem_set = create_rem_set(heap_rs.region());
   _rem_set->initialize();
+  // TODO: (OUR_PERSIST) Must check for more flags.
+#ifdef OUR_PERSIST
+  NVMCardTableBarrierSet *bs = new NVMCardTableBarrierSet(_rem_set);
+#else
   CardTableBarrierSet *bs = new CardTableBarrierSet(_rem_set);
+#endif
   bs->initialize();
   BarrierSet::set_barrier_set(bs);
 

@@ -144,6 +144,10 @@
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
 #endif
+#ifdef OUR_PERSIST
+#include "nvm/nvmWorkListStack.hpp"
+#include "nvm/nvmBarrierSync.hpp"
+#endif // OUR_PERSIST
 
 // Initialization after module runtime initialization
 void universe_post_module_init();  // must happen after call_initPhase2
@@ -227,6 +231,13 @@ void JavaThread::smr_delete() {
 DEBUG_ONLY(Thread* Thread::_starting_thread = NULL;)
 
 Thread::Thread() {
+
+#ifdef OUR_PERSIST
+  set_nvm_work_list(new NVMWorkListStack());
+  set_nvm_barrier_sync(new NVMBarrierSync());
+  set_dependent_obj_list_head(NULL);
+  set_dependent_obj_list_tail(NULL);
+#endif // OUR_PERSIST
 
   DEBUG_ONLY(_run_state = PRE_CALL_RUN;)
 
@@ -415,6 +426,11 @@ void Thread::call_run() {
 }
 
 Thread::~Thread() {
+
+#ifdef OUR_PERSIST
+  delete nvm_work_list();
+  delete nvm_barrier_sync();
+#endif // OUR_PERSIST
 
   // Attached threads will remain in PRE_CALL_RUN, as will threads that don't actually
   // get started due to errors etc. Any active thread should at least reach post_run

@@ -4,7 +4,7 @@
 #ifndef SHARE_OOPS_NVMHEADER_INLINE_HPP
 #define SHARE_OOPS_NVMHEADER_INLINE_HPP
 
-#include "oops/oop.hpp"
+#include "oops/oop.inline.hpp"
 #include "oops/nvmHeader.hpp"
 
 void nvmHeader::set_header(HeapWord* mem, nvmHeader h) {

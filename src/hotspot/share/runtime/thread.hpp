@@ -54,6 +54,10 @@
 #if INCLUDE_JFR
 #include "jfr/support/jfrThreadExtension.hpp"
 #endif
+#ifdef OUR_PERSIST
+#include "nvm/nvmWorkListStack.hpp"
+#include "nvm/nvmBarrierSync.hpp"
+#endif // OUR_PERSIST
 
 
 class SafeThreadsListPtr;
@@ -143,6 +147,29 @@ class JavaThread;
 //       - this->entry_point()  // set differently for each kind of JavaThread
 
 class Thread: public ThreadShadow {
+
+#ifdef OUR_PERSIST
+ private:
+  NVMWorkListStack* _nvm_work_list;
+  NVMBarrierSync*   _nvm_barrier_sync;
+  void* _dependent_obj_list_head;
+  void* _dependent_obj_list_tail;
+
+ public:
+  NVMWorkListStack* nvm_work_list()  { return _nvm_work_list; }
+  NVMBarrierSync* nvm_barrier_sync() { return _nvm_barrier_sync; }
+  void* dependent_obj_list_head() { return _dependent_obj_list_head; }
+  void* dependent_obj_list_tail() { return _dependent_obj_list_tail; }
+
+ private:
+  void set_nvm_work_list(NVMWorkListStack* val)  { _nvm_work_list = val; }
+  void set_nvm_barrier_sync(NVMBarrierSync* val) { _nvm_barrier_sync = val; }
+
+ public:
+  void set_dependent_obj_list_head(void* val) { _dependent_obj_list_head = val; }
+  void set_dependent_obj_list_tail(void* val) { _dependent_obj_list_tail = val; }
+#endif // OUR_PERSIST
+
   friend class VMStructs;
   friend class JVMCIVMStructs;
  private:

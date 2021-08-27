@@ -1,0 +1,58 @@
+#ifdef OUR_PERSIST
+
+#include <x86intrin.h>
+#include <clwbintrin.h>
+
+#define NVM_FWD_BUSY ((void*)~0b111)
+
+#define OOP_TO_VOID(obj) static_cast<void*>(obj)
+
+// writeback
+#ifdef ENABLE_NVM_WRITEBACK
+
+// flush
+#ifdef USE_CLWB
+#define NVM_FLUSH(mem) {\
+  _mm_clwb(mem);\
+}
+#else
+#define NVM_FLUSH(mem) {\
+  _mm_clflush(mem);\
+}
+#endif
+
+// flush some cacheline
+#define NVM_FLUSH_LOOP(mem, len) {\
+  for (ptrdiff_t i = 0; i < (ptrdiff_t)(len); i += 64) {\
+    NVM_FLUSH(((u1*)mem) + i)\
+  }\
+}
+
+// fence
+#define NVM_FENCH {\
+  _mm_sfence();\
+}
+
+// flush and fence
+#define NVM_WRITEBACK(mem) {\
+  NVM_FLUSH(mem);\
+  NVM_FENCH\
+}
+
+#define NVM_WRITEBACK_LOOP(mem, len) {\
+  NVM_FLUSH_LOOP(mem, len)\
+  NVM_FENCH\
+}
+
+#else  // ENABLE_NVM_WRITEBACK
+
+#define NVM_FLUSH(mem)
+#define NVM_FLUSH_LOOP(mem, len)
+#define NVM_FENCH
+#define NVM_WRITEBACK(mem)
+#define NVM_WRITEBACK_LOOP(mem, len)
+
+#endif // ENABLE_NVM_WRITEBACK
+
+
+#endif // OUR_PERSIST

@@ -212,8 +212,27 @@ const DecoratorSet ARRAYCOPY_DECORATOR_MASK       = ARRAYCOPY_CHECKCAST | ARRAYC
 const DecoratorSet ACCESS_READ                    = UCONST64(1) << 28;
 const DecoratorSet ACCESS_WRITE                   = UCONST64(1) << 29;
 
+// == OurPersist Decorators ==
+// DEBUG: barrierset assembler
+const DecoratorSet OURPERSIST_BS_ASM                  = UCONST64(1) << 30;
+// annotation
+const DecoratorSet OURPERSIST_DURABLE_ANNOTATION      = UCONST64(1) << 31;
+const DecoratorSet OURPERSIST_NOT_DURABLE_ANNOTATION  = UCONST64(1) << 32;
+const DecoratorSet OURPERSIST_DURABLE_ANNOTATION_MASK = OURPERSIST_DURABLE_ANNOTATION |
+                                                        OURPERSIST_NOT_DURABLE_ANNOTATION;
+// static field
+const DecoratorSet OURPERSIST_IS_STATIC               = UCONST64(1) << 33;
+const DecoratorSet OURPERSIST_IS_NOT_STATIC           = UCONST64(1) << 34;
+const DecoratorSet OURPERSIST_IS_STATIC_MASK          = OURPERSIST_IS_STATIC |
+                                                        OURPERSIST_IS_NOT_STATIC;
+// is volatile
+const DecoratorSet OURPERSIST_IS_VOLATILE             = UCONST64(1) << 35;
+const DecoratorSet OURPERSIST_IS_NOT_VOLATILE         = UCONST64(1) << 36;
+const DecoratorSet OURPERSIST_IS_VOLATILE_MASK        = OURPERSIST_IS_VOLATILE |
+                                                        OURPERSIST_IS_NOT_VOLATILE;
+
 // Keep track of the last decorator.
-const DecoratorSet DECORATOR_LAST = UCONST64(1) << 29;
+const DecoratorSet DECORATOR_LAST = UCONST64(1) << 36;
 
 namespace AccessInternal {
   // This class adds implied decorators that follow according to decorator rules.

@@ -40,7 +40,12 @@
   static void index_check_without_pop(Register array, Register index);
 
   static void putfield_or_static_helper(int byte_no, bool is_static, RewriteControl rc,
-                                        Register obj, Register off, Register flags);
-  static void fast_storefield_helper(Address field, Register rax);
+                                        Register obj, Register off, Register flags, DecoratorSet ds);
+  static void fast_storefield_helper(Address field, Register rax, DecoratorSet ds);
+
+  static void getfield_or_static_helper(int byte_no, bool is_static, RewriteControl rc,
+                                        Register obj, Register off, Register flags, DecoratorSet ds);
+  static void fast_accessfield_helper(Address field, Register rax, DecoratorSet ds);
+  static void fast_xaccess_helper(TosState state, Address field, Register rax, DecoratorSet ds);
 
 #endif // CPU_X86_TEMPLATETABLE_X86_HPP

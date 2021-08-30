@@ -20,9 +20,7 @@
 #include "nvm/nvmWorkListStack.hpp"
 #include "nvm/nvmBarrierSync.inline.hpp"
 #include "nvm/nvmMacro.hpp"
-
-// TODO: (OUR_PERSIST)
-//#include "runtime/fieldDescriptor.hpp"
+#include "runtime/fieldDescriptor.hpp"
 
 bool OurPersist::_enable = false;
 bool OurPersist::_enable_is_set = false;
@@ -40,18 +38,16 @@ void* OurPersist::allocate_nvm(int size, Thread* thr) {
   return mem;
 }
 
-// TODO: (OUR_PERSIST)
-/*
 bool OurPersist::is_volatile(oop obj, ptrdiff_t offset, DecoratorSet ds) {
-  if (!(ds & NVM_BS_ASM)) return false; // DEBUG:
-  if (ds & NVM_IS_VOLATILE) return true;
-  if (ds & NVM_IS_NOT_VOLATILE) return false;
+  if (!(ds & OURPERSIST_BS_ASM)) return false; // DEBUG:
+  if (ds & OURPERSIST_IS_VOLATILE) return true;
+  if (ds & OURPERSIST_IS_NOT_VOLATILE) return false;
   ShouldNotReachHere(); // DEBUG:
   return OurPersist::is_volatile_slow(obj, offset, ds);
 }
 
 bool OurPersist::is_volatile_fast(oop obj, ptrdiff_t offset, DecoratorSet ds) {
-  return (ds & NVM_IS_VOLATILE) || (ds & MO_SEQ_CST);
+  return (ds & OURPERSIST_IS_VOLATILE) || (ds & MO_SEQ_CST);
 }
 
 bool OurPersist::is_volatile_slow(oop obj, ptrdiff_t offset, DecoratorSet ds) {
@@ -69,7 +65,6 @@ bool OurPersist::is_volatile_slow(oop obj, ptrdiff_t offset, DecoratorSet ds) {
 
   return is_volatile_FD;
 }
-*/
 
 void OurPersist::copy_dram_to_nvm(oop from, oop to, ptrdiff_t offset, BasicType type, bool is_array) {
   const DecoratorSet ds = MO_UNORDERED | AS_NORMAL | IN_HEAP;
@@ -221,7 +216,7 @@ bool OurPersist::cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, BasicType
 Thread* OurPersist::responsible_thread(void* nvm_obj) {
   assert(!oopDesc::is_oop(oop(nvm_obj)), "nvm_obj should not be oop.");
   assert(nvm_obj != NULL, "Maybe nvm_obj is oop or initialization failed.");
-  assert(nvm_obj != NVM_FWD_BUSY, "Maybe nvm_obj is oop or initialization failed.");
+  assert(nvm_obj != OURPERSIST_FWD_BUSY, "Maybe nvm_obj is oop or initialization failed.");
 
   return (Thread*)oop(nvm_obj)->nvm_header().fwd();
 }
@@ -369,126 +364,6 @@ bool OurPersist::check_durableroot_annotation(oop klass_obj, ptrdiff_t offset) {
   return has_durableroot_annotation;
 }
 
-// TODO:
-/*
-#define NVM_RUNTIME_BS_PTR_PRIMITIVE_IF(ds, ctype, btype, func, is_store) { \
-  const DecoratorSet _ds = ds; \
-  if (is_store) { \
-    if (decorators == _ds && type == btype) { \
-      return (void*)(void(*)(oop, ptrdiff_t, BasicType, ctype))func<_ds, ctype, NvmCardBarrierSet>; \
-    } \
-  } else { \
-    if (decorators == _ds && type == btype) { \
-      return (void*)(void(*)(oop, ptrdiff_t, BasicType))func<_ds, ctype, NvmCardBarrierSet>; \
-    } \
-  } \
-}
-#define NVM_RUNTIME_BS_PTR_OOP_IF(ds, ctype, btype, func, is_store) { \
-  const DecoratorSet _ds = ds; \
-  if (is_store) { \
-    if (decorators == _ds && type == btype) { \
-      return (void*)(void(*)(oop, ptrdiff_t, BasicType, ctype))func<_ds, NvmCardBarrierSet>; \
-    } \
-  } else { \
-    if (decorators == _ds && type == btype) { \
-      return (void*)(void(*)(oop, ptrdiff_t, BasicType))func<_ds, NvmCardBarrierSet>; \
-    } \
-  } \
-}
-#define NVM_RUNTIME_BS_PTR_IF(ds, func, oop_func, is_store) { \
-  NVM_RUNTIME_BS_PTR_PRIMITIVE_IF(ds, jbyte,    T_BYTE,    func, is_store) \
-  NVM_RUNTIME_BS_PTR_PRIMITIVE_IF(ds, jchar,    T_CHAR,    func, is_store) \
-  NVM_RUNTIME_BS_PTR_PRIMITIVE_IF(ds, jdouble,  T_DOUBLE,  func, is_store) \
-  NVM_RUNTIME_BS_PTR_PRIMITIVE_IF(ds, jfloat,   T_FLOAT,   func, is_store) \
-  NVM_RUNTIME_BS_PTR_PRIMITIVE_IF(ds, jint,     T_INT,     func, is_store) \
-  NVM_RUNTIME_BS_PTR_PRIMITIVE_IF(ds, jlong,    T_LONG,    func, is_store) \
-  NVM_RUNTIME_BS_PTR_PRIMITIVE_IF(ds, jshort,   T_SHORT,   func, is_store) \
-  NVM_RUNTIME_BS_PTR_PRIMITIVE_IF(ds, jboolean, T_BOOLEAN, func, is_store) \
-  NVM_RUNTIME_BS_PTR_PRIMITIVE_IF(ds, jlong,    T_ADDRESS, func, is_store) \
-  NVM_RUNTIME_BS_PTR_OOP_IF(ds, oop, T_OBJECT,  oop_func, is_store) \
-  NVM_RUNTIME_BS_PTR_OOP_IF(ds, oop, T_ARRAY,   oop_func, is_store) \
-}
-
-#ifndef CHECK_UNHANDLED_OOPS
-  #define NVM_STORE_FUNC_PTR_PRIMITIVE NVM::put_field
-  #define NVM_STORE_FUNC_PTR_OOP NVM::oop_put_field
-#else
-  #define NVM_STORE_FUNC_PTR_PRIMITIVE NVM::put_field_debug
-  #define NVM_STORE_FUNC_PTR_OOP NVM::oop_put_field_debug
-#endif
-
-#define NVM_STORE_FUNC_PTR_IF_BASE(ds) {\
-  NVM_RUNTIME_BS_PTR_IF(ds, NVM_STORE_FUNC_PTR_PRIMITIVE, NVM_STORE_FUNC_PTR_OOP, true) \
-}
-
-#define NVM_STORE_FUNC_PTR_IF_2(ds) {\
-  NVM_STORE_FUNC_PTR_IF_BASE(ds|NVM_IS_NOT_VOLATILE) \
-  NVM_STORE_FUNC_PTR_IF_BASE(ds|NVM_IS_VOLATILE) \
-}
-
-#define NVM_STORE_FUNC_PTR_IF_1(ds) {\
-  NVM_STORE_FUNC_PTR_IF_2(ds|NVM_IS_NOT_STATIC) \
-  NVM_STORE_FUNC_PTR_IF_2(ds|NVM_IS_STATIC) \
-}
-
-void* OurPersist::store_in_heap_at_ptr(DecoratorSet decorators, BasicType type) {
-  assert(decorators & NVM_IS_VOLATILE_MASK, "");
-  assert(decorators & NVM_IS_STATIC_MASK, "");
-
-  decorators |= NVM_BS_ASM;
-
-  NVM_STORE_FUNC_PTR_IF_1(NVM_BS_ASM|2637912ULL)
-  NVM_STORE_FUNC_PTR_IF_1(NVM_BS_ASM|540760ULL )
-  NVM_STORE_FUNC_PTR_IF_1(NVM_BS_ASM|540952ULL )
-
-  report_vm_error(__FILE__, __LINE__, "Should not reach here.");
-  return NULL;
-}
-
-#ifndef CHECK_UNHANDLED_OOPS
-  #define NVM_LOAD_FUNC_PTR_PRIMITIVE NVM::get_field
-  #define NVM_LOAD_FUNC_PTR_OOP NVM::get_oop_field
-#else
-  #define NVM_LOAD_FUNC_PTR_PRIMITIVE NVM::get_field_debug
-  #define NVM_LOAD_FUNC_PTR_OOP NVM::get_oop_field_debug
-#endif
-
-#define NVM_LOAD_FUNC_PTR_IF_BASE(ds) {\
-  NVM_RUNTIME_BS_PTR_IF(ds, NVM_LOAD_FUNC_PTR_PRIMITIVE, NVM_LOAD_FUNC_PTR_OOP, false) \
-}
-
-#define NVM_LOAD_FUNC_PTR_IF_1(ds) {\
-  NVM_LOAD_FUNC_PTR_IF_BASE(ds|NVM_IS_NOT_VOLATILE) \
-  NVM_LOAD_FUNC_PTR_IF_BASE(ds|NVM_IS_VOLATILE) \
-}
-
-#define NVM_LOAD_FUNC_PTR_IF_2(ds) {\
-  NVM_LOAD_FUNC_PTR_IF_1(ds|NVM_IS_NOT_STATIC) \
-  NVM_LOAD_FUNC_PTR_IF_1(ds|NVM_IS_STATIC) \
-}
-
-void* OurPersist::load_in_heap_at_ptr(DecoratorSet decorators, BasicType type) {
-  assert(decorators & NVM_IS_VOLATILE_MASK, "");
-  assert(decorators & NVM_IS_STATIC_MASK, "");
-
-  decorators |= NVM_BS_ASM;
-  NVM_LOAD_FUNC_PTR_IF_2(NVM_BS_ASM|1196120ULL)
-  NVM_LOAD_FUNC_PTR_IF_2(NVM_BS_ASM|2637912ULL)
-  NVM_LOAD_FUNC_PTR_IF_2(NVM_BS_ASM|1065048ULL)
-  NVM_LOAD_FUNC_PTR_IF_2(NVM_BS_ASM|606296ULL )
-  NVM_LOAD_FUNC_PTR_IF_2(NVM_BS_ASM|540760ULL )
-  NVM_LOAD_FUNC_PTR_IF_2(NVM_BS_ASM|540952ULL )
-
-  //NVMDebug::print_decorators(decorators);
-  report_vm_error(__FILE__, __LINE__, "Should not reach here.");
-  return NULL;
-}
-
-void* OurPersist::ensure_recoverable_ptr() {
-  return (void*)(void(*)(oop))OurPersist::ensure_recoverable;
-}
-*/
-
 void OurPersist::ensure_recoverable(oop obj) {
   if (obj->nvm_header().recoverable()) {
     return;
@@ -505,7 +380,7 @@ RETRY:
   bool success = before_fwd == NULL;
   assert(!success || responsible_thread(nvm_obj) == Thread::current(), "");
   if (!success) {
-    if (before_fwd == NVM_FWD_BUSY) {
+    if (before_fwd == OURPERSIST_FWD_BUSY) {
       goto RETRY;
     }
 
@@ -587,7 +462,7 @@ RETRY:
                     worklist->add(v);
                     break;
                   } else {
-                    if (before_fwd == NVM_FWD_BUSY) {
+                    if (before_fwd == OURPERSIST_FWD_BUSY) {
                       // busy wait
                       continue;
                     }
@@ -645,7 +520,7 @@ RETRY:
                 worklist->add(v);
                 break;
               } else {
-                if (before_fwd == NVM_FWD_BUSY) {
+                if (before_fwd == OURPERSIST_FWD_BUSY) {
                   continue;
                 }
 

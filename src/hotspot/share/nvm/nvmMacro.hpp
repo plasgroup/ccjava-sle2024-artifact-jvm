@@ -3,7 +3,7 @@
 #include <x86intrin.h>
 #include <clwbintrin.h>
 
-#define NVM_FWD_BUSY ((void*)~0b111)
+#define OURPERSIST_FWD_BUSY ((void*)~0b111)
 
 #define OOP_TO_VOID(obj) static_cast<void*>(obj)
 

@@ -1,7 +1,7 @@
 #ifdef OUR_PERSIST
 
-#ifndef NVM_NVM_HPP
-#define NVM_NVM_HPP
+#ifndef NVM_OURPERSIST_HPP
+#define NVM_OURPERSIST_HPP
 
 #include "oops/accessDecorators.hpp"
 #include "oops/oopsHierarchy.hpp"
@@ -44,14 +44,8 @@ class OurPersist : AllStatic {
   }
 
   static void ensure_recoverable(oop obj);
-
-  // To call runtime functions from the interpreter
-  static void* store_in_heap_at_ptr(DecoratorSet decorators, BasicType type);
-  static void* load_in_heap_at_ptr(DecoratorSet decorators, BasicType type);
-  static void* ensure_recoverable_ptr();
-
 };
 
-#endif // NVM_NVM_HPP
+#endif // NVM_OURPERSIST_HPP
 
 #endif // OUR_PERSIST

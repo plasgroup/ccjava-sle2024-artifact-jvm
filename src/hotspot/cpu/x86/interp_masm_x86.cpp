@@ -516,7 +516,8 @@ void InterpreterMacroAssembler::load_resolved_reference_at_index(Register result
   resolve_oop_handle(result, tmp);
   load_heap_oop(result, Address(result, index,
                                 UseCompressedOops ? Address::times_4 : Address::times_ptr,
-                                arrayOopDesc::base_offset_in_bytes(T_OBJECT)), tmp);
+                                arrayOopDesc::base_offset_in_bytes(T_OBJECT)), tmp, noreg,
+                                OURPERSIST_IS_NOT_VOLATILE | OURPERSIST_IS_NOT_STATIC);
 }
 
 // load cpool->resolved_klass_at(index)

@@ -744,7 +744,7 @@ address TemplateInterpreterGenerator::generate_Reference_get_entry(void) {
   const Address field_address(rax, referent_offset);
   // TODO: (OURPERSIST)
   // OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE
-  __ load_heap_oop(rax, field_address, /*tmp1*/ rbx, /*tmp_thread*/ rdx, ON_WEAK_OOP_REF | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE);
+  __ load_heap_oop(rax, field_address, /*tmp1*/ rbx, /*tmp_thread*/ rdx, ON_WEAK_OOP_REF);
 
   // _areturn
   const Register sender_sp = NOT_LP64(rsi) LP64_ONLY(r13);

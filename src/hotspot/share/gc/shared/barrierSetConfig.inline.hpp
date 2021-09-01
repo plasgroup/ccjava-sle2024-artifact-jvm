@@ -43,7 +43,7 @@
 #include "gc/z/zBarrierSet.inline.hpp"
 #endif
 #ifdef OUR_PERSIST
-#include "gc/nvm_card/nvmCardTableBarrierSet.hpp"
+#include "gc/nvm_card/nvmCardTableBarrierSet.inline.hpp"
 #endif // OUR_PERSIST
 
 #endif // SHARE_GC_SHARED_BARRIERSETCONFIG_INLINE_HPP

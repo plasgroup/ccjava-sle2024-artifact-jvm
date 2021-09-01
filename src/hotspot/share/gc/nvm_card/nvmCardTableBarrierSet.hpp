@@ -5,12 +5,19 @@
 
 #include "gc/nvm_card/nvmCardTableBarrierSetAssembler.hpp"
 #include "gc/shared/cardTableBarrierSet.hpp"
+#include "nvm/nvmMacro.hpp"
+#include "nvm/ourPersist.hpp"
 
 class NVMCardTableBarrierSet: public CardTableBarrierSet {
   friend class VMStructs;
 
-public:
+ public:
   NVMCardTableBarrierSet(CardTable* card_table);
+
+ private:
+  // TODO: rename
+  // return is_set_durableroot_annotation
+  inline static bool static_object_etc(oop obj, ptrdiff_t offset, oop value);
 
   template <DecoratorSet decorators, typename BarrierSetT = NVMCardTableBarrierSet>
   class AccessBarrier: public BarrierSet::AccessBarrier<decorators, BarrierSetT> {
@@ -19,7 +26,7 @@ public:
     // raw barrierset class
     typedef BarrierSet::AccessBarrier<decorators, BarrierSetT> Raw;
 
-  public:
+   public:
     // primitive
     template <typename T>
     static T load_in_heap_at(oop base, ptrdiff_t offset) {
@@ -29,7 +36,29 @@ public:
 
     template <typename T>
     static void store_in_heap_at(oop base, ptrdiff_t offset, T value) {
+      // Original
+      // Parent::store_in_heap_at(base, offset, value);
+
+      // Store in DRAM.
       Parent::store_in_heap_at(base, offset, value);
+
+      // Skip markWord.
+      if (offset == oopDesc::mark_offset_in_bytes()) {
+        return;
+      }
+
+      _mm_mfence();
+      void* nvm_fwd = base->nvm_header().fwd();
+
+      if (nvm_fwd == NULL || nvm_fwd == OURPERSIST_FWD_BUSY) {
+        // Store only in DRAM.
+        return;
+      }
+      assert(nvmHeader::is_fwd(nvm_fwd), "");
+
+      // Store in NVM.
+      Raw::store_in_heap_at(oop(nvm_fwd), offset, value);
+      NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
     }
 
     template <typename T>
@@ -65,7 +94,36 @@ public:
     }
 
     static void oop_store_in_heap_at(oop base, ptrdiff_t offset, oop value) {
+      // Original
+      // Parent::oop_store_in_heap_at(base, offset, value);
+
+      // check annotation
+      // TODO:
+      bool is_set_durableroot_annotation = NVMCardTableBarrierSet::static_object_etc(base, offset, value);
+
+RETRY:
+      void* before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
+      bool success = before_fwd == NULL;
+      if (success) {
+        // Store only in DRAM.
+        Parent::oop_store_in_heap_at(base, offset, value);
+        nvmHeader::set_fwd(base, NULL);
+        return;
+      }
+      if (before_fwd == OURPERSIST_FWD_BUSY) {
+        // busy wait
+        goto RETRY;
+      }
+
+      assert(nvmHeader::is_fwd(before_fwd), "");
+      if (value != NULL) {
+        OurPersist::ensure_recoverable(value);
+      }
+      // Store in DRAM.
       Parent::oop_store_in_heap_at(base, offset, value);
+      // Store in NVM.
+      Raw::oop_store_in_heap_at(oop(before_fwd), offset, oop(value != NULL ? value->nvm_header().fwd() : NULL));
+      NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset););
     }
 
     static oop oop_atomic_xchg_in_heap_at(oop base, ptrdiff_t offset, oop new_value) {

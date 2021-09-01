@@ -1,10 +1,21 @@
-
 #ifdef OUR_PERSIST
 
+#include "nvm/nvmMacro.hpp"
 #include "oops/oop.hpp"
 #include "oops/nvmHeader.hpp"
 
+bool nvmHeader::is_null(void* _fwd) {
+  return _fwd == NULL;
+}
+
+bool nvmHeader::is_busy(void* _fwd) {
+  return _fwd == OURPERSIST_FWD_BUSY;
+}
+
 bool nvmHeader::is_fwd(void* _fwd) {
+  if (is_null(_fwd) || is_busy(_fwd)) {
+    return false;
+  }
   if (from_pointer(_fwd).flags() != uintptr_t(0)) {
     return false;
   }
@@ -12,13 +23,6 @@ bool nvmHeader::is_fwd(void* _fwd) {
     return false;
   }
   return true;
-}
-
-bool nvmHeader::is_fwd_or_null(void* _fwd) {
-  if (_fwd == NULL) {
-    return true;
-  }
-  return is_fwd(_fwd);
 }
 
 #endif // OUR_PERSIST

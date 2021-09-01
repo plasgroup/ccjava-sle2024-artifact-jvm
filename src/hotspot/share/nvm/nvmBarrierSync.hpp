@@ -1,7 +1,7 @@
 #ifdef OUR_PERSIST
 
-#ifndef NVM_BARRIERSYNC_HPP
-#define NVM_BARRIERSYNC_HPP
+#ifndef NVM_NVMBARRIERSYNC_HPP
+#define NVM_NVMBARRIERSYNC_HPP
 
 #include "memory/allocation.hpp"
 #include "nvm/ourPersist.hpp"
@@ -51,6 +51,6 @@ class NVMBarrierSync : public CHeapObj<mtNone>{
 
 };
 
-#endif // NVM_BARRIERSYNC_HPP
+#endif // NVM_NVMBARRIERSYNC_HPP
 
 #endif // OUR_PERSIST

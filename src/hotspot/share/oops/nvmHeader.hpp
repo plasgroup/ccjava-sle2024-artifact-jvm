@@ -1,9 +1,9 @@
-
 #ifdef OUR_PERSIST
 
 #ifndef SHARE_OOPS_NVMHEADER_HPP
 #define SHARE_OOPS_NVMHEADER_HPP
 
+#include "nvm/ourPersist.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/atomic.hpp"
 
@@ -83,13 +83,13 @@ class nvmHeader {
 
   bool recoverable() {
     void* nvm_obj = fwd();
-    return false; // TODO:
-    //return nvm_obj != NULL && NVM::responsible_thread(nvm_obj) == NULL;
+    return nvm_obj != NULL && OurPersist::responsible_thread(nvm_obj) == NULL;
   }
 
   // Checker
+  static bool is_null(void* _fwd);
+  static bool is_busy(void* _fwd);
   static bool is_fwd(void* _fwd);
-  static bool is_fwd_or_null(void* _fwd);
 
   // Setter
   // WARNING: All setters are static functions.

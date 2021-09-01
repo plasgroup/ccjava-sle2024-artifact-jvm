@@ -1,7 +1,7 @@
 #ifdef OUR_PERSIST
 
-#ifndef NVM_WORKLISTSTACK_HPP
-#define NVM_WORKLISTSTACK_HPP
+#ifndef NVM_NVMWORKLISTSTACK_HPP
+#define NVM_NVMWORKLISTSTACK_HPP
 
 #include "memory/allocation.hpp"
 #include "nvm/ourPersist.hpp"
@@ -42,6 +42,6 @@ class NVMWorkListStack : public CHeapObj<mtNone> {
   }
 };
 
-#endif // NVM_WORKLISTSTACK_HPP
+#endif // NVM_NVMWORKLISTSTACK_HPP
 
 #endif // OUR_PERSIST

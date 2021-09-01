@@ -16,11 +16,8 @@ class OurPersist : AllStatic {
   static bool _enable_is_set;
 
  private:
-  static Thread* responsible_thread(void* nvm_obj);
   static void set_responsible_thread(void* nvm_ptr, Thread* cur_thread);
   static void clear_responsible_thread(Thread* cur_thread);
-
-  static bool check_durableroot_annotation(oop klass_obj, ptrdiff_t offset);
 
   static void copy_dram_to_nvm(oop from, oop to, ptrdiff_t offset, BasicType type, bool is_array = false);
   static bool cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, BasicType type, bool is_array = false);
@@ -35,13 +32,10 @@ class OurPersist : AllStatic {
   //static void shade();
 
  public:
-  static bool enable() {
-    if (!_enable_is_set) {
-      _enable = Arguments::is_interpreter_only() && (!UseCompressedOops);
-      _enable_is_set = true;
-    }
-    return _enable;
-  }
+  inline static bool enable();
+  inline static bool is_static_field(oop obj, ptrdiff_t offset);
+  static Thread* responsible_thread(void* nvm_obj);
+  static bool is_set_durableroot_annotation(oop klass_obj, ptrdiff_t offset);
 
   static void ensure_recoverable(oop obj);
 };

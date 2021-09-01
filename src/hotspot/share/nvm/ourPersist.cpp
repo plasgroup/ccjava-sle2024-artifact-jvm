@@ -1,26 +1,24 @@
 #ifdef OUR_PERSIST
 
+#include "classfile/javaClasses.hpp"
 #include "gc/nvm_card/nvmCardTableBarrierSet.hpp"
 #include "gc/shared/cardTableBarrierSet.hpp"
+#include "nvm/nvmBarrierSync.inline.hpp"
+#include "nvm/nvmAllocator.hpp"
 #include "nvm/nvmMacro.hpp"
-#include "nvm/ourPersist.hpp"
+#include "nvm/nvmWorkListStack.hpp"
+#include "nvm/ourPersist.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "oops/klass.hpp"
 #include "oops/arrayKlass.hpp"
+#include "oops/instanceKlass.hpp"
+#include "oops/nvmHeader.inline.hpp"
 #include "oops/objArrayKlass.hpp"
 #include "oops/typeArrayKlass.hpp"
-
-#include "classfile/javaClasses.hpp"
-#include "runtime/thread.hpp"
-#include "oops/instanceKlass.hpp"
-#include "nvm/nvmAllocator.hpp"
-#include "oops/nvmHeader.inline.hpp"
-#include "utilities/globalDefinitions.hpp"
-#include "runtime/signature.hpp"
-#include "nvm/nvmWorkListStack.hpp"
-#include "nvm/nvmBarrierSync.inline.hpp"
-#include "nvm/nvmMacro.hpp"
 #include "runtime/fieldDescriptor.hpp"
+#include "runtime/signature.hpp"
+#include "runtime/thread.hpp"
+#include "utilities/globalDefinitions.hpp"
 
 bool OurPersist::_enable = false;
 bool OurPersist::_enable_is_set = false;
@@ -214,27 +212,30 @@ bool OurPersist::cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, BasicType
 }
 
 Thread* OurPersist::responsible_thread(void* nvm_obj) {
-  assert(!oopDesc::is_oop(oop(nvm_obj)), "nvm_obj should not be oop.");
-  assert(nvm_obj != NULL, "Maybe nvm_obj is oop or initialization failed.");
-  assert(nvm_obj != OURPERSIST_FWD_BUSY, "Maybe nvm_obj is oop or initialization failed.");
+  assert(nvmHeader::is_fwd(nvm_obj), "");
 
   return (Thread*)oop(nvm_obj)->nvm_header().fwd();
 }
 
-void OurPersist::set_responsible_thread(void* nvm_ptr, Thread* cur_thread) {
-  oop(nvm_ptr)->set_mark(markWord::zero());
+void OurPersist::set_responsible_thread(void* nvm_obj, Thread* cur_thread) {
+  assert(nvmHeader::is_fwd(nvm_obj), "");
+  assert(cur_thread != NULL, "");
+
+  oop(nvm_obj)->set_mark(markWord::zero());
 
   if (cur_thread->dependent_obj_list_head() == NULL) {
-    cur_thread->set_dependent_obj_list_head(nvm_ptr);
+    cur_thread->set_dependent_obj_list_head(nvm_obj);
   } else {
-    oop(cur_thread->dependent_obj_list_tail())->set_mark(markWord::from_pointer(nvm_ptr));
+    oop(cur_thread->dependent_obj_list_tail())->set_mark(markWord::from_pointer(nvm_obj));
   }
 
-  cur_thread->set_dependent_obj_list_tail(nvm_ptr);
-  nvmHeader::set_fwd(oop(nvm_ptr), (void*)cur_thread);
+  cur_thread->set_dependent_obj_list_tail(nvm_obj);
+  nvmHeader::set_fwd(oop(nvm_obj), (void*)cur_thread);
 }
 
 void OurPersist::clear_responsible_thread(Thread* cur_thread) {
+  assert(cur_thread != NULL, "");
+
   void* dependent_obj = cur_thread->dependent_obj_list_head();
 
   while (dependent_obj != NULL) {
@@ -247,17 +248,13 @@ void OurPersist::clear_responsible_thread(Thread* cur_thread) {
   cur_thread->set_dependent_obj_list_tail(NULL);
 }
 
-bool OurPersist::check_durableroot_annotation(oop klass_obj, ptrdiff_t offset) {
+bool OurPersist::is_set_durableroot_annotation(oop klass_obj, ptrdiff_t offset) {
   assert(klass_obj != NULL, "");
   assert(klass_obj->klass()->is_instance_klass(), "");
   assert(((InstanceKlass*)klass_obj->klass())->is_mirror_instance_klass(), "");
 
-#ifdef ALL_DURABLEROOT_IS_TRUE
+  // DEBUG:
   return true;
-#endif
-#ifdef ALL_DURABLEROOT_IS_FALSE
-  return false;
-#endif
 
   // get field index
   Klass* k = java_lang_Class::as_Klass(klass_obj);

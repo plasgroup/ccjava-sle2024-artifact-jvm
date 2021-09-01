@@ -1,7 +1,7 @@
 #ifdef OUR_PERSIST
 
-#ifndef NVM_BARRIERSYNC_INLINE_HPP
-#define NVM_BARRIERSYNC_INLINE_HPP
+#ifndef NVM_NVMBARRIERSYNC_INLINE_HPP
+#define NVM_NVMBARRIERSYNC_INLINE_HPP
 
 #include "nvm/nvmBarrierSync.hpp"
 #include "oops/oop.inline.hpp"
@@ -144,6 +144,6 @@ inline void NVMBarrierSync::sync() {
   this->set_parent(NULL);
 }
 
-#endif // NVM_BARRIERSYNC_INLINE_HPP
+#endif // NVM_NVMBARRIERSYNC_INLINE_HPP
 
 #endif // OUR_PERSIST

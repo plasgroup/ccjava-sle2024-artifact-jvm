@@ -4,6 +4,7 @@
 #include "runtime/thread.hpp"
 #include "utilities/vmError.hpp"
 #include "utilities/nativeCallStack.hpp"
+#include <sys/mman.h>
 
 void* NVMAllocator::nvm_head = NULL;
 void* NVMAllocator::nvm_tail = NULL;
@@ -22,8 +23,8 @@ void NVMAllocator::init() {
   off_t size = stat_buf.st_size;
 
 #ifdef USE_NVM
-  NVM::nvm_head = (void*)mmap(NULL, size, PROT_WRITE, MAP_SHARED, nvm_fd, 0);
-  bool success = NVM::nvm_head != MAP_FAILED;
+  NVMAllocator::nvm_head = (void*)mmap(NULL, size, PROT_WRITE, MAP_SHARED, nvm_fd, 0);
+  bool success = NVMAllocator::nvm_head != MAP_FAILED;
   if (!success) {
     report_vm_error(__FILE__, __LINE__, "Failed to map the file.");
   }

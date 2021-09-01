@@ -1,4 +1,3 @@
-
 #ifdef OUR_PERSIST
 
 #ifndef SHARE_OOPS_NVMHEADER_INLINE_HPP
@@ -16,8 +15,8 @@ void nvmHeader::set_header(oop obj, nvmHeader h) {
 }
 
 void* nvmHeader::cas_fwd(oop obj, void* compare_fwd, void* after_fwd) {
-  assert(is_fwd_or_null(compare_fwd), "compare_fwd is not a forwarding pointer.");
-  assert(is_fwd_or_null(after_fwd), "after_fwd is not a forwarding pointer.");
+  assert(is_null(compare_fwd), "");
+  assert(is_busy(after_fwd) || is_fwd(after_fwd), "");
 
   uintptr_t* header_addr = (uintptr_t*)obj->nvm_header_addr();
 
@@ -40,7 +39,7 @@ void* nvmHeader::cas_fwd(oop obj, void* compare_fwd, void* after_fwd) {
   return before_fwd;
 }
 
-// for NVM::set_responsible_thread
+// for OurPersist::set_responsible_thread
 void nvmHeader::set_fwd(oop obj, void* ptr) {
   assert(from_pointer(ptr).flags() == uintptr_t(0), "ptr is not a forwarding pointer.");
 

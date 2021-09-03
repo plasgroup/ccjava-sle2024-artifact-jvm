@@ -97,7 +97,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       // Original
       // Parent::oop_store_in_heap_at(base, offset, value);
 
-      // check annotation
+      // Check annotation
       // TODO:
       bool is_set_durableroot_annotation = NVMCardTableBarrierSet::static_object_etc(base, offset, value);
 
@@ -123,7 +123,7 @@ RETRY:
       Parent::oop_store_in_heap_at(base, offset, value);
       // Store in NVM.
       Raw::oop_store_in_heap_at(oop(before_fwd), offset, oop(value != NULL ? value->nvm_header().fwd() : NULL));
-      NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset););
+      NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
     }
 
     static oop oop_atomic_xchg_in_heap_at(oop base, ptrdiff_t offset, oop new_value) {

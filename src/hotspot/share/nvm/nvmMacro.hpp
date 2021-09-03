@@ -15,11 +15,11 @@
 #define NVM_FLUSH(mem) {\
   _mm_clwb(mem);\
 }
-#else
+#else  // USE_CLWB
 #define NVM_FLUSH(mem) {\
   _mm_clflush(mem);\
 }
-#endif
+#endif // USE_CLWB
 
 // flush some cacheline
 #define NVM_FLUSH_LOOP(mem, len) {\

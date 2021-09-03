@@ -14,14 +14,14 @@ void NVMCardTableBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSe
   // Parent::store_at(masm, decorators, type, dst, val, tmp1, tmp2);
 
   // OurPersist assembler
-  // if (is_reference_type(type)) {
-  //   NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
-  // } else {
-  //   NVMCardTableBarrierSetAssembler::interpreter_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
-  // }
+  if (is_reference_type(type)) {
+    NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
+  } else {
+    NVMCardTableBarrierSetAssembler::interpreter_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
+  }
 
   // Runtime
-  NVMCardTableBarrierSetAssembler::runtime_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
+  // NVMCardTableBarrierSetAssembler::runtime_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
 }
 
 void NVMCardTableBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
@@ -47,16 +47,187 @@ void NVMCardTableBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet
 
 void NVMCardTableBarrierSetAssembler::interpreter_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                                            Address dst, Register val, Register _tmp1, Register _tmp2) {
-  // TODO:
+  Label done;
+  Register tmp1 = r8;
+  Register tmp2 = r9;
+
+  // Store in DRAM.
+  Parent::store_at(masm, decorators, type, dst, val, noreg, noreg);
+
+  // fence
+  __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
+  // tmp1 = obj->nvm_header().fwd()
+  __ movptr(tmp1, Address(dst.base(), oopDesc::nvm_header_offset_in_bytes()));
+  __ andptr(tmp1, ~0b111);
+
+  // Check nvm header.
+  __ cmpptr(tmp1, 0);
+  __ jcc(Assembler::equal, done);
+  // tmp2 = BUSY
+  __ movptr(tmp2, (intptr_t)OURPERSIST_FWD_BUSY);
+  __ cmpptr(tmp1, tmp2);
+  __ jcc(Assembler::equal, done);
+
+  // Store in NVM.
+  const Address nvm_dst(tmp1, dst.index(), dst.scale(), dst.disp());
+  Raw::store_at(masm, decorators, type, nvm_dst, val, noreg, noreg);
+  // Write back
+#ifdef ENABLE_NVM_WRITEBACK
+#ifdef USE_CLWB
+  __ lea(tmp2, nvm_dst);
+  __ clwb(Address(tmp2, 0));
+#else  // USE_CLWB
+  __ clflush(nvm_dst);
+#endif // USE_CLWB
+  __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
+#endif // ENABLE_NVM_WRITEBACK
+
+  __ bind(done);
 }
 
 void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                                                Address dst, Register val, Register _tmp1, Register _tmp2) {
+  Label done_check_annotaion, retry, failure, no_retry_1, no_retry_2,
+        val_is_null, done_set_val, done;
+  Register tmp1 = r8;
+  Register tmp2 = r9;
+  Address nvm_header(dst.base(), oopDesc::nvm_header_offset_in_bytes());
+
+  // Check annotation
+  assert((decorators & OURPERSIST_IS_STATIC_MASK) != 0, "");
+  if ((val != noreg) && (decorators & OURPERSIST_IS_STATIC)) {
+    __ cmpptr(val, 0);
+    __ jcc(Assembler::equal, done_check_annotaion);
+
+    // True
+    NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, _tmp1, _tmp2, tmp1, tmp2);
+    __ jmp(done_check_annotaion);
+
+    // False
+    //  __ jmp(done_check_annotaion);
+
+    // TODO:
+    //  if (NVM::check_durableroot_annotation(obj, offset)) {
+    //    make_object_recoverable(val);
+    //  }
+
+    __ bind(done_check_annotaion);
+  }
+
+// WARNING: tmp1 使用 ここから
+// WARNING: tmp2 使用 ここから
+  __ bind(retry);
+  __ push(rax);
+
+  // CAS(nvm_header, cmpval = rax(NULL|flags), newval = tmp1(BUSY|flags)) --> rax
+  // tmp2 = flags
+  __ movptr(tmp2, nvm_header);
+  __ andptr(tmp2, 0b111);
+  // tmp1 = BUSY | flags
+  __ movptr(tmp1, (intptr_t)OURPERSIST_FWD_BUSY);
+  __ orptr(tmp1, tmp2);
+  // rax = NULL | flags
+  __ mov(rax, tmp2);
+  // CAS
+  __ lock();
+  __ cmpxchgptr(tmp1, nvm_header);
+  __ jcc(Assembler::notEqual, failure);
+
+  // success
+  // Store only in DRAM.
+// WARNING: tmp2 使用 ここまで
+// WARNING: tmp1 使用 ここまで
+// WARNING: tmp1 使用 ここから
+  __ mov(tmp1, rax);
+  __ pop(rax);
+// WARNING: tmp2 使用 ここから
+  __ movptr(tmp2, dst.base()); // push obj
+  Parent::store_at(masm, decorators, type, dst, val, _tmp1, _tmp2);
+  __ movptr(dst.base(), tmp2); // pop obj
+// WARNING: tmp2 使用 ここまで
   // TODO:
-  // DEBUG:
-  // if (val != noreg) {
-  //   NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, noreg, noreg, noreg, noreg);
-  // }
+  __ movptr(nvm_header, tmp1); // obj.nvm_header = NULL | flags
+// WARNING: tmp1 使用 ここまで
+  __ jmp(done);
+
+  // failure
+  __ bind(failure);
+
+// WARNING: tmp1 使用 ここまで
+  // tmp2 = before flags (cmp_val)
+  // rax  = before value (cas result)
+// WARNING: tmp1 使用 ここから
+  // tmp1 = before flags (cas result)
+  __ mov(tmp1, rax);
+  __ andptr(tmp1, 0b111);
+  __ cmpptr(tmp1, tmp2);
+// WARNING: tmp1 使用 ここまで
+// WARNING: tmp2 使用 ここまで
+  __ jcc(Assembler::equal, no_retry_1);
+  __ pop(rax);
+  __ jmp(retry);
+
+  __ bind(no_retry_1);
+
+// WARNING: tmp2 使用 ここから
+  __ movptr(tmp2, (intptr_t)OURPERSIST_FWD_BUSY);
+  __ andptr(rax, ~0b111); // forwarding pointer
+  __ cmpptr(rax, tmp2);
+  __ jcc(Assembler::notEqual, no_retry_2);
+// WARNING: tmp2 使用 ここまで
+  __ pop(rax);
+  __ jmp(retry);
+
+  __ bind(no_retry_2);
+// WARNING: tmp1 使用 ここから
+  __ mov(tmp1, rax); // tmp1 = rax(forwarding pointer)
+  __ pop(rax);
+
+  // if (value != NULL) OurPersist::ensure_recoverable(value);
+  if (val != noreg) {
+    __ cmpptr(val, 0);
+    __ jcc(Assembler::equal, val_is_null);
+    NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, noreg, noreg, noreg, noreg);
+    __ bind(val_is_null);
+  }
+
+  // Store in DRAM.
+// WARNING: tmp2 使用 ここから
+  __ movptr(tmp2, dst.base()); // push dst.base
+  Parent::store_at(masm, decorators, type, dst, val, _tmp1, _tmp2);
+  __ movptr(dst.base(), tmp2); // pop dst.base
+// WARNING: tmp2 使用 ここまで
+
+  // Store in NVM.
+  // tmp1 = forwarding pointer
+  // tmp2 = value
+// WARNING: tmp2 使用 ここから
+  __ xorl(tmp2, tmp2);
+  if (val != noreg) {
+    __ cmpptr(val, 0);
+    __ jcc(Assembler::equal, done_set_val);
+    Address nvm_val(val, oopDesc::nvm_header_offset_in_bytes());
+    __ movptr(tmp2, nvm_val);
+    __ andptr(tmp2, ~0b111);
+    __ bind(done_set_val);
+  }
+  const Address nvm_field(tmp1, dst.index(), dst.scale(), dst.disp());
+  Raw::store_at(masm, decorators, type, nvm_field, tmp2, _tmp1, _tmp2);
+// WARNING: tmp2 使用 ここまで
+// WARNING: tmp1 使用 ここまで
+#ifdef ENABLE_NVM_WRITEBACK
+#ifdef USE_CLWB
+// WARNING: tmp2 使用 ここから
+  __ lea(tmp2, nvm_field);
+  __ clwb(Address(tmp2, 0));
+// WARNING: tmp2 使用 ここまで
+#else
+  __ clflush(nvm_field);
+#endif
+  __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
+#endif
+
+  __ bind(done);
 }
 
 void NVMCardTableBarrierSetAssembler::interpreter_load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,

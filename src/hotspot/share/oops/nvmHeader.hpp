@@ -12,7 +12,8 @@
 //
 //  64 bits:
 //  --------
-//  NULL:61  unused:1   volatile_lock:1   atomic_lock:1 (volatile object)
+//  NULL:61  unused:3                                   (volatile object)
+//  BUSY:61  unused:3                                   (volatile object)
 //  fwd:61   unused:1   volatile_lock:1   atomic_lock:1 (persistent object)
 //
 

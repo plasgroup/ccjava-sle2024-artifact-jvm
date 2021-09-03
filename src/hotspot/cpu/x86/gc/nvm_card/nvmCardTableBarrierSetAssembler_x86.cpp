@@ -114,8 +114,6 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
     __ bind(done_check_annotaion);
   }
 
-// WARNING: tmp1 使用 ここから
-// WARNING: tmp2 使用 ここから
   __ bind(retry);
   __ push(rax);
 
@@ -135,51 +133,36 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
 
   // success
   // Store only in DRAM.
-// WARNING: tmp2 使用 ここまで
-// WARNING: tmp1 使用 ここまで
-// WARNING: tmp1 使用 ここから
   __ mov(tmp1, rax);
   __ pop(rax);
-// WARNING: tmp2 使用 ここから
   __ movptr(tmp2, dst.base()); // push obj
   Parent::store_at(masm, decorators, type, dst, val, _tmp1, _tmp2);
   __ movptr(dst.base(), tmp2); // pop obj
-// WARNING: tmp2 使用 ここまで
-  // TODO:
   __ movptr(nvm_header, tmp1); // obj.nvm_header = NULL | flags
-// WARNING: tmp1 使用 ここまで
   __ jmp(done);
 
   // failure
   __ bind(failure);
 
-// WARNING: tmp1 使用 ここまで
-  // tmp2 = before flags (cmp_val)
-  // rax  = before value (cas result)
-// WARNING: tmp1 使用 ここから
-  // tmp1 = before flags (cas result)
   __ mov(tmp1, rax);
   __ andptr(tmp1, 0b111);
+  // tmp1 = before flags (cas result)
+  // tmp2 = before flags (cmp_val)
+  // rax  = before value (cas result)
   __ cmpptr(tmp1, tmp2);
-// WARNING: tmp1 使用 ここまで
-// WARNING: tmp2 使用 ここまで
   __ jcc(Assembler::equal, no_retry_1);
   __ pop(rax);
   __ jmp(retry);
 
   __ bind(no_retry_1);
-
-// WARNING: tmp2 使用 ここから
   __ movptr(tmp2, (intptr_t)OURPERSIST_FWD_BUSY);
   __ andptr(rax, ~0b111); // forwarding pointer
   __ cmpptr(rax, tmp2);
   __ jcc(Assembler::notEqual, no_retry_2);
-// WARNING: tmp2 使用 ここまで
   __ pop(rax);
   __ jmp(retry);
 
   __ bind(no_retry_2);
-// WARNING: tmp1 使用 ここから
   __ mov(tmp1, rax); // tmp1 = rax(forwarding pointer)
   __ pop(rax);
 
@@ -192,16 +175,13 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
   }
 
   // Store in DRAM.
-// WARNING: tmp2 使用 ここから
   __ movptr(tmp2, dst.base()); // push dst.base
   Parent::store_at(masm, decorators, type, dst, val, _tmp1, _tmp2);
   __ movptr(dst.base(), tmp2); // pop dst.base
-// WARNING: tmp2 使用 ここまで
 
   // Store in NVM.
   // tmp1 = forwarding pointer
   // tmp2 = value
-// WARNING: tmp2 使用 ここから
   __ xorl(tmp2, tmp2);
   if (val != noreg) {
     __ cmpptr(val, 0);
@@ -213,14 +193,10 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
   }
   const Address nvm_field(tmp1, dst.index(), dst.scale(), dst.disp());
   Raw::store_at(masm, decorators, type, nvm_field, tmp2, _tmp1, _tmp2);
-// WARNING: tmp2 使用 ここまで
-// WARNING: tmp1 使用 ここまで
 #ifdef ENABLE_NVM_WRITEBACK
 #ifdef USE_CLWB
-// WARNING: tmp2 使用 ここから
   __ lea(tmp2, nvm_field);
   __ clwb(Address(tmp2, 0));
-// WARNING: tmp2 使用 ここまで
 #else
   __ clflush(nvm_field);
 #endif

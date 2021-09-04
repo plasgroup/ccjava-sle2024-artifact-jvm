@@ -62,21 +62,50 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
     }
 
     template <typename T>
-    static T atomic_cmpxchg_in_heap_at(oop base, ptrdiff_t offset, T compare_value, T new_value) {
-      T result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+    static T atomic_xchg_in_heap_at(oop base, ptrdiff_t offset, T new_value) {
+      // Original
+      // T result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
+
+      nvmHeader::lock_atomic(base);
+      T result = load_in_heap_at<T>(base, offset);
+      Parent::store_in_heap_at(base, offset, new_value);
+      _mm_mfence();
+      void* nvm_fwd = base->nvm_header().fwd();
+      if (nvm_fwd != NULL && nvm_fwd != OURPERSIST_FWD_BUSY) {
+        Raw::store_in_heap_at(oop(nvm_fwd), offset, new_value);
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
+      }
+      nvmHeader::unlock_atomic(base);
+
       return result;
     }
 
     template <typename T>
-    static T atomic_xchg_in_heap_at(oop base, ptrdiff_t offset, T new_value) {
-      T result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
+    static T atomic_cmpxchg_in_heap_at(oop base, ptrdiff_t offset, T compare_value, T new_value) {
+      // Original
+      // T result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+
+      T result;
+      if (offset == oopDesc::mark_offset_in_bytes()) {
+        result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+      } else {
+        nvmHeader::lock_atomic(base);
+        result = load_in_heap_at<T>(base, offset);
+        bool swap = result == compare_value;
+        if (swap) {
+          Parent::store_in_heap_at(base, offset, new_value);
+          _mm_mfence();
+          void* nvm_fwd = base->nvm_header().fwd();
+          if (nvm_fwd != NULL && nvm_fwd != OURPERSIST_FWD_BUSY) {
+            Raw::store_in_heap_at(oop(nvm_fwd), offset, new_value);
+            NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
+          }
+        }
+        nvmHeader::unlock_atomic(base);
+      }
+
       return result;
     }
-
-    // sizeof for arraycopy_in_heap
-    //template <typename T>
-    //static size_t sizeof_ac(T* val)     { return sizeof(*val);  }
-    //static size_t sizeof_ac(void* val)  { return sizeof(jbyte); }
 
     template <typename T>
     static void arraycopy_in_heap(arrayOop src_obj, size_t src_offset_in_bytes, T* src_raw,
@@ -98,8 +127,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       // Parent::oop_store_in_heap_at(base, offset, value);
 
       // Check annotation
-      // TODO:
-      bool is_set_durableroot_annotation = NVMCardTableBarrierSet::static_object_etc(base, offset, value);
+      bool is_set_durableroot_annotation =
+        NVMCardTableBarrierSet::static_object_etc(base, offset, value);
 
 RETRY:
       void* before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
@@ -127,14 +156,86 @@ RETRY:
     }
 
     static oop oop_atomic_xchg_in_heap_at(oop base, ptrdiff_t offset, oop new_value) {
-      oop result = Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
+      // Original
+      // oop result = Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
+
+      // Check annotation
+      bool is_set_durableroot_annotation =
+        NVMCardTableBarrierSet::static_object_etc(base, offset, new_value);
+
+      bool success;
+      void* before_fwd;
+      while (true) {
+        before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
+        if (before_fwd != OURPERSIST_FWD_BUSY) {
+          success = before_fwd == NULL;
+          break;
+        }
+      }
+      oop result;
+      if (success) {
+        result = Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
+        nvmHeader::set_fwd(base, NULL);
+      } else {
+        if (new_value != NULL) {
+          OurPersist::ensure_recoverable(new_value);
+        }
+        nvmHeader::lock_atomic(base);
+        result = Parent::oop_load_in_heap_at(base, offset);
+        Parent::oop_store_in_heap_at(base, offset, new_value);
+        oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
+        Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+        nvmHeader::unlock_atomic(base);
+      }
+
       return result;
     }
 
     static oop oop_atomic_cmpxchg_in_heap_at(oop base, ptrdiff_t offset, oop compare_value, oop new_value) {
-      oop result = Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+      // Original
+      // oop result = Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+
+      // Check annotation
+      bool is_set_durableroot_annotation =
+        NVMCardTableBarrierSet::static_object_etc(base, offset, new_value);
+
+      bool success;
+      void* before_fwd;
+      while (true) {
+        before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
+        if (before_fwd != OURPERSIST_FWD_BUSY) {
+          success = before_fwd == NULL;
+          break;
+        }
+      }
+      oop result;
+      if (success) {
+        result = Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+        nvmHeader::set_fwd(base, NULL);
+      } else {
+        if (new_value != NULL) {
+          OurPersist::ensure_recoverable(new_value);
+        }
+        nvmHeader::lock_atomic(base);
+        result = oop_load_in_heap_at(base, offset);
+        bool swap = result == compare_value;
+        if (swap) {
+          Parent::oop_store_in_heap_at(base, offset, new_value);
+          oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
+          Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
+          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+        }
+        nvmHeader::unlock_atomic(base);
+      }
+
       return result;
     }
+
+    // sizeof for arraycopy_in_heap
+    //template <typename T>
+    //static size_t sizeof_ac(T* val)     { return sizeof(*val);  }
+    //static size_t sizeof_ac(void* val)  { return sizeof(jbyte); }
 
     template <typename T>
     static bool oop_arraycopy_in_heap(arrayOop src_obj, size_t src_offset_in_bytes, T* src_raw,

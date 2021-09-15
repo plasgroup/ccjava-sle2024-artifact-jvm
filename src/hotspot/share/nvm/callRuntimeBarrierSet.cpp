@@ -6,23 +6,23 @@
 
 #define OURPERSIST_RUNTIME_BS_PTR_PRIMITIVE_IF(cmp_ds, ds, ctype, btype, is_store) { \
   if (is_store) { \
-    if (cmp_ds == ds && type == btype) { \
-      return (void*)(void(*)(oopDesc*, ptrdiff_t, ctype))CallRuntimeBarrierSet::call_runtime_store_in_heap_at<ds, ctype>; \
+    if ((cmp_ds) == (ds) && type == btype) { \
+      return (void*)(void(*)(oopDesc*, ptrdiff_t, ctype))CallRuntimeBarrierSet::call_runtime_store_in_heap_at<(ds), ctype>; \
     } \
   } else { \
-    if (cmp_ds == ds && type == btype) { \
-      return (void*)(ctype(*)(oopDesc*, ptrdiff_t))CallRuntimeBarrierSet::call_runtime_load_in_heap_at<ds, ctype>; \
+    if ((cmp_ds) == (ds) && type == btype) { \
+      return (void*)(ctype(*)(oopDesc*, ptrdiff_t))CallRuntimeBarrierSet::call_runtime_load_in_heap_at<(ds), ctype>; \
     } \
   } \
 }
 #define OURPERSIST_RUNTIME_BS_PTR_OOP_IF(cmp_ds, ds, ctype, btype, is_store) { \
   if (is_store) { \
-    if (cmp_ds == ds && type == btype) { \
-      return (void*)(void(*)(oopDesc*, ptrdiff_t, oopDesc*))CallRuntimeBarrierSet::call_runtime_oop_store_in_heap_at<ds>; \
+    if ((cmp_ds) == (ds) && type == btype) { \
+      return (void*)(void(*)(oopDesc*, ptrdiff_t, oopDesc*))CallRuntimeBarrierSet::call_runtime_oop_store_in_heap_at<(ds)>; \
     } \
   } else { \
-    if (cmp_ds == ds && type == btype) { \
-      return (void*)(ctype(*)(oopDesc*, ptrdiff_t))CallRuntimeBarrierSet::call_runtime_oop_load_in_heap_at<ds>; \
+    if ((cmp_ds) == (ds) && type == btype) { \
+      return (void*)(ctype(*)(oopDesc*, ptrdiff_t))CallRuntimeBarrierSet::call_runtime_oop_load_in_heap_at<(ds)>; \
     } \
   } \
 }

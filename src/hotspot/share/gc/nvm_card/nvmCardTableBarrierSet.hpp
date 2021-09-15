@@ -7,6 +7,8 @@
 #include "gc/shared/cardTableBarrierSet.hpp"
 #include "nvm/nvmMacro.hpp"
 #include "nvm/ourPersist.hpp"
+#include "oops/oop.hpp"
+#include "oops/arrayOop.hpp"
 
 class NVMCardTableBarrierSet: public CardTableBarrierSet {
   friend class VMStructs;
@@ -111,9 +113,22 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
     static void arraycopy_in_heap(arrayOop src_obj, size_t src_offset_in_bytes, T* src_raw,
                                   arrayOop dst_obj, size_t dst_offset_in_bytes, T* dst_raw,
                                   size_t length) {
+      assert(dst_obj != NULL && dst_raw == NULL, "");
+
+      // Store in DRAM.
       Parent::arraycopy_in_heap(src_obj, src_offset_in_bytes, src_raw,
                                 dst_obj, dst_offset_in_bytes, dst_raw,
                                 length);
+
+      _mm_mfence();
+      void* dst_nvm_obj = dst_obj->nvm_header().fwd();
+      if (dst_nvm_obj != NULL && dst_nvm_obj != OURPERSIST_FWD_BUSY) {
+        // Store in NVM.
+        Raw::arraycopy_in_heap(src_obj,     src_offset_in_bytes, src_raw,
+                               dst_nvm_obj, dst_offset_in_bytes, dst_raw,
+                               length);
+        NVM_WRITEBACK_LOOP(AccessInternal::field_addr(oop(dst_nvm_obj), dst_offset_in_bytes), length)
+      }
     }
 
     // oop
@@ -241,15 +256,64 @@ RETRY:
     static bool oop_arraycopy_in_heap(arrayOop src_obj, size_t src_offset_in_bytes, T* src_raw,
                                       arrayOop dst_obj, size_t dst_offset_in_bytes, T* dst_raw,
                                       size_t length) {
-      bool result = Parent::oop_arraycopy_in_heap(src_obj, src_offset_in_bytes, src_raw,
-                                                  dst_obj, dst_offset_in_bytes, dst_raw,
-                                                  length);
+      assert(src_obj != NULL && dst_obj != NULL, "");
+      assert(src_obj->is_objArray() && dst_obj->is_objArray(), "");
+      assert(src_raw == NULL && dst_raw == NULL, "");
+
+      bool success;
+      void* before_fwd;
+      while (true) {
+        before_fwd = nvmHeader::cas_fwd(dst_obj, NULL, OURPERSIST_FWD_BUSY);
+        if (before_fwd != OURPERSIST_FWD_BUSY) {
+          success = before_fwd == NULL;
+          break;
+        }
+      }
+
+      bool result;
+      if (success) {
+        result = Parent::oop_arraycopy_in_heap(src_obj, src_offset_in_bytes, src_raw,
+                                               dst_obj, dst_offset_in_bytes, dst_raw,
+                                               length);
+        nvmHeader::set_fwd(dst_obj, NULL);
+      } else {
+        // ensure_recoverable
+        for (size_t offset = 0; offset < length; offset += 8) {
+          oop val = Raw::oop_load_in_heap_at(src_obj, src_offset_in_bytes + offset);
+          assert(oopDesc::is_oop_or_null(val), "");
+          if (val != NULL) {
+            OurPersist::ensure_recoverable(val);
+          }
+        }
+
+        // Store in Dram.
+        result = Parent::oop_arraycopy_in_heap(src_obj, src_offset_in_bytes, src_raw,
+                                               dst_obj, dst_offset_in_bytes, dst_raw,
+                                               length);
+
+        // Store in NVM.
+        void* dst_nvm_obj = dst_obj->nvm_header().fwd();
+        for (size_t offset = 0; offset < length; offset += 8) {
+          oop val = Raw::oop_load_in_heap_at(src_obj, src_offset_in_bytes + offset);
+          oop nvm_val = oop(val != NULL ? val->nvm_header().fwd() : NULL);
+          assert(val == NULL || val->nvm_header().recoverable(), "");
+          Raw::store_in_heap_at(oop(dst_nvm_obj), dst_offset_in_bytes + offset, nvm_val);
+        }
+        NVM_WRITEBACK_LOOP(AccessInternal::field_addr(oop(dst_nvm_obj), dst_offset_in_bytes), length)
+      }
+
       return result;
     }
 
     // clone
     static void clone_in_heap(oop src, oop dst, size_t size) {
+#ifdef ASSERT
+      void* dst_obj_nvm_header = dst->nvm_header().to_pointer();
+      assert(dst_obj_nvm_header == NULL, "dst_obj.nvm_header: %p", dst_obj_nvm_header);
+#endif
+
       Parent::clone_in_heap(src, dst, size);
+      nvmHeader::set_header(dst, nvmHeader::zero());
     }
   };
 };

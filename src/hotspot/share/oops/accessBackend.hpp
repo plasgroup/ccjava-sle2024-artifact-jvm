@@ -649,6 +649,7 @@ namespace AccessInternal {
 
     template<DecoratorSet decorators>
     static bool is_hardwired_primitive() {
+      return false; // DEBUG:
       return !HasDecorator<decorators, INTERNAL_VALUE_IS_OOP>::value;
     }
 

@@ -46,7 +46,8 @@
 
 #ifdef OUR_PERSIST
 nvmHeader oopDesc::nvm_header() const {
-  return _nvm_header;
+  uintptr_t v = RawAccess<MO_RELAXED>::load_at(as_oop(), nvm_header_offset_in_bytes());
+  return nvmHeader(v);
 }
 
 nvmHeader* oopDesc::nvm_header_addr() const {

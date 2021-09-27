@@ -56,7 +56,7 @@ class oopDesc {
  private:
 
 #ifdef OUR_PERSIST
-  nvmHeader _nvm_header;
+  volatile nvmHeader _nvm_header;
 #endif // OUR_PERSIST
 
   volatile markWord _mark;

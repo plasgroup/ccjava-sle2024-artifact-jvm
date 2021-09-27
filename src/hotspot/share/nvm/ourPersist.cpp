@@ -15,7 +15,7 @@
 #include "oops/nvmHeader.inline.hpp"
 #include "oops/objArrayKlass.hpp"
 #include "oops/typeArrayKlass.hpp"
-#include "runtime/fieldDescriptor.hpp"
+#include "runtime/fieldDescriptor.inline.hpp"
 #include "runtime/signature.hpp"
 #include "runtime/thread.hpp"
 #include "utilities/globalDefinitions.hpp"
@@ -36,32 +36,24 @@ void* OurPersist::allocate_nvm(int size, Thread* thr) {
   return mem;
 }
 
-bool OurPersist::is_volatile(oop obj, ptrdiff_t offset, DecoratorSet ds) {
-  if (!(ds & OURPERSIST_BS_ASM)) return false; // DEBUG:
-  if (ds & OURPERSIST_IS_VOLATILE) return true;
+bool OurPersist::is_volatile_and_non_mirror(oop obj, ptrdiff_t offset, DecoratorSet ds) {
   if (ds & OURPERSIST_IS_NOT_VOLATILE) return false;
-  ShouldNotReachHere(); // DEBUG:
-  return OurPersist::is_volatile_slow(obj, offset, ds);
-}
+  if (ds & OURPERSIST_IS_VOLATILE)     return true;
+  if (ds & OURPERSIST_IS_STATIC)       return false;
 
-bool OurPersist::is_volatile_fast(oop obj, ptrdiff_t offset, DecoratorSet ds) {
-  return (ds & OURPERSIST_IS_VOLATILE) || (ds & MO_SEQ_CST);
-}
+  assert(oopDesc::is_oop(obj), "");
 
-bool OurPersist::is_volatile_slow(oop obj, ptrdiff_t offset, DecoratorSet ds) {
   Klass* k = obj->klass();
-  if (k->is_array_klass()) {
-    return false;
-  }
-  assert(k->is_instance_klass(), "");
+  if (k->is_array_klass()) return false;
 
-  int k_id = k->id();
-  bool is_static = k_id == InstanceMirrorKlassID && InstanceMirrorKlass::offset_of_static_fields() <= offset;
+  InstanceKlass* ik = (InstanceKlass*)k;
+  if (ik->is_mirror_instance_klass()) return false;
+
   fieldDescriptor fd;
-  ((InstanceKlass*)k)->find_field_from_offset(offset, is_static, &fd);
-  bool is_volatile_FD = fd.is_volatile();
+  ik->find_field_from_offset(offset, false /* is_static */, &fd);
+  bool is_volatile = fd.is_volatile();
 
-  return is_volatile_FD;
+  return is_volatile;
 }
 
 void OurPersist::copy_dram_to_nvm(oop from, oop to, ptrdiff_t offset, BasicType type, bool is_array) {

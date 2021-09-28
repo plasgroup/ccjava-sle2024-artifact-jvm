@@ -38,6 +38,7 @@ class OurPersist : AllStatic {
   static bool is_set_durableroot_annotation(oop klass_obj, ptrdiff_t offset);
 
   static void ensure_recoverable(oop obj);
+  static bool is_same(oop dram_object);
 };
 
 #endif // NVM_OURPERSIST_HPP

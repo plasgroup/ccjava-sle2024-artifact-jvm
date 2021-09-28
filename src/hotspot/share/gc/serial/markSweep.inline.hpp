@@ -53,6 +53,7 @@ template <class T> inline void MarkSweep::mark_and_push(T* p) {
     if (!obj->mark().is_marked()) {
       mark_object(obj);
       _marking_stack.push(obj);
+      OurPersist::is_same(obj);
     }
   }
 }

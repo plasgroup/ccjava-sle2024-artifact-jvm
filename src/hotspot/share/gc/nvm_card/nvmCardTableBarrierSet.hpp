@@ -5,6 +5,7 @@
 
 #include "gc/nvm_card/nvmCardTableBarrierSetAssembler.hpp"
 #include "gc/shared/cardTableBarrierSet.hpp"
+#include "gc/shared/collectedHeap.hpp"
 #include "nvm/nvmMacro.hpp"
 #include "nvm/ourPersist.hpp"
 #include "oops/oop.hpp"
@@ -50,9 +51,10 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         if (nvm_fwd == NULL || nvm_fwd == OURPERSIST_FWD_BUSY) {
           result = Parent::template load_in_heap_at<T>(base, offset);
         } else {
-          result = Parent::template load_in_heap_at<T>(base, offset);
+          T result_dram = Parent::template load_in_heap_at<T>(base, offset);
           // TODO:
-          // result = Parent::template load_in_heap_at<T>(oop(nvm_fwd), offset);
+          // T result_nvm  = Parent::template load_in_heap_at<T>(oop(nvm_fwd), offset);
+          result = result_dram;
         }
 
         return result;
@@ -94,11 +96,13 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
           Parent::store_in_heap_at(base, offset, value);
           nvmHeader::set_fwd(base, NULL);
         } else {
+          nvmHeader::lock_volatile(base); // DEBUG:
           // TODO: delete
           Parent::store_in_heap_at(base, offset, value);
           // Store only in NVM.
           Raw::store_in_heap_at(oop(before_fwd), offset, value);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+          nvmHeader::unlock_volatile(base); // DEBUG:
         }
 
         return;
@@ -145,11 +149,13 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
           result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
           nvmHeader::set_fwd(base, NULL);
         } else {
+          nvmHeader::lock_volatile(base); // DEBUG:
           // TODO: delete
           result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
           // Store only in NVM.
           Raw::atomic_xchg_in_heap_at(oop(before_fwd), offset, new_value);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+          nvmHeader::unlock_volatile(base); // DEBUG:
         }
 
         return result;
@@ -193,11 +199,13 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
           result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
           nvmHeader::set_fwd(base, NULL);
         } else {
+          nvmHeader::lock_volatile(base); // DEBUG:
           // TODO: delete
           result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
           // Store only in NVM.
           Raw::atomic_cmpxchg_in_heap_at(oop(before_fwd), offset, compare_value, new_value);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+          nvmHeader::unlock_volatile(base); // DEBUG:
         }
 
         return result;
@@ -230,9 +238,11 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
     static void arraycopy_in_heap(arrayOop src_obj, size_t src_offset_in_bytes, T* src_raw,
                                   arrayOop dst_obj, size_t dst_offset_in_bytes, T* dst_raw,
                                   size_t length) {
-      // assert(dst_obj != NULL && dst_raw == NULL, ""); // TODO:
-
       if (dst_obj != NULL && dst_raw == NULL) {
+        // heap to heap or native to heap ?
+        assert(src_obj != NULL || !Universe::heap()->is_in(src_raw), "");
+        assert(dst_obj != NULL && dst_raw == NULL, "");
+
         // Store in DRAM.
         Parent::arraycopy_in_heap(src_obj, src_offset_in_bytes, src_raw,
                                   dst_obj, dst_offset_in_bytes, dst_raw,
@@ -243,12 +253,15 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         if (dst_nvm_obj != NULL && dst_nvm_obj != OURPERSIST_FWD_BUSY) {
           // Store in NVM.
           Raw::arraycopy_in_heap(src_obj,     src_offset_in_bytes, src_raw,
-                                dst_nvm_obj, dst_offset_in_bytes, dst_raw,
-                                length);
+                                 dst_nvm_obj, dst_offset_in_bytes, dst_raw,
+                                 length);
           NVM_WRITEBACK_LOOP(AccessInternal::field_addr(oop(dst_nvm_obj), dst_offset_in_bytes), length)
         }
       } else {
-        // TODO:
+        // heap to native or native to native ?
+        assert(src_obj != NULL || !Universe::heap()->is_in(src_raw), "");
+        assert(dst_obj == NULL && !Universe::heap()->is_in(dst_raw), "");
+
         // Store in DRAM.
         Parent::arraycopy_in_heap(src_obj, src_offset_in_bytes, src_raw,
                                   dst_obj, dst_offset_in_bytes, dst_raw,

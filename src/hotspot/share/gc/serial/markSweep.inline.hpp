@@ -28,6 +28,7 @@
 #include "classfile/classLoaderData.inline.hpp"
 #include "gc/serial/markSweep.hpp"
 #include "memory/universe.hpp"
+#include "nvm/nvmDebug.hpp"
 #include "oops/markWord.inline.hpp"
 #include "oops/access.inline.hpp"
 #include "oops/compressedOops.inline.hpp"
@@ -53,6 +54,11 @@ template <class T> inline void MarkSweep::mark_and_push(T* p) {
     if (!obj->mark().is_marked()) {
       mark_object(obj);
       _marking_stack.push(obj);
+#ifdef OUR_PERSIST
+#ifdef ASSERT
+      NVMDebug::cmp_dram_and_nvm_obj_during_gc(obj);
+#endif // ASSERT
+#endif // OUR_PERSIST
     }
   }
 }

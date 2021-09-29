@@ -70,6 +70,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       // Original
       // Parent::store_in_heap_at(base, offset, value);
 
+      assert((decorators & AS_NO_KEEPALIVE) == 0, "");
+
       // Skip markWord.
       if (offset == oopDesc::mark_offset_in_bytes()) {
         // Store in DRAM.
@@ -131,6 +133,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       // Original
       // T result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
 
+      assert((decorators & AS_NO_KEEPALIVE) == 0, "");
+
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         bool success;
@@ -180,6 +184,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
     static T atomic_cmpxchg_in_heap_at(oop base, ptrdiff_t offset, T compare_value, T new_value) {
       // Original
       // T result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+
+      assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
@@ -238,6 +244,9 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
     static void arraycopy_in_heap(arrayOop src_obj, size_t src_offset_in_bytes, T* src_raw,
                                   arrayOop dst_obj, size_t dst_offset_in_bytes, T* dst_raw,
                                   size_t length) {
+
+      assert((decorators & AS_NO_KEEPALIVE) == 0, "");
+
       if (dst_obj != NULL && dst_raw == NULL) {
         // heap to heap or native to heap ?
         assert(src_obj != NULL || !Universe::heap()->is_in(src_raw), "");
@@ -279,6 +288,12 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
     static void oop_store_in_heap_at(oop base, ptrdiff_t offset, oop value) {
       // Original
       // Parent::oop_store_in_heap_at(base, offset, value);
+
+      // Avoid allocating nvm during GC.
+      if ((decorators & AS_NO_KEEPALIVE) != 0) {
+        Parent::oop_store_in_heap_at(base, offset, value);
+        return;
+      }
 
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
@@ -353,6 +368,8 @@ RETRY:
     static oop oop_atomic_xchg_in_heap_at(oop base, ptrdiff_t offset, oop new_value) {
       // Original
       // oop result = Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
+
+      assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
@@ -435,6 +452,8 @@ RETRY:
     static oop oop_atomic_cmpxchg_in_heap_at(oop base, ptrdiff_t offset, oop compare_value, oop new_value) {
       // Original
       // oop result = Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+
+      assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
@@ -519,9 +538,14 @@ RETRY:
     static bool oop_arraycopy_in_heap(arrayOop src_obj, size_t src_offset_in_bytes, T* src_raw,
                                       arrayOop dst_obj, size_t dst_offset_in_bytes, T* dst_raw,
                                       size_t length) {
+      // heap to heap
       assert(src_obj != NULL && dst_obj != NULL, "");
-      assert(src_obj->is_objArray() && dst_obj->is_objArray(), "");
       assert(src_raw == NULL && dst_raw == NULL, "");
+      assert(src_obj->is_objArray() && dst_obj->is_objArray(), "");
+      assert(((size_t)objArrayOopDesc::header_size() * HeapWordSize) <= src_offset_in_bytes, "");
+      assert(((size_t)objArrayOopDesc::header_size() * HeapWordSize) <= dst_offset_in_bytes, "");
+
+      assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
       bool success;
       void* before_fwd;
@@ -574,6 +598,8 @@ RETRY:
       void* dst_obj_nvm_header = dst->nvm_header().to_pointer();
       assert(dst_obj_nvm_header == NULL, "dst_obj.nvm_header: %p", dst_obj_nvm_header);
 #endif
+
+      assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
       Parent::clone_in_heap(src, dst, size);
       nvmHeader::set_header(dst, nvmHeader::zero());

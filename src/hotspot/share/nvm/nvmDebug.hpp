@@ -14,7 +14,7 @@ public:
 
   static bool cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
                                    BasicType type, bool is_volatile);
-  static bool is_same(oop dram_obj);
+  static bool cmp_dram_and_nvm_obj_during_gc(oop dram_obj);
 };
 
 #endif // NVM_NVMDEBUG_HPP

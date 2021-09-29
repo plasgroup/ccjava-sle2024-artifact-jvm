@@ -153,8 +153,92 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
   return v1.long_val == v2.long_val;
 }
 
-bool NVMDebug::is_same(oop dram_obj) {
-  // TODO: unimplemented.
+bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
+  oop nvm_obj = oop(dram_obj->nvm_header().fwd());
+  if (nvm_obj == NULL) {
+    //tty->print("doesn't have nvm copy.\n");
+    return true;
+  }
+  assert(nvm_obj != OURPERSIST_FWD_BUSY, "");
+  assert(nvmHeader::is_fwd(nvm_obj), "");
+  assert(dram_obj->nvm_header().recoverable(), "");
+
+  Klass* klass = dram_obj->klass();
+  bool has_same_field;
+
+  if (klass->is_instance_klass()) {
+    // tty->print("InstanceKlass\n");
+
+    if (klass->id() == InstanceMirrorKlassID) {
+      // tty->print("ik: mirror klass.\n");
+      return true;
+    }
+
+    InstanceKlass* ik = (InstanceKlass*) klass;
+    int cnt = ik->java_fields_count();
+    for (int i = 0; i < cnt; i++) {
+      AccessFlags field_flags = accessFlags_from(ik->field_access_flags(i));
+      Symbol* field_sig = ik->field_signature(i);
+      BasicType field_type = Signature::basic_type(field_sig);
+      ptrdiff_t field_offset = ik->field_offset(i);
+
+      if (field_flags.is_static()) {
+        continue;
+      }
+
+      has_same_field = NVMDebug::cmp_dram_and_nvm_val(dram_obj, nvm_obj, field_offset,
+                                                      field_type, field_flags.is_volatile());
+      if (has_same_field) {
+        // tty->print("ik: has same field.\n");
+        // tty->print("field name: %s\n", field_sig->as_klass_external_name());
+      } else {
+        // tty->print("ik: doesn't have same field.\n");
+        tty->print("ik: name: %s, offset: %ld\n", ik->internal_name(), field_offset);
+        // TODO: return false;
+      }
+    }
+  } else if (klass->is_objArray_klass()) {
+    // tty->print("ObjArrayKlass\n");
+
+    ObjArrayKlass* oak = (ObjArrayKlass*) klass;
+    objArrayOop oao = (objArrayOop) dram_obj;
+    BasicType array_type = ((ArrayKlass*)oak)->element_type();
+    int array_length = oao->length();
+
+    for (int i = 0; i < array_length; i++) {
+      ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
+      has_same_field = NVMDebug::cmp_dram_and_nvm_val(dram_obj, nvm_obj, field_offset, T_OBJECT, false);
+      if (has_same_field) {
+        // tty->print("oak: has same field.\n");
+      } else {
+        // tty->print("oak: doesn't have same field.\n");
+        tty->print("oak: name: %s, offset: %ld\n", oak->external_name(), field_offset);
+        // TODO: return false;
+      }
+    }
+  } else if (klass->is_typeArray_klass()) {
+    // tty->print("TypeArrayKlass\n");
+
+    TypeArrayKlass* tak = (TypeArrayKlass*) klass;
+    typeArrayOop tao = (typeArrayOop) dram_obj;
+    BasicType array_type = ((ArrayKlass*)tak)->element_type();
+    int array_length = tao->length();
+
+    for (int i = 0; i < array_length; i++) {
+      ptrdiff_t field_offset = arrayOopDesc::base_offset_in_bytes(array_type) + type2aelembytes(array_type) * i;
+      has_same_field = NVMDebug::cmp_dram_and_nvm_val(dram_obj, nvm_obj, field_offset, array_type, false);
+      if (has_same_field) {
+        // tty->print("tak: has same field.\n");
+      } else {
+        // tty->print("tak: doesn't have same field.\n");
+        tty->print("tak: name: %s, offset: %ld\n", tak->internal_name(), field_offset);
+        // TODO: return false;
+      }
+    }
+  } else {
+    report_vm_error(__FILE__, __LINE__, "Illegal field type.");
+  }
+
   return true;
 }
 

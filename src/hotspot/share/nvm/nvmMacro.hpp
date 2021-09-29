@@ -5,10 +5,6 @@
 
 #define OURPERSIST_FWD_BUSY ((void*)~0b111)
 
-#ifdef ASSERT
-#define OURPERSIST_DEBUG_MEM_INIT_BITS 12021220213202142021ULL
-#endif
-
 #define OOP_TO_VOID(obj) static_cast<void*>(obj)
 
 // writeback

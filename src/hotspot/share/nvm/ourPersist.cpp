@@ -33,25 +33,6 @@ void* OurPersist::allocate_nvm(int size, Thread* thr) {
   assert(thr != NULL, "");
 
   OurPersist::set_responsible_thread(mem, thr);
-
-#ifdef ASSERT
-  // const int oop_header_size_in_bytes = oopDesc::header_size() * HeapWordSize;
-  // julong* f_cur = (julong*)((char*)mem + oop_header_size_in_bytes);
-  // julong* f_end = (julong*)((char*)mem + size);
-  // while (f_cur < f_end) {
-  //   *f_cur = OURPERSIST_DEBUG_MEM_INIT_BITS;
-  //   f_cur++;
-  // }
-  //
-  // usage:
-  // write_or_load_barrier()
-  //   oop nvm_obj = oop(obj->nvm_header().fwd());
-  //   ptrdiff_t test_off = offset - (offset % 8);
-  //   julong test_val = Raw::template load_in_heap_at<julong>(nvm_obj, test_off);
-  //   assert(test_val != OURPERSIST_DEBUG_MEM_INIT_BITS, "");
-  assert(responsible_thread(mem) == thr, "");
-#endif
-
   return mem;
 }
 

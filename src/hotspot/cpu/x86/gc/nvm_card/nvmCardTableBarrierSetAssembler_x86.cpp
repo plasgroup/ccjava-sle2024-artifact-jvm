@@ -14,14 +14,14 @@ void NVMCardTableBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSe
   // Parent::store_at(masm, decorators, type, dst, val, tmp1, tmp2);
 
   // OurPersist assembler
-  if (is_reference_type(type)) {
-    NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
-  } else {
-    NVMCardTableBarrierSetAssembler::interpreter_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
-  }
+  // if (is_reference_type(type)) {
+  //   NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
+  // } else {
+  //   NVMCardTableBarrierSetAssembler::interpreter_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
+  // }
 
   // Runtime
-  // NVMCardTableBarrierSetAssembler::runtime_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
+  NVMCardTableBarrierSetAssembler::runtime_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
 }
 
 void NVMCardTableBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
@@ -110,6 +110,7 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
     //  if (NVM::check_durableroot_annotation(obj, offset)) {
     //    make_object_recoverable(val);
     //  }
+    Unimplemented();
 
     __ bind(done_check_annotaion);
   }
@@ -209,11 +210,13 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
 void NVMCardTableBarrierSetAssembler::interpreter_load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                                           Register dst, Address src, Register tmp1, Register tmp_thread) {
   // TODO:
+  Unimplemented();
 }
 
 void NVMCardTableBarrierSetAssembler::interpreter_oop_load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                                               Register dst, Address src, Register tmp1, Register tmp_thread) {
   // TODO:
+  Unimplemented();
 }
 
 #define CHECK_PUSH_POP(reg) if (reg != tmp1 && reg != tmp2)

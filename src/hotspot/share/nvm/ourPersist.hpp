@@ -22,10 +22,6 @@ class OurPersist : AllStatic {
   static void copy_dram_to_nvm(oop from, oop to, ptrdiff_t offset, BasicType type, bool is_array = false);
   static bool cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, BasicType type, bool is_array = false);
 
-  static bool is_volatile(oop obj, ptrdiff_t offset, DecoratorSet ds);
-  static bool is_volatile_fast(oop obj, ptrdiff_t offset, DecoratorSet ds);
-  static bool is_volatile_slow(oop obj, ptrdiff_t offset, DecoratorSet ds);
-
   static void* allocate_nvm(int size, Thread* thr = NULL);
 
   static void copy_object(oop obj);
@@ -36,6 +32,7 @@ class OurPersist : AllStatic {
   inline static bool is_static_field(oop obj, ptrdiff_t offset);
   static Thread* responsible_thread(void* nvm_obj);
   static bool is_set_durableroot_annotation(oop klass_obj, ptrdiff_t offset);
+  static bool is_volatile_and_non_mirror(oop obj, ptrdiff_t offset, DecoratorSet ds);
 
   static void ensure_recoverable(oop obj);
   static bool is_same(oop dram_object);

@@ -7,6 +7,10 @@
 #include "utilities/globalDefinitions.hpp"
 
 class NVMAllocator : AllStatic {
+  friend class NonVolatileThreadLocalAllocBuffer;
+  friend class NonVolatileChunkSegregate;
+public:
+  static const size_t NVM_CHUNK_BYTE_SIZE = 4096;
  private:
   static void* nvm_head;
   static void* nvm_tail;
@@ -16,6 +20,8 @@ class NVMAllocator : AllStatic {
   static void init();
   // allocate an UNINITILIZED memory block in NVM
   static void* allocate(size_t size);
+
+  static void* allocate_chunksize();
 };
 
 #endif // NVM_NVMALLOCATOR_HPP

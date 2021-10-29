@@ -5,6 +5,8 @@
 #include "utilities/vmError.hpp"
 #include "utilities/nativeCallStack.hpp"
 #include <sys/mman.h>
+#include "nvm/nonVolatileThreadLocalAllocBuffer.hpp"
+#include "nvm/nonVolatileChunk.hpp"
 
 void* NVMAllocator::nvm_head = NULL;
 void* NVMAllocator::nvm_tail = NULL;
@@ -45,35 +47,49 @@ void* NVMAllocator::allocate(size_t _size) {
   void* ptr = NULL;
 
 #ifdef USE_NVTLAB
+printf("USE_NVTLAB\n");
   // NVTLABからメモリを確保する
-  if (NVM::nvm_head == NULL) NVM::init_alloc_nvm();
+
+  if (NVMAllocator::nvm_head == NULL){
+    pthread_mutex_lock(&NVMAllocator::allocate_mtx);
+    NVMAllocator::init();
+    NonVolatileChunkSegregate::initialize_standby_for_gc();
+    pthread_mutex_unlock(&NVMAllocator::allocate_mtx);
+  }
   Thread* thr = Thread::current();
   NonVolatileThreadLocalAllocBuffer& nvtlab = thr->nvtlab();
 
-  if (nvtlab.get_start() == NULL) {
-    nvtlab.initialize();
-  }
-
-  if (_size*HeapWordSize >= NonVolatileThreadLocalAllocBuffer::kbyte_per_nvtlab*1024 / 2) {
-    ptr = nvtlab.alloc_nvm_outside_nvtlab(_size);
-  } else {
-    ptr = nvtlab.alloc_nvm_from_nvtlab(_size);
-  }
-
+  ptr = nvtlab.allocate(_size);
+  
   if (ptr == NULL) {
-    // refill
-    bool succeeded = nvtlab.refill();
-    if (!succeeded) {
-      VMError::report_and_die("refill failed");
-    }
-    // once failed but try again after refill
-    ptr = nvtlab.alloc_nvm_from_nvtlab(_size);
-    if (ptr == NULL) {
-      printf("ptr: %ld\n", _size * HeapWordSize);
-      VMError::report_and_die("refill failed 2");
-    }
+    report_vm_error(__FILE__, __LINE__, "NVMAlocator::allocate cannot allocate nvm.");
   }
+
+  // if (nvtlab.get_start() == NULL) {
+  //   nvtlab.initialize();
+  // }
+
+  // if (_size*HeapWordSize >= NonVolatileThreadLocalAllocBuffer::kbyte_per_nvtlab*1024 / 2) {
+  //   ptr = nvtlab.alloc_nvm_outside_nvtlab(_size);
+  // } else {
+  //   ptr = nvtlab.alloc_nvm_from_nvtlab(_size);
+  // }
+
+  // if (ptr == NULL) {
+  //   // refill
+  //   bool succeeded = nvtlab.refill();
+  //   if (!succeeded) {
+  //     VMError::report_and_die("refill failed");
+  //   }
+  //   // once failed but try again after refill
+  //   ptr = nvtlab.alloc_nvm_from_nvtlab(_size);
+  //   if (ptr == NULL) {
+  //     printf("ptr: %ld\n", _size * HeapWordSize);
+  //     VMError::report_and_die("refill failed 2");
+  //   }
+  // }
 #else
+  printf("NOT USE_NVTLAB\n");
   // 大域的な領域からメモリを確保する
   // allocate
   pthread_mutex_lock(&NVMAllocator::allocate_mtx);
@@ -89,6 +105,20 @@ void* NVMAllocator::allocate(size_t _size) {
   }
   pthread_mutex_unlock(&NVMAllocator::allocate_mtx);
 #endif
+
+  return ptr;
+}
+
+void* NVMAllocator::allocate_chunksize() {
+  if (NVMAllocator::nvm_head == NULL) NVMAllocator::init();
+
+  void* ptr = NVMAllocator::nvm_head;
+  void* nvm_next = (void*)(((char*)NVMAllocator::nvm_head) + NVMAllocator::NVM_CHUNK_BYTE_SIZE);
+  NVMAllocator::nvm_head = nvm_next;
+    // check
+  if (NVMAllocator::nvm_tail <= nvm_next) {
+    report_vm_error(__FILE__, __LINE__, "Out of memory in NVM.");
+  }
 
   return ptr;
 }

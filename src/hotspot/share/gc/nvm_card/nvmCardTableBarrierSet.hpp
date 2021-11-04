@@ -8,8 +8,9 @@
 #include "gc/shared/collectedHeap.hpp"
 #include "nvm/nvmMacro.hpp"
 #include "nvm/ourPersist.hpp"
-#include "oops/oop.hpp"
 #include "oops/arrayOop.hpp"
+#include "oops/klass.hpp"
+#include "oops/oop.hpp"
 
 class NVMCardTableBarrierSet: public CardTableBarrierSet {
   friend class VMStructs;
@@ -22,6 +23,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
   // return is_set_durableroot_annotation
   inline static bool static_object_etc(oop obj, ptrdiff_t offset, oop value);
 
+public:
   template <DecoratorSet decorators, typename BarrierSetT = NVMCardTableBarrierSet>
   class AccessBarrier: public BarrierSet::AccessBarrier<decorators, BarrierSetT> {
     // parent barrierset class
@@ -30,6 +32,49 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
     typedef BarrierSet::AccessBarrier<decorators, BarrierSetT> Raw;
 
    public:
+    // DEBUG:
+    static void oop_store_in_heap_raw(oop base, ptrdiff_t offset, oop value) {
+      // Check annotation
+      bool is_set_durableroot_annotation =
+        NVMCardTableBarrierSet::static_object_etc(base, offset, value);
+
+      // Skip
+      if (!OurPersist::is_target(base->klass())) {
+        // Store in DRAM.
+        Raw::oop_store_in_heap_at(base, offset, value);
+        return;
+      }
+
+RETRY:
+      void* before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
+      bool success = before_fwd == NULL;
+      if (success) {
+        // Store only in DRAM.
+        Raw::oop_store_in_heap_at(base, offset, value);
+        nvmHeader::set_fwd(base, NULL);
+        return;
+      }
+      if (before_fwd == OURPERSIST_FWD_BUSY) {
+        // busy wait
+        goto RETRY;
+      }
+
+      assert(nvmHeader::is_fwd(before_fwd), "");
+      if (value != NULL) {
+        OurPersist::ensure_recoverable(value);
+      }
+      // Store in DRAM.
+      Raw::oop_store_in_heap_at(base, offset, value);
+      // Store in NVM.
+      oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
+      if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
+        // Skip
+        nvm_val = NULL;
+      }
+      Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
+      NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+    }
+
     // primitive
     template <typename T>
     static T load_in_heap_at(oop base, ptrdiff_t offset) {
@@ -51,10 +96,12 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         if (nvm_fwd == NULL || nvm_fwd == OURPERSIST_FWD_BUSY) {
           result = Parent::template load_in_heap_at<T>(base, offset);
         } else {
-          T result_dram = Parent::template load_in_heap_at<T>(base, offset);
-          // TODO:
-          // T result_nvm  = Parent::template load_in_heap_at<T>(oop(nvm_fwd), offset);
-          result = result_dram;
+// DEBUG:
+#ifdef OURPERSIST_VOLATILE_PRIM_ALGO
+          result = Parent::template load_in_heap_at<T>(oop(nvm_fwd), offset);
+#else  // OURPERSIST_VOLATILE_PRIM_ALGO
+          result = Parent::template load_in_heap_at<T>(base, offset);
+#endif // OURPERSIST_VOLATILE_PRIM_ALGO
         }
 
         return result;
@@ -72,8 +119,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
-      // Skip markWord.
-      if (offset == oopDesc::mark_offset_in_bytes()) {
+      // Skip
+      if (offset == oopDesc::mark_offset_in_bytes() || !OurPersist::is_target(base->klass())) {
         // Store in DRAM.
         Parent::store_in_heap_at(base, offset, value);
         return;
@@ -98,13 +145,20 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
           Parent::store_in_heap_at(base, offset, value);
           nvmHeader::set_fwd(base, NULL);
         } else {
-          nvmHeader::lock_volatile(base); // DEBUG:
-          // TODO: delete
-          Parent::store_in_heap_at(base, offset, value);
+// DEBUG:
+#ifdef OURPERSIST_VOLATILE_PRIM_ALGO
           // Store only in NVM.
           Raw::store_in_heap_at(oop(before_fwd), offset, value);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          nvmHeader::unlock_volatile(base); // DEBUG:
+#else  // OURPERSIST_VOLATILE_PRIM_ALGO
+          nvmHeader::lock_volatile(base);
+          // Store in DRAM.
+          Parent::store_in_heap_at(base, offset, value);
+          // Store in NVM.
+          Raw::store_in_heap_at(oop(before_fwd), offset, value);
+          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+          nvmHeader::unlock_volatile(base);
+#endif // OURPERSIST_VOLATILE_PRIM_ALGO
         }
 
         return;
@@ -135,6 +189,12 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
+      // Skip
+      if (!OurPersist::is_target(base->klass())) {
+        // Store in DRAM.
+        return Parent::atomic_xchg_in_heap_at(base, offset, new_value);
+      }
+
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         bool success;
@@ -153,13 +213,20 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
           result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
           nvmHeader::set_fwd(base, NULL);
         } else {
-          nvmHeader::lock_volatile(base); // DEBUG:
-          // TODO: delete
-          result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
+// DEBUG:
+#ifdef OURPERSIST_VOLATILE_PRIM_ALGO
           // Store only in NVM.
+          result = Raw::atomic_xchg_in_heap_at(oop(before_fwd), offset, new_value);
+          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#else  // OURPERSIST_VOLATILE_PRIM_ALGO
+          nvmHeader::lock_volatile(base);
+          // Store and load in DRAM.
+          result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
+          // Store in NVM.
           Raw::atomic_xchg_in_heap_at(oop(before_fwd), offset, new_value);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          nvmHeader::unlock_volatile(base); // DEBUG:
+          nvmHeader::unlock_volatile(base);
+#endif // OURPERSIST_VOLATILE_PRIM_ALGO
         }
 
         return result;
@@ -187,6 +254,12 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
+      // Skip
+      if (!OurPersist::is_target(base->klass())) {
+        // Store in DRAM.
+        return Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+      }
+
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         bool success;
@@ -205,13 +278,20 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
           result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
           nvmHeader::set_fwd(base, NULL);
         } else {
-          nvmHeader::lock_volatile(base); // DEBUG:
-          // TODO: delete
-          result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+// DEBUG:
+#ifdef OURPERSIST_VOLATILE_PRIM_ALGO
           // Store only in NVM.
+          result = Raw::atomic_cmpxchg_in_heap_at(oop(before_fwd), offset, compare_value, new_value);
+          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#else  // OURPERSIST_VOLATILE_PRIM_ALGO
+          nvmHeader::lock_volatile(base);
+          // Store and load in DRAM.
+          result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+          // Store in NVM.
           Raw::atomic_cmpxchg_in_heap_at(oop(before_fwd), offset, compare_value, new_value);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          nvmHeader::unlock_volatile(base); // DEBUG:
+          nvmHeader::unlock_volatile(base);
+#endif // OURPERSIST_VOLATILE_PRIM_ALGO
         }
 
         return result;
@@ -261,8 +341,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         void* dst_nvm_obj = dst_obj->nvm_header().fwd();
         if (dst_nvm_obj != NULL && dst_nvm_obj != OURPERSIST_FWD_BUSY) {
           // Store in NVM.
-          Raw::arraycopy_in_heap(src_obj,     src_offset_in_bytes, src_raw,
-                                 dst_nvm_obj, dst_offset_in_bytes, dst_raw,
+          Raw::arraycopy_in_heap(dst_obj,               dst_offset_in_bytes, (T*)NULL,
+                                 arrayOop(dst_nvm_obj), dst_offset_in_bytes, (T*)NULL,
                                  length);
           NVM_WRITEBACK_LOOP(AccessInternal::field_addr(oop(dst_nvm_obj), dst_offset_in_bytes), length)
         }
@@ -295,12 +375,19 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         return;
       }
 
+      // Check annotation
+      bool is_set_durableroot_annotation =
+        NVMCardTableBarrierSet::static_object_etc(base, offset, value);
+
+      // Skip
+      if (!OurPersist::is_target(base->klass())) {
+        // Store in DRAM.
+        Parent::oop_store_in_heap_at(base, offset, value);
+        return;
+      }
+
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
-        // Check annotation
-        bool is_set_durableroot_annotation =
-          NVMCardTableBarrierSet::static_object_etc(base, offset, value);
-
         bool success;
         void* before_fwd;
         while (true) {
@@ -327,6 +414,10 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
           Parent::oop_store_in_heap_at(base, offset, value);
           // Store in NVM.
           oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
+          if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
+            // Skip
+            nvm_val = NULL;
+          }
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
           nvmHeader::unlock_volatile(base);
@@ -336,10 +427,6 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       }
 
       // Non volatile
-      // Check annotation
-      bool is_set_durableroot_annotation =
-        NVMCardTableBarrierSet::static_object_etc(base, offset, value);
-
 RETRY:
       void* before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
       bool success = before_fwd == NULL;
@@ -361,7 +448,12 @@ RETRY:
       // Store in DRAM.
       Parent::oop_store_in_heap_at(base, offset, value);
       // Store in NVM.
-      Raw::oop_store_in_heap_at(oop(before_fwd), offset, oop(value != NULL ? value->nvm_header().fwd() : NULL));
+      oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
+      if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
+        // Skip
+        nvm_val = NULL;
+      }
+      Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
       NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
     }
 
@@ -371,12 +463,18 @@ RETRY:
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
+      // Check annotation
+      bool is_set_durableroot_annotation =
+        NVMCardTableBarrierSet::static_object_etc(base, offset, new_value);
+
+      // Skip
+      if (!OurPersist::is_target(base->klass())) {
+        // Store in DRAM.
+        return Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
+      }
+
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
-        // Check annotation
-        bool is_set_durableroot_annotation =
-          NVMCardTableBarrierSet::static_object_etc(base, offset, new_value);
-
         bool success;
         void* before_fwd;
         while (true) {
@@ -405,6 +503,10 @@ RETRY:
           Parent::oop_store_in_heap_at(base, offset, new_value);
           // Store in NVM.
           oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
+          if (nvm_val != NULL && !OurPersist::is_target(new_value->klass())) {
+            // Skip
+            nvm_val = NULL;
+          }
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
           nvmHeader::unlock_volatile(base);
@@ -414,10 +516,6 @@ RETRY:
       }
 
       // Non volatile
-      // Check annotation
-      bool is_set_durableroot_annotation =
-        NVMCardTableBarrierSet::static_object_etc(base, offset, new_value);
-
       bool success;
       void* before_fwd;
       while (true) {
@@ -441,6 +539,10 @@ RETRY:
         result = Parent::oop_load_in_heap_at(base, offset);
         Parent::oop_store_in_heap_at(base, offset, new_value);
         oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
+        if (nvm_val != NULL && !OurPersist::is_target(new_value->klass())) {
+          // Skip
+          nvm_val = NULL;
+        }
         Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
         nvmHeader::unlock_atomic(base);
@@ -455,12 +557,18 @@ RETRY:
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
+      // Check annotation
+      bool is_set_durableroot_annotation =
+        NVMCardTableBarrierSet::static_object_etc(base, offset, new_value);
+
+      // Skip
+      if (!OurPersist::is_target(base->klass())) {
+        // Store in DRAM.
+        return Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+      }
+
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
-        // Check annotation
-        bool is_set_durableroot_annotation =
-          NVMCardTableBarrierSet::static_object_etc(base, offset, new_value);
-
         bool success;
         void* before_fwd;
         while (true) {
@@ -488,6 +596,10 @@ RETRY:
             Parent::oop_store_in_heap_at(base, offset, new_value);
             // Store in NVM.
             oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
+            if (nvm_val != NULL && !OurPersist::is_target(new_value->klass())) {
+              // Skip
+              nvm_val = NULL;
+            }
             Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
             NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
           }
@@ -498,10 +610,6 @@ RETRY:
       }
 
       // Non volatile
-      // Check annotation
-      bool is_set_durableroot_annotation =
-        NVMCardTableBarrierSet::static_object_etc(base, offset, new_value);
-
       bool success;
       void* before_fwd;
       while (true) {
@@ -525,6 +633,10 @@ RETRY:
         if (swap) {
           Parent::oop_store_in_heap_at(base, offset, new_value);
           oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
+          if (nvm_val != NULL && !OurPersist::is_target(new_value->klass())) {
+            // Skip
+            nvm_val = NULL;
+          }
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
         }
@@ -564,8 +676,11 @@ RETRY:
                                                length);
         nvmHeader::set_fwd(dst_obj, NULL);
       } else {
+        size_t oop_bytes = 8;
+        assert(HeapWordSize == oop_bytes && type2size[T_OBJECT] * HeapWordSize == oop_bytes, "");
+
         // ensure_recoverable
-        for (size_t offset = 0; offset < length; offset += 8) {
+        for (size_t offset = 0; offset < length * oop_bytes; offset += oop_bytes) {
           oop val = Raw::oop_load_in_heap_at(src_obj, src_offset_in_bytes + offset);
           assert(oopDesc::is_oop_or_null(val), "");
           if (val != NULL) {
@@ -580,10 +695,14 @@ RETRY:
 
         // Store in NVM.
         void* dst_nvm_obj = dst_obj->nvm_header().fwd();
-        for (size_t offset = 0; offset < length; offset += 8) {
-          oop val = Raw::oop_load_in_heap_at(src_obj, src_offset_in_bytes + offset);
+        for (size_t offset = 0; offset < length * oop_bytes; offset += oop_bytes) {
+          oop val = Raw::oop_load_in_heap_at(dst_obj, dst_offset_in_bytes + offset);
           oop nvm_val = oop(val != NULL ? val->nvm_header().fwd() : NULL);
-          assert(val == NULL || val->nvm_header().recoverable(), "");
+          if (nvm_val != NULL && !OurPersist::is_target(val->klass())) {
+            // Skip
+            nvm_val = NULL;
+          }
+          assert(nvm_val == NULL || val->nvm_header().recoverable(), "");
           Raw::store_in_heap_at(oop(dst_nvm_obj), dst_offset_in_bytes + offset, nvm_val);
         }
         NVM_WRITEBACK_LOOP(AccessInternal::field_addr(oop(dst_nvm_obj), dst_offset_in_bytes), length)

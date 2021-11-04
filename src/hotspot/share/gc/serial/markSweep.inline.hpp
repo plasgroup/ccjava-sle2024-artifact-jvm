@@ -56,7 +56,9 @@ template <class T> inline void MarkSweep::mark_and_push(T* p) {
       _marking_stack.push(obj);
 #ifdef OUR_PERSIST
 #ifdef ASSERT
+#ifdef CMP_OBJ
       NVMDebug::cmp_dram_and_nvm_obj_during_gc(obj);
+#endif
 #endif // ASSERT
 #endif // OUR_PERSIST
     }

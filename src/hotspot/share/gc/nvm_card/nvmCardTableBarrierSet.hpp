@@ -676,7 +676,7 @@ RETRY:
                                                length);
         nvmHeader::set_fwd(dst_obj, NULL);
       } else {
-        size_t oop_bytes = 8;
+        int oop_bytes = 8;
         assert(HeapWordSize == oop_bytes && type2size[T_OBJECT] * HeapWordSize == oop_bytes, "");
 
         // ensure_recoverable

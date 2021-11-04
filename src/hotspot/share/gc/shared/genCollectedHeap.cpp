@@ -727,7 +727,11 @@ HeapWord* GenCollectedHeap::satisfy_failed_allocation(size_t size, bool is_tlab)
     return result;   // Could be null if we are out of space.
   } else if (!incremental_collection_will_fail(false /* don't consult_young */)) {
     // Do an incremental collection.
+#ifdef FORCE_FULL_GC
+    do_collection(true,                      // full
+#else  // FORCE_FULL_GC
     do_collection(false,                     // full
+#endif // FORCE_FULL_GC
                   false,                     // clear_all_soft_refs
                   size,                      // size
                   is_tlab,                   // is_tlab

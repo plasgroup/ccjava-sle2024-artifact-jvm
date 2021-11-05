@@ -1,4 +1,5 @@
 #ifdef OUR_PERSIST
+#ifdef ASSERT
 
 #include "oops/accessDecorators.hpp"
 #include "oops/klass.hpp"
@@ -9,6 +10,7 @@
 class NVMDebug : AllStatic {
 private:
 public:
+  static void print_native_stack();
   static void print_decorators(DecoratorSet ds);
   static void print_klass_id(Klass* k);
 
@@ -18,4 +20,5 @@ public:
 };
 
 #endif // NVM_NVMDEBUG_HPP
+#endif // ASSERT
 #endif // OUR_PERSIST

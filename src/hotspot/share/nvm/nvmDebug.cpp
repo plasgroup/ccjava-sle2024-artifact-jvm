@@ -1,4 +1,5 @@
 #ifdef OUR_PERSIST
+#ifdef ASSERT
 
 #include "gc/nvm_card/nvmCardTableBarrierSet.inline.hpp"
 #include "gc/shared/cardTableBarrierSet.hpp"
@@ -12,6 +13,11 @@
 #include "oops/objArrayKlass.hpp"
 #include "oops/typeArrayKlass.hpp"
 #include "runtime/fieldDescriptor.inline.hpp"
+
+void NVMDebug::print_native_stack() {
+  char buf[2000];
+  VMError::print_native_stack(tty, os::current_frame(), Thread::current(), buf, sizeof(buf));
+}
 
 void NVMDebug::print_klass_id(Klass* k) {
   int k_id = k->id();
@@ -145,6 +151,17 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
         oop dram_v = Parent::oop_load_in_heap_at(dram_obj, offset);
         v1.oop_val = oop(dram_v != NULL ? dram_v->nvm_header().fwd() : NULL);
         v2.oop_val = Raw::oop_load_in_heap_at(nvm_obj, offset);
+        if (v1.long_val != v2.long_val) {
+          for (int i = -80; i <= 80; i += 8) {
+            oopDesc* test = Parent::oop_load_in_heap_at(dram_obj, offset + i);
+            tty->print("dram_obj[%d]: %p\n", int(offset + i), test);
+          }
+          tty->print("dram_obj is_recoverable: %d\n", dram_obj->nvm_header().recoverable());
+          tty->print("dram_obj is_target: %d\n", OurPersist::is_target(dram_obj->klass()));
+          tty->print("dram_v is_recoverable: %d\n", dram_v->nvm_header().recoverable());
+          tty->print("dram_v is_target: %d\n", OurPersist::is_target(dram_v->klass()));
+          tty->print("%p != %p\n", v1.oop_val, v2.oop_val);
+        }
         break;
       }
     default:
@@ -156,7 +173,7 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
 bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
   oop nvm_obj = oop(dram_obj->nvm_header().fwd());
   if (nvm_obj == NULL) {
-    //tty->print("doesn't have nvm copy.\n");
+    // tty->print("doesn't have nvm copy.\n");
     return true;
   }
   assert(nvm_obj != OURPERSIST_FWD_BUSY, "");
@@ -174,28 +191,32 @@ bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
       return true;
     }
 
-    InstanceKlass* ik = (InstanceKlass*) klass;
-    int cnt = ik->java_fields_count();
-    for (int i = 0; i < cnt; i++) {
-      AccessFlags field_flags = accessFlags_from(ik->field_access_flags(i));
-      Symbol* field_sig = ik->field_signature(i);
-      BasicType field_type = Signature::basic_type(field_sig);
-      ptrdiff_t field_offset = ik->field_offset(i);
+    InstanceKlass* ik = (InstanceKlass*)klass;
+    while (ik != NULL) {
+      int cnt = ik->java_fields_count();
+      for (int i = 0; i < cnt; i++) {
+        AccessFlags field_flags = accessFlags_from(ik->field_access_flags(i));
+        Symbol* field_sig = ik->field_signature(i);
+        BasicType field_type = Signature::basic_type(field_sig);
+        ptrdiff_t field_offset = ik->field_offset(i);
 
-      if (field_flags.is_static()) {
-        continue;
-      }
+        if (field_flags.is_static()) {
+          continue;
+        }
 
-      has_same_field = NVMDebug::cmp_dram_and_nvm_val(dram_obj, nvm_obj, field_offset,
-                                                      field_type, field_flags.is_volatile());
-      if (has_same_field) {
-        // tty->print("ik: has same field.\n");
-        // tty->print("field name: %s\n", field_sig->as_klass_external_name());
-      } else {
-        // tty->print("ik: doesn't have same field.\n");
-        tty->print("ik: name: %s, offset: %ld\n", ik->internal_name(), field_offset);
-        // TODO: return false;
+        has_same_field = NVMDebug::cmp_dram_and_nvm_val(dram_obj, nvm_obj, field_offset,
+                                                        field_type, field_flags.is_volatile());
+        if (has_same_field) {
+          // tty->print("ik: has same field.\n");
+          // tty->print("field name: %s\n", field_sig->as_klass_external_name());
+        } else {
+          char str[100];
+          tty->print("ik: doesn't have same field.\n");
+          tty->print("ik: name: %s, offset: %ld\n", ik->name()->as_C_string(str, 100), field_offset);
+          return false;
+        }
       }
+      ik = (InstanceKlass*)ik->super();
     }
   } else if (klass->is_objArray_klass()) {
     // tty->print("ObjArrayKlass\n");
@@ -211,9 +232,10 @@ bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
       if (has_same_field) {
         // tty->print("oak: has same field.\n");
       } else {
-        // tty->print("oak: doesn't have same field.\n");
-        tty->print("oak: name: %s, offset: %ld\n", oak->external_name(), field_offset);
-        // TODO: return false;
+        char str[100];
+        tty->print("oak: doesn't have same field.\n");
+        tty->print("oak: name: %s, obj: %p, offset: %ld, size: %d\n", oak->name()->as_C_string(str, 100), OOP_TO_VOID(dram_obj), field_offset, dram_obj->size());
+        return false;
       }
     }
   } else if (klass->is_typeArray_klass()) {
@@ -230,9 +252,10 @@ bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
       if (has_same_field) {
         // tty->print("tak: has same field.\n");
       } else {
-        // tty->print("tak: doesn't have same field.\n");
-        tty->print("tak: name: %s, offset: %ld\n", tak->internal_name(), field_offset);
-        // TODO: return false;
+        char str[100];
+        tty->print("tak: doesn't have same field.\n");
+        tty->print("tak: name: %s, obj: %p, offset: %ld, size: %d\n", tak->name()->as_C_string(str, 100), OOP_TO_VOID(dram_obj), field_offset, dram_obj->size());
+        return false;
       }
     }
   } else {
@@ -242,4 +265,5 @@ bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
   return true;
 }
 
+#endif // ASSERT
 #endif // OUR_PERSIST

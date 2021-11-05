@@ -11,9 +11,6 @@ class OurPersist : AllStatic {
  private:
   // used to global-lock-barrier-sync
   static unsigned long _copy_object_thread_count;
-  // check -Xint and -XX:-UseCompressedOops option.
-  static bool _enable;
-  static bool _enable_is_set;
 
  private:
   static void set_responsible_thread(void* nvm_ptr, Thread* cur_thread);
@@ -28,7 +25,7 @@ class OurPersist : AllStatic {
   //static void shade();
 
  public:
-  inline static bool enable();
+  inline static bool is_target(Klass* klass);
   inline static bool is_static_field(oop obj, ptrdiff_t offset);
   static Thread* responsible_thread(void* nvm_obj);
   static bool is_set_durableroot_annotation(oop klass_obj, ptrdiff_t offset);

@@ -8,12 +8,29 @@
 #include "oops/klass.hpp"
 #include "oops/oop.inline.hpp"
 
-inline bool OurPersist::enable() {
-  if (!OurPersist::_enable_is_set) {
-    OurPersist::_enable = Arguments::is_interpreter_only() && (!UseCompressedOops);
-    OurPersist::_enable_is_set = true;
+inline bool OurPersist::is_target(Klass* klass) {
+  assert(klass != NULL, "");
+  int klass_id = klass->id();
+
+  // DEBUG:
+  //return true;
+
+  if (klass_id == InstanceMirrorKlassID) {
+    return false;
   }
-  return OurPersist::_enable;
+  if (klass_id == InstanceRefKlassID) {
+    return false;
+  }
+  if (klass_id == InstanceClassLoaderKlassID) {
+    return false;
+  }
+
+  Klass* super = klass->super();
+  if (super != NULL) {
+    return OurPersist::is_target(super);
+  }
+
+  return true;
 }
 
 inline bool OurPersist::is_static_field(oop obj, ptrdiff_t offset) {

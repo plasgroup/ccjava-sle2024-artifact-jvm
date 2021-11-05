@@ -20,9 +20,6 @@
 #include "runtime/thread.hpp"
 #include "utilities/globalDefinitions.hpp"
 
-bool OurPersist::_enable = false;
-bool OurPersist::_enable_is_set = false;
-
 void* OurPersist::allocate_nvm(int size, Thread* thr) {
   void* mem = NVMAllocator::allocate(size);
   assert(mem != NULL, "");
@@ -433,6 +430,9 @@ void OurPersist::ensure_recoverable(oop obj) {
   if (obj->nvm_header().recoverable()) {
     return;
   }
+  if (!OurPersist::is_target(obj->klass())) {
+    return;
+  }
 
   Thread* cur_thread = Thread::current();
   NVMWorkListStack* worklist = cur_thread->nvm_work_list();
@@ -513,7 +513,7 @@ RETRY:
             oop v = Parent::oop_load_in_heap_at(obj, field_offset);
             void* nvm_v = NULL;
 
-            if (v != NULL) {
+            if (v != NULL && OurPersist::is_target(v->klass())) {
               if (v->nvm_header().recoverable()) {
                 nvm_v = v->nvm_header().fwd();
               } else {
@@ -570,7 +570,7 @@ RETRY:
         oop v = Parent::oop_load_in_heap_at(obj, field_offset);
 
         void* nvm_v = NULL;
-        if (v != NULL) {
+        if (v != NULL && OurPersist::is_target(v->klass())) {
           if (v->nvm_header().recoverable()) {
             nvm_v = v->nvm_header().fwd();
           } else {

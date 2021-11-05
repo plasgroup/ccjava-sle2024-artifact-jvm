@@ -37,7 +37,7 @@ class CallRuntimeBarrierSet : AllStatic {
 
   template <DecoratorSet ds>
   inline static oopDesc* call_runtime_oop_load_in_heap_at(oopDesc* obj, ptrdiff_t off) {
-    return NVMCardTableBarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet>::oop_load_in_heap_at(obj, off);
+    return NVMCardTableBarrierSet::AccessBarrier<ds>::oop_load_in_heap_at(obj, off);
   };
 
   inline static void call_runtime_ensure_recoverable(oopDesc* obj) {

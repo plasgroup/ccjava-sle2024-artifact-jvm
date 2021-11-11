@@ -49,12 +49,21 @@ void* NonVolatileThreadLocalAllocBuffer::allocate(size_t _word_size) {
   if (ptr != NULL) {
     return ptr;
   }
+
+
+
   // refill
   nvc[idx] = NonVolatileChunkSegregate::generate_new_nvc(idx);
   chunk = nvc[idx];
   // retry
   ptr = chunk->allocation();
-  if (ptr != NULL) {
+
+  // for (size_t i = 0; i < chunk->get_max_idx(); i++) {
+  //   printf("abit[%lu]: %d\n", i, chunk->get_abit(i));
+  // }
+  if (ptr == NULL) {
+
+
     report_vm_error(__FILE__, __LINE__, "refill failed");
   }
 
@@ -91,24 +100,24 @@ size_t NonVolatileThreadLocalAllocBuffer::word_size_to_idx(size_t word_size) {
 }
 
 size_t NonVolatileThreadLocalAllocBuffer::idx_to_word_size(size_t idx) {
-  if (idx <= 30) {
+  if (idx <= 31) {
     return idx + 1;
   }
-  if (idx == 31)
-    return 41;
   if (idx == 32)
-    return 54;
+    return 41;
   if (idx == 33)
-    return 71;
+    return 54;
   if (idx == 34)
-    return 83;
+    return 71;
   if (idx == 35)
-    return 122;
+    return 83;
   if (idx == 36)
-    return 159;
+    return 122;
   if (idx == 37)
-    return 208;
+    return 159;
   if (idx == 38)
+    return 208;
+  if (idx == 39)
     return 256;
 
   report_vm_error(__FILE__, __LINE__, "Should not reach here.");
@@ -116,25 +125,25 @@ size_t NonVolatileThreadLocalAllocBuffer::idx_to_word_size(size_t idx) {
 }
 
 size_t NonVolatileThreadLocalAllocBuffer::idx_to_minimum_word_size(size_t idx) {
-  if (idx <= 30)
+  if (idx <= 31)
   {
     return idx + 1;
   }
-  if (idx == 31)
-    return 32;
   if (idx == 32)
-    return 42;
+    return 32;
   if (idx == 33)
-    return 55;
+    return 42;
   if (idx == 34)
-    return 72;
+    return 55;
   if (idx == 35)
-    return 84;
+    return 72;
   if (idx == 36)
-    return 123;
+    return 84;
   if (idx == 37)
-    return 160;
+    return 123;
   if (idx == 38)
+    return 160;
+  if (idx == 39)
     return 209;
 
   report_vm_error(__FILE__, __LINE__, "Should not reach here.");

@@ -9,7 +9,10 @@
 #include "nvm/nonVolatileChunk.hpp"
 
 void* NVMAllocator::nvm_head = NULL;
+void* NVMAllocator::segregated_top = NULL;
 void* NVMAllocator::nvm_tail = NULL;
+void* NVMAllocator::large_head = NULL;
+void* NVMAllocator::large_top = NULL;
 pthread_mutex_t NVMAllocator::allocate_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 void NVMAllocator::init() {
@@ -26,28 +29,43 @@ void NVMAllocator::init() {
 
 #ifdef USE_NVM
   NVMAllocator::nvm_head = (void*)mmap(NULL, size, PROT_WRITE, MAP_SHARED, nvm_fd, 0);
+  NVMAllocator::segregated_top = NVMAllocator::nvm_head;
   bool success = NVMAllocator::nvm_head != MAP_FAILED;
   if (!success) {
     report_vm_error(__FILE__, __LINE__, "Failed to map the file.");
   }
 #else
   NVMAllocator::nvm_head = (void*)AllocateHeap(size, mtNone, NativeCallStack::empty_stack(), AllocFailStrategy::RETURN_NULL);
-  bool success = NVMAllocator::nvm_head != NULL;
+  bool success = NVMAllocator::nvm_head != NULL;  //TODO: nvm_topに対応させる
   if (!success) {
     report_vm_error(__FILE__, __LINE__, "Failed to allocate the dram.");
   }
 #endif
 
   NVMAllocator::nvm_tail = (void*)(((char*)NVMAllocator::nvm_head) + size);
+
+#ifdef USE_NVTLAB
+  NVMAllocator::large_head = (void*)(((char*)NVMAllocator::nvm_head) + (NVMAllocator::SEGREGATED_REGION_SIZE_GB * 1024 * 1024 * 1024));
+  NVMAllocator::large_top = NVMAllocator::large_head;
+#endif
 }
 
-void* NVMAllocator::allocate(size_t _size) {
+void* NVMAllocator::allocate(size_t _size)
+{
   // calc size in bytes
   int size = _size * HeapWordSize;
   void* ptr = NULL;
 
 #ifdef USE_NVTLAB
-printf("USE_NVTLAB\n");
+
+  if (_size > 256) {
+    ptr = allocate_large(_size);
+    printf("large ptr: %p\n", ptr);
+    fflush(stdout);
+    return ptr;
+    // return nvm_head;  // TODO: 2
+  }
+
   // NVTLABからメモリを確保する
 
   if (NVMAllocator::nvm_head == NULL){
@@ -60,8 +78,13 @@ printf("USE_NVTLAB\n");
   NonVolatileThreadLocalAllocBuffer& nvtlab = thr->nvtlab();
 
   ptr = nvtlab.allocate(_size);
-  
+
+  // printf("ptr: %p\n", ptr);
+  // fflush(stdout);
+
+
   if (ptr == NULL) {
+      printf("allocation failed\n");
     report_vm_error(__FILE__, __LINE__, "NVMAlocator::allocate cannot allocate nvm.");
   }
 
@@ -89,7 +112,6 @@ printf("USE_NVTLAB\n");
   //   }
   // }
 #else
-  printf("NOT USE_NVTLAB\n");
   // 大域的な領域からメモリを確保する
   // allocate
   pthread_mutex_lock(&NVMAllocator::allocate_mtx);
@@ -112,14 +134,31 @@ printf("USE_NVTLAB\n");
 void* NVMAllocator::allocate_chunksize() {
   if (NVMAllocator::nvm_head == NULL) NVMAllocator::init();
 
-  void* ptr = NVMAllocator::nvm_head;
-  void* nvm_next = (void*)(((char*)NVMAllocator::nvm_head) + NVMAllocator::NVM_CHUNK_BYTE_SIZE);
-  NVMAllocator::nvm_head = nvm_next;
+  void* ptr = NVMAllocator::segregated_top;
+  void* nvm_next = (void*)(((char*)NVMAllocator::segregated_top) + NVMAllocator::NVM_CHUNK_BYTE_SIZE);
+  NVMAllocator::segregated_top = nvm_next;
     // check
-  if (NVMAllocator::nvm_tail <= nvm_next) {
+  if (NVMAllocator::large_head <= NVMAllocator::segregated_top) {
     report_vm_error(__FILE__, __LINE__, "Out of memory in NVM.");
   }
 
+  return ptr;
+}
+
+void* NVMAllocator::allocate_large(size_t size) {
+  pthread_mutex_lock(&NVMAllocator::allocate_mtx);
+  if (NVMAllocator::nvm_head == NULL) {
+    NVMAllocator::init();
+    }
+  void* ptr = NVMAllocator::large_top;
+  void* next_top = (void *)(((char *)NVMAllocator::large_top) + (size * HeapWordSize));
+  NVMAllocator::large_top = next_top;
+  pthread_mutex_unlock(&NVMAllocator::allocate_mtx);
+  if (NVMAllocator::nvm_tail <= NVMAllocator::large_top) {
+    printf("ending...large_head: %p\n", NVMAllocator::large_top);
+    printf("nvm_tail: %p\n", NVMAllocator::nvm_tail);
+    report_vm_error(__FILE__, __LINE__, "Out of memory in allocate_large.");
+  }
   return ptr;
 }
 

@@ -17,11 +17,12 @@ void NonVolatileChunkSegregate::initialize_standby_for_gc() {
   for (i=0; i < NonVolatileThreadLocalAllocBuffer::num_of_nvc_small; i++) {
     printf("i: %lu\n", i);
     fflush(stdout);
-    new NonVolatileChunkSmall(NULL, NULL, 0);
-    // standby_for_gc[i] = new NonVolatileChunkSmall(NULL, NULL, 0);
+    // new NonVolatileChunkSmall(NULL, NULL, 100);
+    // exit(1);
+    standby_for_gc[i] = new NonVolatileChunkSmall(NULL, NULL, 1);
   }
   for (; i < NonVolatileThreadLocalAllocBuffer::segregated_num; i++) {
-    standby_for_gc[i] = new NonVolatileChunkMedium(NULL, NULL, 0, 0);
+    standby_for_gc[i] = new NonVolatileChunkMedium(NULL, NULL, 1, 1);
   }
 }
 
@@ -40,7 +41,7 @@ void NonVolatileChunkSegregate::print_standby_for_gc() {
 NonVolatileChunkSegregate* NonVolatileChunkSegregate::generate_new_nvc(size_t idx)
 {
   pthread_mutex_lock(&NVMAllocator::allocate_mtx);
-  void *_start = NVMAllocator::nvm_head;
+  void *_start = NVMAllocator::segregated_top;
   void *_end = NVMAllocator::allocate_chunksize();
   pthread_mutex_unlock(&NVMAllocator::allocate_mtx);
 
@@ -67,7 +68,7 @@ void NonVolatileChunkSegregate::add_standby_for_gc(NonVolatileChunkSegregate* nv
   nvc->next_chunk = nvc_list_head;
   standby_for_gc[idx] = nvc;
   pthread_mutex_unlock(&gc_mtx);
-  print_standby_for_gc();
+  // print_standby_for_gc();
   return;
 }
 
@@ -108,7 +109,7 @@ void* NonVolatileChunkSegregate::idx_2_address(size_t idx) {
 
 void* NonVolatileChunkSmall::allocation() {
   for (size_t i = 0; i < max_idx; i++) {
-    if (get_abit(i) == false) {
+    if (!get_abit(i)) {
       char* ad = (char*) idx_2_address(i);
       reverse_abit(i);
       return ad;

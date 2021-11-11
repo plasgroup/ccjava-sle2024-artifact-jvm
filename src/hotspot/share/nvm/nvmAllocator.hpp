@@ -11,10 +11,17 @@ class NVMAllocator : AllStatic {
   friend class NonVolatileChunkSegregate;
 public:
   static const size_t NVM_CHUNK_BYTE_SIZE = 4096;
+  static const size_t SEGREGATED_REGION_SIZE_GB = 15;
  private:
   static void* nvm_head;
+  static void* segregated_top;
   static void* nvm_tail;
+  static void* large_head;
+  static void* large_top;
   static pthread_mutex_t allocate_mtx;
+
+  // allocate nvm bigger than 256 word.
+  static void* allocate_large(size_t size);
 
  public:
   static void init();

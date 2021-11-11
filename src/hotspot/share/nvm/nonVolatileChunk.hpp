@@ -37,10 +37,23 @@ public:
   , is_full(false)
   , next_chunk(NULL)
   {
+    if (size_class == 0) {
+      printf("size_class == 0\n");
+      size_class = 1;
+    }
     max_idx = 512 / size_class;
+
+    for (size_t i = 0; i < max_idx; i++) {
+      abit[i] = false;
+      mbit[i] = false;
+    }
+
+    printf("segregated constractor\n");
+    fflush(stdout);
 
   }
 
+  size_t get_max_idx()  { return max_idx; }
   bool get_abit(size_t idx);
   bool get_mbit(size_t idx);
   void reverse_abit(size_t idx);
@@ -59,7 +72,8 @@ public:
   NonVolatileChunkSmall(void* _start, void* _end, size_t _size_class)
   : NonVolatileChunkSegregate(_start, _end, _size_class)
   {
-
+    printf("small constractor\n");
+    fflush(stdout);
   }
 
   void* allocation();
@@ -73,6 +87,11 @@ public:
   : NonVolatileChunkSegregate(_start, _end, _size_class)
   , size_class_minimum(_size_class_minimum)
   {
+    if (size_class == 0)
+    {
+      printf("size_class == 0\n");
+      size_class = 1;
+    }
   }
 
   void* allocation();

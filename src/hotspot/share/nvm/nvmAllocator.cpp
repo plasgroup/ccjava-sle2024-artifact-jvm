@@ -60,7 +60,7 @@ void* NVMAllocator::allocate(size_t _size)
 
   if (_size > 256) {
     ptr = allocate_large(_size);
-    printf("large ptr: %p\n", ptr);
+    // printf("large ptr: %p\n", ptr);
     fflush(stdout);
     return ptr;
     // return nvm_head;  // TODO: 2
@@ -142,7 +142,7 @@ void* NVMAllocator::allocate_chunksize() {
     report_vm_error(__FILE__, __LINE__, "Out of memory in NVM.");
   }
 
-  return ptr;
+  return nvm_next;  // not ptr
 }
 
 void* NVMAllocator::allocate_large(size_t size) {

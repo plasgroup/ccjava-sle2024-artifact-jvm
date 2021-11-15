@@ -141,6 +141,9 @@ void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_so
   Universe::heap()->record_whole_heap_examined_timestamp();
 
   gch->trace_heap_after_gc(_gc_tracer);
+
+
+  NonVolatileChunkSegregate::sweep_objects();
 }
 
 void GenMarkSweep::allocate_stacks() {

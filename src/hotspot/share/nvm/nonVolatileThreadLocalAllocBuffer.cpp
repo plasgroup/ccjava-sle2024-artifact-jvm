@@ -53,17 +53,39 @@ void* NonVolatileThreadLocalAllocBuffer::allocate(size_t _word_size) {
 
 
   // refill
+  nvc[idx]->set_is_using(false);
+  nvc[idx]->set_is_full(true);
+
+  // find used nvc (need global lock)
+  pthread_mutex_lock(&NonVolatileChunkSegregate::gc_mtx);
+  NonVolatileChunkSegregate* used_nvc = NonVolatileChunkSegregate::get_standby_for_gc_head(idx);  // TODO: 効率わるい
+  while (used_nvc->get_next_chunk() != NULL) {
+    // used_nvc->print_nvc_info();
+    if (used_nvc->get_is_using() != true && used_nvc->get_is_full() != true) {
+      nvc[idx] = used_nvc;
+      used_nvc->set_is_using(true);
+      break;
+    }
+    used_nvc = used_nvc->get_next_chunk();
+  }
+  pthread_mutex_unlock(&NonVolatileChunkSegregate::gc_mtx);
+  
+  chunk = nvc[idx];
+  ptr = chunk->allocation();
+  if (ptr != NULL) {
+    printf("reuse %p\n", nvc[idx]);
+    return ptr;
+  }
+
+  // define new nvc
+  printf("define new one\n");
   nvc[idx] = NonVolatileChunkSegregate::generate_new_nvc(idx);
   chunk = nvc[idx];
   // retry
   ptr = chunk->allocation();
 
-  // for (size_t i = 0; i < chunk->get_max_idx(); i++) {
-  //   printf("abit[%lu]: %d\n", i, chunk->get_abit(i));
-  // }
+
   if (ptr == NULL) {
-
-
     report_vm_error(__FILE__, __LINE__, "refill failed");
   }
 

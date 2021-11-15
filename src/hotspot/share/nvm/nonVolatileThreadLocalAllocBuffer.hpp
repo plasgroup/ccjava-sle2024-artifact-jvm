@@ -19,7 +19,7 @@ public:
   static const size_t num_of_nvc_small = 31;
   static const size_t num_of_nvc_medium = 9;
   // static const size_t num_of_nvc_large = 1;
-  static const size_t minimum_word_size_of_extra_large = 512;
+  static const size_t minimum_word_size_of_extra_large = 257;
 private:
   void* start;
   NonVolatileChunkSegregate* nvc[segregated_num];

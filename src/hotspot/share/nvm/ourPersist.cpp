@@ -20,6 +20,8 @@
 #include "runtime/thread.hpp"
 #include "utilities/globalDefinitions.hpp"
 
+int OurPersist::_enable = our_persist_not_set;
+
 void* OurPersist::allocate_nvm(int size, Thread* thr) {
   void* mem = NVMAllocator::allocate(size);
   assert(mem != NULL, "");

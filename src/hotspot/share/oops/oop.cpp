@@ -168,10 +168,14 @@ oop oopDesc::obj_field_acquire(int offset) const                      { return H
 
 void oopDesc::obj_field_put_raw(int offset, oop value) {
 #ifdef OUR_PERSIST
-  const DecoratorSet ds = AS_RAW | IN_HEAP | MO_UNORDERED;
-  NVMCardTableBarrierSet::AccessBarrier<ds>::oop_store_in_heap_raw(as_oop(), offset, value);
-#else // OUR_PRESIST
-  RawAccess<>::oop_store_at(as_oop(), offset, value);
+  if (OurPersist::enable()) {
+    const DecoratorSet ds = AS_RAW | IN_HEAP | MO_UNORDERED;
+    NVMCardTableBarrierSet::AccessBarrier<ds>::oop_store_in_heap_raw(as_oop(), offset, value);
+  } else {
+#endif // OUR_PRESIST
+    RawAccess<>::oop_store_at(as_oop(), offset, value);
+#ifdef OUR_PERSIST
+  }
 #endif // OUR_PRESIST
 }
 void oopDesc::release_obj_field_put(int offset, oop value)            { HeapAccess<MO_RELEASE>::oop_store_at(as_oop(), offset, value); }

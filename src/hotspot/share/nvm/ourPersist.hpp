@@ -12,6 +12,13 @@ class OurPersist : AllStatic {
   // used to global-lock-barrier-sync
   static unsigned long _copy_object_thread_count;
 
+  enum {
+    our_persist_not_set,
+    our_persist_enable,
+    our_persist_disable
+  };
+  static int _enable;
+
  private:
   static void set_responsible_thread(void* nvm_ptr, Thread* cur_thread);
   static void clear_responsible_thread(Thread* cur_thread);
@@ -25,6 +32,7 @@ class OurPersist : AllStatic {
   //static void shade();
 
  public:
+  inline static bool enable();
   inline static bool is_target(Klass* klass);
   inline static bool is_static_field(oop obj, ptrdiff_t offset);
   static Thread* responsible_thread(void* nvm_obj);

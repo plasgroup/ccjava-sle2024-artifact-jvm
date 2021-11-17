@@ -8,12 +8,24 @@
 #include "oops/klass.hpp"
 #include "oops/oop.inline.hpp"
 
+inline bool OurPersist::enable() {
+  // init
+  if (OurPersist::_enable == our_persist_not_set) {
+    bool enable_slow = Arguments::is_interpreter_only() && !UseCompressedOops;
+    OurPersist::_enable = enable_slow ? our_persist_enable : our_persist_disable;
+    if (!OurPersist::_enable) {
+      tty->print("OurPersist is disabled!!!\n");
+    }
+  }
+
+  bool res = OurPersist::_enable == our_persist_enable;
+  assert(OurPersist::_enable != our_persist_not_set, "");
+  return res;
+}
+
 inline bool OurPersist::is_target(Klass* klass) {
   assert(klass != NULL, "");
   int klass_id = klass->id();
-
-  // DEBUG:
-  //return true;
 
   if (klass_id == InstanceMirrorKlassID) {
     return false;

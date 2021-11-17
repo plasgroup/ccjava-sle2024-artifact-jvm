@@ -20,6 +20,21 @@ void NVMCardTableBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSe
   //   NVMCardTableBarrierSetAssembler::interpreter_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
   // }
 
+  // implements volatile algorithm
+  // assert((decorators & OURPERSIST_IS_STATIC_MASK)   != DECORATORS_NONE, "");
+  // assert((decorators & OURPERSIST_IS_VOLATILE_MASK) != DECORATORS_NONE, "");
+  // if (decorators & OURPERSIST_IS_VOLATILE) {
+  //   // Runtime
+  //   NVMCardTableBarrierSetAssembler::runtime_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
+  // } else {
+  //   // OurPersist assembler
+  //   if (is_reference_type(type)) {
+  //     NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
+  //   } else {
+  //     NVMCardTableBarrierSetAssembler::interpreter_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
+  //   }
+  // }
+
   // Runtime
   NVMCardTableBarrierSetAssembler::runtime_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
 }
@@ -99,12 +114,16 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
     __ cmpptr(val, 0);
     __ jcc(Assembler::equal, done_check_annotaion);
 
+#ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
     // True
     NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, _tmp1, _tmp2, tmp1, tmp2);
     __ jmp(done_check_annotaion);
+#endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
 
+#ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
     // False
-    //  __ jmp(done_check_annotaion);
+    __ jmp(done_check_annotaion);
+#endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
 
     // TODO:
     //  if (NVM::check_durableroot_annotation(obj, offset)) {

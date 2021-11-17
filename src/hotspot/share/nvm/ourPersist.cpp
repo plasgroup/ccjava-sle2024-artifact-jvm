@@ -245,8 +245,16 @@ bool OurPersist::is_set_durableroot_annotation(oop klass_obj, ptrdiff_t offset) 
   assert(klass_obj->klass()->is_instance_klass(), "");
   assert(((InstanceKlass*)klass_obj->klass())->is_mirror_instance_klass(), "");
 
-  // DEBUG:
+#ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
   return true;
+#endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
+
+#ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
+  return false;
+#endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
+
+  // Unimplements
+  Unimplemented();
 
   // get field index
   Klass* k = java_lang_Class::as_Klass(klass_obj);

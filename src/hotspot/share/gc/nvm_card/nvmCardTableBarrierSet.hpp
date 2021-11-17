@@ -85,6 +85,7 @@ RETRY:
         return result;
       }
 
+#ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         assert(offset != oopDesc::mark_offset_in_bytes(), "");
@@ -96,16 +97,16 @@ RETRY:
         if (nvm_fwd == NULL || nvm_fwd == OURPERSIST_FWD_BUSY) {
           result = Parent::template load_in_heap_at<T>(base, offset);
         } else {
-// DEBUG:
-#ifdef OURPERSIST_VOLATILE_PRIM_ALGO
-          result = Parent::template load_in_heap_at<T>(oop(nvm_fwd), offset);
-#else  // OURPERSIST_VOLATILE_PRIM_ALGO
+#ifdef OURPERSIST_VOLATILE_PRIM_CAS
           result = Parent::template load_in_heap_at<T>(base, offset);
-#endif // OURPERSIST_VOLATILE_PRIM_ALGO
+#else  // OURPERSIST_VOLATILE_PRIM_CAS
+          result = Parent::template load_in_heap_at<T>(oop(nvm_fwd), offset);
+#endif // OURPERSIST_VOLATILE_PRIM_CAS
         }
 
         return result;
       }
+#endif // !OURPERSIST_IGNORE_VOLATILE
 
       // Non volatile
       T result = Parent::template load_in_heap_at<T>(base, offset);
@@ -126,6 +127,7 @@ RETRY:
         return;
       }
 
+#ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         assert(offset != oopDesc::mark_offset_in_bytes(), "");
@@ -145,12 +147,7 @@ RETRY:
           Parent::store_in_heap_at(base, offset, value);
           nvmHeader::set_fwd(base, NULL);
         } else {
-// DEBUG:
-#ifdef OURPERSIST_VOLATILE_PRIM_ALGO
-          // Store only in NVM.
-          Raw::store_in_heap_at(oop(before_fwd), offset, value);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-#else  // OURPERSIST_VOLATILE_PRIM_ALGO
+#ifdef OURPERSIST_VOLATILE_PRIM_CAS
           nvmHeader::lock_volatile(base);
           // Store in DRAM.
           Parent::store_in_heap_at(base, offset, value);
@@ -158,11 +155,15 @@ RETRY:
           Raw::store_in_heap_at(oop(before_fwd), offset, value);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
           nvmHeader::unlock_volatile(base);
-#endif // OURPERSIST_VOLATILE_PRIM_ALGO
+#else  // OURPERSIST_VOLATILE_PRIM_CAS
+          // Store only in NVM.
+          Raw::store_in_heap_at(oop(before_fwd), offset, value);
+          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // OURPERSIST_VOLATILE_PRIM_CAS
         }
-
         return;
       }
+#endif // !OURPERSIST_IGNORE_VOLATILE
 
       // Non volatile
       // Store in DRAM.
@@ -195,6 +196,7 @@ RETRY:
         return Parent::atomic_xchg_in_heap_at(base, offset, new_value);
       }
 
+#ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         bool success;
@@ -213,12 +215,7 @@ RETRY:
           result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
           nvmHeader::set_fwd(base, NULL);
         } else {
-// DEBUG:
-#ifdef OURPERSIST_VOLATILE_PRIM_ALGO
-          // Store only in NVM.
-          result = Raw::atomic_xchg_in_heap_at(oop(before_fwd), offset, new_value);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-#else  // OURPERSIST_VOLATILE_PRIM_ALGO
+#ifdef OURPERSIST_VOLATILE_PRIM_CAS
           nvmHeader::lock_volatile(base);
           // Store and load in DRAM.
           result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
@@ -226,11 +223,16 @@ RETRY:
           Raw::atomic_xchg_in_heap_at(oop(before_fwd), offset, new_value);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
           nvmHeader::unlock_volatile(base);
-#endif // OURPERSIST_VOLATILE_PRIM_ALGO
+#else  // OURPERSIST_VOLATILE_PRIM_CAS
+          // Store only in NVM.
+          result = Raw::atomic_xchg_in_heap_at(oop(before_fwd), offset, new_value);
+          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // OURPERSIST_VOLATILE_PRIM_CAS
         }
 
         return result;
       }
+#endif // !OURPERSIST_IGNORE_VOLATILE
 
       // Non volatile
       nvmHeader::lock_atomic(base);
@@ -260,6 +262,7 @@ RETRY:
         return Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
       }
 
+#ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         bool success;
@@ -278,12 +281,7 @@ RETRY:
           result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
           nvmHeader::set_fwd(base, NULL);
         } else {
-// DEBUG:
-#ifdef OURPERSIST_VOLATILE_PRIM_ALGO
-          // Store only in NVM.
-          result = Raw::atomic_cmpxchg_in_heap_at(oop(before_fwd), offset, compare_value, new_value);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-#else  // OURPERSIST_VOLATILE_PRIM_ALGO
+#ifdef OURPERSIST_VOLATILE_PRIM_CAS
           nvmHeader::lock_volatile(base);
           // Store and load in DRAM.
           result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
@@ -291,11 +289,16 @@ RETRY:
           Raw::atomic_cmpxchg_in_heap_at(oop(before_fwd), offset, compare_value, new_value);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
           nvmHeader::unlock_volatile(base);
-#endif // OURPERSIST_VOLATILE_PRIM_ALGO
+#else  // OURPERSIST_VOLATILE_PRIM_CAS
+          // Store only in NVM.
+          result = Raw::atomic_cmpxchg_in_heap_at(oop(before_fwd), offset, compare_value, new_value);
+          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // OURPERSIST_VOLATILE_PRIM_CAS
         }
 
         return result;
       }
+#endif // !OURPERSIST_IGNORE_VOLATILE
 
       // Non volatile
       T result;
@@ -386,6 +389,7 @@ RETRY:
         return;
       }
 
+#ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         bool success;
@@ -425,6 +429,7 @@ RETRY:
 
         return;
       }
+#endif // !OURPERSIST_IGNORE_VOLATILE
 
       // Non volatile
 RETRY:
@@ -473,6 +478,7 @@ RETRY:
         return Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
       }
 
+#ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         bool success;
@@ -514,6 +520,7 @@ RETRY:
 
         return result;
       }
+#endif // !OURPERSIST_IGNORE_VOLATILE
 
       // Non volatile
       bool success;
@@ -567,6 +574,7 @@ RETRY:
         return Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
       }
 
+#ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         bool success;
@@ -608,6 +616,7 @@ RETRY:
 
         return result;
       }
+#endif // !OURPERSIST_IGNORE_VOLATILE
 
       // Non volatile
       bool success;

@@ -649,8 +649,11 @@ namespace AccessInternal {
 
     template<DecoratorSet decorators>
     static bool is_hardwired_primitive() {
-      return false; // DEBUG:
+#ifdef OUR_PERSIST
+      return false;
+#else  // OUR_PERSIST
       return !HasDecorator<decorators, INTERNAL_VALUE_IS_OOP>::value;
+#endif // OUR_PERSIST
     }
 
     template <DecoratorSet decorators, typename T>

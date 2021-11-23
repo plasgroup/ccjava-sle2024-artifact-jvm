@@ -16,7 +16,11 @@ void nvmHeader::set_header(oop obj, nvmHeader h) {
 
 void* nvmHeader::cas_fwd(oop obj, void* compare_fwd, void* after_fwd) {
   assert(is_null(compare_fwd), "");
+#ifdef OURPERSIST_CAS_VERSION
   assert(is_busy(after_fwd) || is_fwd(after_fwd), "");
+#else  // OURPERSIST_CAS_VERSION
+  assert(is_fwd(after_fwd), "");
+#endif // OURPERSIST_CAS_VERSION
 
   uintptr_t* header_addr = (uintptr_t*)obj->nvm_header_addr();
 

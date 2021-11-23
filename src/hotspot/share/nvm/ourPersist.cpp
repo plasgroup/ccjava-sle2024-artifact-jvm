@@ -204,7 +204,7 @@ bool OurPersist::cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, BasicType
 }
 
 Thread* OurPersist::responsible_thread(void* nvm_obj) {
-  assert(nvmHeader::is_fwd(nvm_obj), "");
+  assert(nvmHeader::is_fwd(nvm_obj), "nvm_obj = %p", nvm_obj);
 
   return (Thread*)oop(nvm_obj)->nvm_header().fwd();
 }
@@ -362,6 +362,10 @@ bool OurPersist::is_set_durableroot_annotation(oop klass_obj, ptrdiff_t offset) 
 }
 
 void OurPersist::ensure_recoverable(oop obj) {
+#ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
+  ShouldNotReachHere();
+#endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
+
   if (obj->nvm_header().recoverable()) {
     return;
   }
@@ -380,9 +384,11 @@ RETRY:
   bool success = before_fwd == NULL;
   assert(!success || responsible_thread(nvm_obj) == Thread::current(), "");
   if (!success) {
+#ifdef OURPERSIST_CAS_VERSION
     if (before_fwd == OURPERSIST_FWD_BUSY) {
       goto RETRY;
     }
+#endif // OURPERSIST_CAS_VERSION
 
     // TODO: release nvm
 
@@ -462,10 +468,12 @@ RETRY:
                     worklist->add(v);
                     break;
                   } else {
+#ifdef OURPERSIST_CAS_VERSION
                     if (before_fwd == OURPERSIST_FWD_BUSY) {
                       // busy wait
                       continue;
                     }
+#endif // OURPERSIST_CAS_VERSION
 
                     // TODO: release nvm
 
@@ -520,9 +528,11 @@ RETRY:
                 worklist->add(v);
                 break;
               } else {
+#ifdef OURPERSIST_CAS_VERSION
                 if (before_fwd == OURPERSIST_FWD_BUSY) {
                   continue;
                 }
+#endif // OURPERSIST_CAS_VERSION
 
                 // TODO: release nvm
 

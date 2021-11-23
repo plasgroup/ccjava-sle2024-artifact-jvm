@@ -3,7 +3,9 @@
 #include <x86intrin.h>
 #include <clwbintrin.h>
 
+#ifdef OURPERSIST_CAS_VERSION
 #define OURPERSIST_FWD_BUSY ((void*)~0b111)
+#endif // OURPERSIST_CAS_VERSION
 
 #define OOP_TO_VOID(obj) static_cast<void*>(obj)
 

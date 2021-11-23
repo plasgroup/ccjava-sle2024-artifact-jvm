@@ -32,7 +32,6 @@ public:
     typedef BarrierSet::AccessBarrier<decorators, BarrierSetT> Raw;
 
    public:
-    // DEBUG:
     static void oop_store_in_heap_raw(oop base, ptrdiff_t offset, oop value) {
       // Check annotation
       bool is_set_durableroot_annotation =
@@ -45,19 +44,30 @@ public:
         return;
       }
 
+#ifdef OURPERSIST_CAS_VERSION
 RETRY:
       void* before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
+#else  // OURPERSIST_CAS_VERSION
+      _mm_mfence();
+      void* before_fwd = base->nvm_header().fwd();
+#endif // OURPERSIST_CAS_VERSION
       bool success = before_fwd == NULL;
+
       if (success) {
         // Store only in DRAM.
         Raw::oop_store_in_heap_at(base, offset, value);
+#ifdef OURPERSIST_CAS_VERSION
         nvmHeader::set_fwd(base, NULL);
+#endif // OURPERSIST_CAS_VERSION
         return;
       }
+
+#ifdef OURPERSIST_CAS_VERSION
       if (before_fwd == OURPERSIST_FWD_BUSY) {
         // busy wait
         goto RETRY;
       }
+#endif // OURPERSIST_CAS_VERSION
 
       assert(nvmHeader::is_fwd(before_fwd), "");
       if (value != NULL) {
@@ -94,7 +104,11 @@ RETRY:
         void* nvm_fwd = base->nvm_header().fwd();
 
         T result;
+#ifdef OURPERSIST_CAS_VERSION
         if (nvm_fwd == NULL || nvm_fwd == OURPERSIST_FWD_BUSY) {
+#else  // OURPERSIST_CAS_VERSION
+        if (nvm_fwd == NULL) {
+#endif // OURPERSIST_CAS_VERSION
           result = Parent::template load_in_heap_at<T>(base, offset);
         } else {
 #ifdef OURPERSIST_VOLATILE_PRIM_CAS
@@ -134,6 +148,7 @@ RETRY:
 
         bool success;
         void* before_fwd;
+#ifdef OURPERSIST_CAS_VERSION
         while (true) {
           before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
           if (before_fwd != OURPERSIST_FWD_BUSY) {
@@ -141,11 +156,18 @@ RETRY:
             break;
           }
         }
+#else  // OURPERSIST_CAS_VERSION
+        _mm_mfence();
+        before_fwd = base->nvm_header().fwd();
+        success = before_fwd == NULL;
+#endif // OURPERSIST_CAS_VERSION
 
         if (success) {
           // Store only in DRAM.
           Parent::store_in_heap_at(base, offset, value);
+#ifdef OURPERSIST_CAS_VERSION
           nvmHeader::set_fwd(base, NULL);
+#endif // OURPERSIST_CAS_VERSION
         } else {
 #ifdef OURPERSIST_VOLATILE_PRIM_CAS
           nvmHeader::lock_volatile(base);
@@ -172,7 +194,11 @@ RETRY:
       _mm_mfence();
       void* nvm_fwd = base->nvm_header().fwd();
 
+#ifdef OURPERSIST_CAS_VERSION
       if (nvm_fwd == NULL || nvm_fwd == OURPERSIST_FWD_BUSY) {
+#else  // OURPERSIST_CAS_VERSION
+      if (nvm_fwd == NULL) {
+#endif // OURPERSIST_CAS_VERSION
         // Store only in DRAM.
         return;
       }
@@ -188,6 +214,11 @@ RETRY:
       // Original
       // T result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
 
+// DEBUG: ATOMIC
+#ifdef OURPERSIST_IGNORE_ATOMIC
+      return Parent::atomic_xchg_in_heap_at(base, offset, new_value);
+#endif // OURPERSIST_IGNORE_ATOMIC
+
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
       // Skip
@@ -201,6 +232,7 @@ RETRY:
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         bool success;
         void* before_fwd;
+#ifdef OURPERSIST_CAS_VERSION
         while (true) {
           before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
           if (before_fwd != OURPERSIST_FWD_BUSY) {
@@ -208,12 +240,19 @@ RETRY:
             break;
           }
         }
+#else  // OURPERSIST_CAS_VERSION
+        _mm_mfence();
+        before_fwd = base->nvm_header().fwd();
+        success = before_fwd == NULL;
+#endif // OURPERSIST_CAS_VERSION
 
         T result;
         if (success) {
           // Store only in DRAM.
           result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
+#ifdef OURPERSIST_CAS_VERSION
           nvmHeader::set_fwd(base, NULL);
+#endif // OURPERSIST_CAS_VERSION
         } else {
 #ifdef OURPERSIST_VOLATILE_PRIM_CAS
           nvmHeader::lock_volatile(base);
@@ -240,7 +279,11 @@ RETRY:
       Parent::store_in_heap_at(base, offset, new_value);
       _mm_mfence();
       void* nvm_fwd = base->nvm_header().fwd();
+#ifdef OURPERSIST_CAS_VERSION
       if (nvm_fwd != NULL && nvm_fwd != OURPERSIST_FWD_BUSY) {
+#else  // OURPERSIST_CAS_VERSION
+      if (nvm_fwd != NULL) {
+#endif // OURPERSIST_CAS_VERSION
         Raw::store_in_heap_at(oop(nvm_fwd), offset, new_value);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
       }
@@ -253,6 +296,11 @@ RETRY:
     static T atomic_cmpxchg_in_heap_at(oop base, ptrdiff_t offset, T compare_value, T new_value) {
       // Original
       // T result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+
+// DEBUG: ATOMIC
+#ifdef OURPERSIST_IGNORE_ATOMIC
+      return Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+#endif // OURPERSIST_IGNORE_ATOMIC
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
@@ -267,6 +315,7 @@ RETRY:
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         bool success;
         void* before_fwd;
+#ifdef OURPERSIST_CAS_VERSION
         while (true) {
           before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
           if (before_fwd != OURPERSIST_FWD_BUSY) {
@@ -274,12 +323,19 @@ RETRY:
             break;
           }
         }
+#else  // OURPERSIST_CAS_VERSION
+        _mm_mfence();
+        before_fwd = base->nvm_header().fwd();
+        success = before_fwd == NULL;
+#endif // OURPERSIST_CAS_VERSION
 
         T result;
         if (success) {
           // Store only in DRAM.
           result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+#ifdef OURPERSIST_CAS_VERSION
           nvmHeader::set_fwd(base, NULL);
+#endif // OURPERSIST_CAS_VERSION
         } else {
 #ifdef OURPERSIST_VOLATILE_PRIM_CAS
           nvmHeader::lock_volatile(base);
@@ -312,7 +368,11 @@ RETRY:
           Parent::store_in_heap_at(base, offset, new_value);
           _mm_mfence();
           void* nvm_fwd = base->nvm_header().fwd();
+#ifdef OURPERSIST_CAS_VERSION
           if (nvm_fwd != NULL && nvm_fwd != OURPERSIST_FWD_BUSY) {
+#else  // OURPERSIST_CAS_VERSION
+          if (nvm_fwd != NULL) {
+#endif // OURPERSIST_CAS_VERSION
             Raw::store_in_heap_at(oop(nvm_fwd), offset, new_value);
             NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
           }
@@ -342,7 +402,11 @@ RETRY:
 
         _mm_mfence();
         void* dst_nvm_obj = dst_obj->nvm_header().fwd();
+#ifdef OURPERSIST_CAS_VERSION
         if (dst_nvm_obj != NULL && dst_nvm_obj != OURPERSIST_FWD_BUSY) {
+#else  // OURPERSIST_CAS_VERSION
+        if (dst_nvm_obj != NULL) {
+#endif // OURPERSIST_CAS_VERSION
           // Store in NVM.
           Raw::arraycopy_in_heap(dst_obj,               dst_offset_in_bytes, (T*)NULL,
                                  arrayOop(dst_nvm_obj), dst_offset_in_bytes, (T*)NULL,
@@ -394,6 +458,7 @@ RETRY:
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         bool success;
         void* before_fwd;
+#ifdef OURPERSIST_CAS_VERSION
         while (true) {
           before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
           if (before_fwd != OURPERSIST_FWD_BUSY) {
@@ -401,11 +466,18 @@ RETRY:
             break;
           }
         }
+#else  // OURPERSIST_CAS_VERSION
+        _mm_mfence();
+        before_fwd = base->nvm_header().fwd();
+        success = before_fwd == NULL;
+#endif // OURPERSIST_CAS_VERSION
 
         if (success) {
           // Store only in DRAM.
           Parent::oop_store_in_heap_at(base, offset, value);
+#ifdef OURPERSIST_CAS_VERSION
           nvmHeader::set_fwd(base, NULL);
+#endif // OURPERSIST_CAS_VERSION
         } else {
           assert(nvmHeader::is_fwd(before_fwd), "");
 
@@ -432,18 +504,29 @@ RETRY:
 #endif // !OURPERSIST_IGNORE_VOLATILE
 
       // Non volatile
-RETRY:
-      void* before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
-      bool success = before_fwd == NULL;
+      bool success;
+      void* before_fwd;
+#ifdef OURPERSIST_CAS_VERSION
+      while (true) {
+        before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
+        if (before_fwd != OURPERSIST_FWD_BUSY) {
+          success = before_fwd == NULL;
+          break;
+        }
+      }
+#else  // OURPERSIST_CAS_VERSION
+      _mm_mfence();
+      before_fwd = base->nvm_header().fwd();
+      success = before_fwd == NULL;
+#endif // OURPERSIST_CAS_VERSION
+
       if (success) {
         // Store only in DRAM.
         Parent::oop_store_in_heap_at(base, offset, value);
+#ifdef OURPERSIST_CAS_VERSION
         nvmHeader::set_fwd(base, NULL);
+#endif // OURPERSIST_CAS_VERSION
         return;
-      }
-      if (before_fwd == OURPERSIST_FWD_BUSY) {
-        // busy wait
-        goto RETRY;
       }
 
       assert(nvmHeader::is_fwd(before_fwd), "");
@@ -466,6 +549,11 @@ RETRY:
       // Original
       // oop result = Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
 
+// DEBUG: ATOMIC
+#ifdef OURPERSIST_IGNORE_ATOMIC
+      return Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
+#endif // OURPERSIST_IGNORE_ATOMIC
+
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
       // Check annotation
@@ -483,6 +571,7 @@ RETRY:
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         bool success;
         void* before_fwd;
+#ifdef OURPERSIST_CAS_VERSION
         while (true) {
           before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
           if (before_fwd != OURPERSIST_FWD_BUSY) {
@@ -490,12 +579,19 @@ RETRY:
             break;
           }
         }
+#else  // OURPERSIST_CAS_VERSION
+        _mm_mfence();
+        before_fwd = base->nvm_header().fwd();
+        success = before_fwd == NULL;
+#endif // OURPERSIST_CAS_VERSION
 
         oop result;
         if (success) {
           // Store only in DRAM.
           result = Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
+#ifdef OURPERSIST_CAS_VERSION
           nvmHeader::set_fwd(base, NULL);
+#endif // OURPERSIST_CAS_VERSION
         } else {
           assert(nvmHeader::is_fwd(before_fwd), "");
 
@@ -525,6 +621,7 @@ RETRY:
       // Non volatile
       bool success;
       void* before_fwd;
+#ifdef OURPERSIST_CAS_VERSION
       while (true) {
         before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
         if (before_fwd != OURPERSIST_FWD_BUSY) {
@@ -532,11 +629,18 @@ RETRY:
           break;
         }
       }
+#else  // OURPERSIST_CAS_VERSION
+      _mm_mfence();
+      before_fwd = base->nvm_header().fwd();
+      success = before_fwd == NULL;
+#endif // OURPERSIST_CAS_VERSION
 
       oop result;
       if (success) {
         result = Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
+#ifdef OURPERSIST_CAS_VERSION
         nvmHeader::set_fwd(base, NULL);
+#endif // OURPERSIST_CAS_VERSION
       } else {
         if (new_value != NULL) {
           OurPersist::ensure_recoverable(new_value);
@@ -562,6 +666,11 @@ RETRY:
       // Original
       // oop result = Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
 
+// DEBUG: ATOMIC
+#ifdef OURPERSIST_IGNORE_ATOMIC
+      return Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+#endif // OURPERSIST_IGNORE_ATOMIC
+
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
       // Check annotation
@@ -579,6 +688,7 @@ RETRY:
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         bool success;
         void* before_fwd;
+#ifdef OURPERSIST_CAS_VERSION
         while (true) {
           before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
           if (before_fwd != OURPERSIST_FWD_BUSY) {
@@ -586,11 +696,18 @@ RETRY:
             break;
           }
         }
+#else  // OURPERSIST_CAS_VERSION
+        _mm_mfence();
+        before_fwd = base->nvm_header().fwd();
+        success = before_fwd == NULL;
+#endif // OURPERSIST_CAS_VERSION
 
         oop result;
         if (success) {
           result = Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+#ifdef OURPERSIST_CAS_VERSION
           nvmHeader::set_fwd(base, NULL);
+#endif // OURPERSIST_CAS_VERSION
         } else {
           if (new_value != NULL) {
             OurPersist::ensure_recoverable(new_value);
@@ -621,6 +738,7 @@ RETRY:
       // Non volatile
       bool success;
       void* before_fwd;
+#ifdef OURPERSIST_CAS_VERSION
       while (true) {
         before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
         if (before_fwd != OURPERSIST_FWD_BUSY) {
@@ -628,10 +746,18 @@ RETRY:
           break;
         }
       }
+#else  // OURPERSIST_CAS_VERSION
+      _mm_mfence();
+      before_fwd = base->nvm_header().fwd();
+      success = before_fwd == NULL;
+#endif // OURPERSIST_CAS_VERSION
+
       oop result;
       if (success) {
         result = Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+#ifdef OURPERSIST_CAS_VERSION
         nvmHeader::set_fwd(base, NULL);
+#endif // OURPERSIST_CAS_VERSION
       } else {
         if (new_value != NULL) {
           OurPersist::ensure_recoverable(new_value);
@@ -670,6 +796,7 @@ RETRY:
 
       bool success;
       void* before_fwd;
+#ifdef OURPERSIST_CAS_VERSION
       while (true) {
         before_fwd = nvmHeader::cas_fwd(dst_obj, NULL, OURPERSIST_FWD_BUSY);
         if (before_fwd != OURPERSIST_FWD_BUSY) {
@@ -677,13 +804,20 @@ RETRY:
           break;
         }
       }
+#else  // OURPERSIST_CAS_VERSION
+      _mm_mfence();
+      before_fwd = dst_obj->nvm_header().fwd();
+      success = before_fwd == NULL;
+#endif // OURPERSIST_CAS_VERSION
 
       bool result;
       if (success) {
         result = Parent::oop_arraycopy_in_heap(src_obj, src_offset_in_bytes, src_raw,
                                                dst_obj, dst_offset_in_bytes, dst_raw,
                                                length);
+#ifdef OURPERSIST_CAS_VERSION
         nvmHeader::set_fwd(dst_obj, NULL);
+#endif // OURPERSIST_CAS_VERSION
       } else {
         int oop_bytes = 8;
         assert(HeapWordSize == oop_bytes && type2size[T_OBJECT] * HeapWordSize == oop_bytes, "");

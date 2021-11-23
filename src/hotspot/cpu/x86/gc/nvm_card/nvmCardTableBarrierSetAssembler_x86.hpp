@@ -34,6 +34,8 @@ public:
                        Register dst, Address src, Register tmp1, Register tmp_thread);
   void runtime_ensure_recoverable(MacroAssembler* masm, Register val,
                                   Register tmp1, Register tmp2, Register tmp3, Register tmp4);
+  void runtime_is_target(MacroAssembler* masm, Register dst, Register obj,
+                         Register tmp1, Register tmp2, Register tmp3, Register tmp4);
 };
 
 #endif // CPU_X86_GC_NVMCARD_NVMCARDTABLEBARRIERSETASSEMBLER_X86_HPP

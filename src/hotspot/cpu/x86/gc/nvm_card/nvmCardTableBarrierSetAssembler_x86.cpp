@@ -199,13 +199,19 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
   Parent::store_at(masm, decorators, type, dst, val, _tmp1, _tmp2);
   __ movptr(dst.base(), tmp2); // pop dst.base
 
-  // Store in NVM.
+ // Store in NVM.
   // tmp1 = forwarding pointer
   // tmp2 = value
   __ xorl(tmp2, tmp2);
   if (val != noreg) {
     __ cmpptr(val, 0);
     __ jcc(Assembler::equal, done_set_val);
+
+    // Check klass
+    NVMCardTableBarrierSetAssembler::runtime_is_target(masm, tmp2, val, noreg, noreg, noreg, noreg);
+    __ andl(tmp2, 0b1);
+    __ jcc(Assembler::zero, done_set_val);
+
     Address nvm_val(val, oopDesc::nvm_header_offset_in_bytes());
     __ movptr(tmp2, nvm_val);
     __ andptr(tmp2, ~0b111);
@@ -229,13 +235,13 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
 void NVMCardTableBarrierSetAssembler::interpreter_load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                                           Register dst, Address src, Register tmp1, Register tmp_thread) {
   // TODO:
-  Unimplemented();
+  __ unimplemented();
 }
 
 void NVMCardTableBarrierSetAssembler::interpreter_oop_load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                                               Register dst, Address src, Register tmp1, Register tmp_thread) {
   // TODO:
-  Unimplemented();
+  __ unimplemented();
 }
 
 #define CHECK_PUSH_POP(reg) if (reg != tmp1 && reg != tmp2)
@@ -388,6 +394,42 @@ void NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(MacroAssembler*
   // call
   address ensure_recoverable_func = CAST_FROM_FN_PTR(address, CallRuntimeBarrierSet::ensure_recoverable_ptr());
   __ call_VM_leaf(ensure_recoverable_func, obj);
+
+  // pop
+  CHECK_PUSH_POP(r11) __ movq(r11, Address(rsp, 0 * wordSize));
+  CHECK_PUSH_POP(r10) __ movq(r10, Address(rsp, 1 * wordSize));
+  CHECK_PUSH_POP(r9)  __ movq(r9,  Address(rsp, 2 * wordSize));
+  CHECK_PUSH_POP(r8)  __ movq(r8,  Address(rsp, 3 * wordSize));
+  CHECK_PUSH_POP(rdi) __ movq(rdi, Address(rsp, 4 * wordSize));
+  CHECK_PUSH_POP(rsi) __ movq(rsi, Address(rsp, 5 * wordSize));
+  CHECK_PUSH_POP(rdx) __ movq(rdx, Address(rsp, 6 * wordSize));
+  CHECK_PUSH_POP(rcx) __ movq(rcx, Address(rsp, 7 * wordSize));
+  CHECK_PUSH_POP(rax) __ movq(rax, Address(rsp, 8 * wordSize));
+  __ addq(rsp, 9 * wordSize);
+}
+#undef CHECK_PUSH_POP
+
+#define CHECK_PUSH_POP(reg) if (reg != tmp1 && reg != tmp2 && reg != tmp3 && reg != tmp4 && reg != dst)
+void NVMCardTableBarrierSetAssembler::runtime_is_target(MacroAssembler* masm, Register dst, Register obj,
+                                                        Register tmp1, Register tmp2, Register tmp3, Register tmp4) {
+  assert(obj != noreg, "");
+
+  // push
+  __ subq(rsp, 9 * wordSize);
+  CHECK_PUSH_POP(rax) __ movq(Address(rsp, 8 * wordSize), rax);
+  CHECK_PUSH_POP(rcx) __ movq(Address(rsp, 7 * wordSize), rcx);
+  CHECK_PUSH_POP(rdx) __ movq(Address(rsp, 6 * wordSize), rdx);
+  CHECK_PUSH_POP(rsi) __ movq(Address(rsp, 5 * wordSize), rsi);
+  CHECK_PUSH_POP(rdi) __ movq(Address(rsp, 4 * wordSize), rdi);
+  CHECK_PUSH_POP(r8)  __ movq(Address(rsp, 3 * wordSize), r8);
+  CHECK_PUSH_POP(r9)  __ movq(Address(rsp, 2 * wordSize), r9);
+  CHECK_PUSH_POP(r10) __ movq(Address(rsp, 1 * wordSize), r10);
+  CHECK_PUSH_POP(r11) __ movq(Address(rsp, 0 * wordSize), r11);
+
+  // call
+  address is_target_func = CAST_FROM_FN_PTR(address, CallRuntimeBarrierSet::is_target_ptr());
+  __ call_VM_leaf(is_target_func, obj);
+  __ mov(dst, rax);
 
   // pop
   CHECK_PUSH_POP(r11) __ movq(r11, Address(rsp, 0 * wordSize));

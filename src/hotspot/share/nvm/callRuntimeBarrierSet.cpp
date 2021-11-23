@@ -105,4 +105,8 @@ void* CallRuntimeBarrierSet::ensure_recoverable_ptr() {
   return (void*)(void(*)(oopDesc*))CallRuntimeBarrierSet::call_runtime_ensure_recoverable;
 }
 
+void* CallRuntimeBarrierSet::is_target_ptr() {
+  return (void*)(bool(*)(oopDesc*))CallRuntimeBarrierSet::call_runtime_is_target;
+}
+
 #endif // OUR_PERSIST

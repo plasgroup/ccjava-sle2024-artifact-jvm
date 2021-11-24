@@ -9,7 +9,7 @@
 pthread_mutex_t NonVolatileChunkSegregate::gc_mtx = PTHREAD_MUTEX_INITIALIZER;
 NonVolatileChunkSegregate* NonVolatileChunkSegregate::standby_for_gc[40];
 void* NonVolatileChunkSegregate::nvc_address[3750000] = {NULL};
-char fill_memory[4] = "42";
+bool NonVolatileChunkLarge::has_available_chunk = false;
 
 void NonVolatileChunkSegregate::initialize_standby_for_gc() {
   size_t i;
@@ -163,7 +163,7 @@ void* NonVolatileChunkSegregate::idx_2_address(size_t idx) {
 }
 
 void NonVolatileChunkSegregate::mark_object(void* ptr, size_t obj_word_size) {
-  if (obj_word_size >= NonVolatileThreadLocalAllocBuffer::minimum_word_size_of_extra_large) {
+  if (obj_word_size >= NonVolatileChunkLarge::MINIMUM_WORD_SIZE_OF_NVCLARGE_ALLOCATION) {
     return ; // TODO: large marking
   }
   NonVolatileChunkSegregate* nvc = (NonVolatileChunkSegregate *) NonVolatileChunkSegregate::address_to_nvc(ptr);
@@ -179,7 +179,7 @@ void NonVolatileChunkSegregate::mark_object(void* ptr, size_t obj_word_size) {
 
   // nvc->reverse_mbit(idx);
   nvc->m_0_to_1(idx);
-  printf("marking %p [%lu]\n", NonVolatileChunkSegregate::address_to_nvc(ptr), idx);
+  // printf("marking %p [%lu]\n", NonVolatileChunkSegregate::address_to_nvc(ptr), idx);
 
       return;
 }
@@ -212,18 +212,20 @@ void NonVolatileChunkSegregate::sweep_objects() {
     while (nvc->next_chunk != NULL) {
       for (size_t idx = 0; idx < nvc->get_max_idx(); idx++) {
         if (nvc->get_abit(idx) != true) {
-          printf("ignore %p [%lu]\n", nvc->get_start(), idx);
+          // printf("ignore %p [%lu]\n", nvc->get_start(), idx);
           continue;
         }
         if (nvc->get_mbit(idx) != true) {
           nvc->a_1_to_0(idx);
           // disable sweeped memory
-          memset(nvc->idx_2_address(idx), 'u', 4);
-          printf("sweep %p [%lu]\n", nvc->get_start(), idx);
+          // char* c = (char*) nvc->idx_2_address(idx);
+          memset(nvc->idx_2_address(idx), 'u', HeapWordSize * nvc->get_size_class());
+
+          // printf("sweep %p [%lu]\n", nvc->get_start(), idx);
           nvc->set_is_full(false);
         } else {
           nvc->m_1_to_0(idx);
-          printf("keep %p [%lu]\n", nvc->get_start(), idx);
+          // printf("keep %p [%lu]\n", nvc->get_start(), idx);
         }
       }
       nvc->set_allication_top(0);
@@ -258,5 +260,167 @@ void* NonVolatileChunkMedium::allocation() {
   return NULL;
 }
 
+// FIXME: largeの管理はbyte_sizeでやらないと。
+void* NonVolatileChunkLarge::allocation(size_t word_size) {
+  void* ptr = NULL;
+  pthread_mutex_lock(&NVMAllocator::allocate_mtx);  // TODO: Large allocation専用のlockを作るほうが高速
+  if (NVMAllocator::nvm_head == NULL) {
+    NVMAllocator::init();
+    }
+
+  NonVolatileChunkLarge* nvcl = NVMAllocator::first_free_nvcl;
+  NonVolatileChunkLarge* left_nvcl = (NonVolatileChunkLarge*) NULL;
+
+  while (nvcl->get_next_chunk() != NULL || left_nvcl == NULL) {
+    size_t nvcl_size = nvcl->get_word_size();
+    if (nvcl_size >= word_size + sizeof(NonVolatileChunkLarge) || !nvcl->get_alloc()) {
+      // going to use this nvcl.
+      // if as large as needed size, just use.
+      // if too large, cut from tail.
+      if (nvcl_size > word_size + ((sizeof(NonVolatileChunkLarge)-1) / HeapWordSize) + 1 + NonVolatileChunkLarge::MINIMUM_WORD_SIZE_OF_NVCLARGE_ALLOCATION) {
+        // cut from tail
+        size_t need_byte_size = word_size * HeapWordSize + sizeof(NonVolatileChunkLarge);
+        void* new_nvcl_header = (void*) (((char*) nvcl->get_dummy() + (nvcl_size * HeapWordSize - need_byte_size)));
+        NonVolatileChunkLarge* new_nvcl = new(new_nvcl_header) NonVolatileChunkLarge(true, word_size, nvcl->get_next_chunk());
+        // nvcl->set_next_chunk(new_nvcl);
+        nvcl->set_word_size(nvcl_size - (((need_byte_size - 1) / HeapWordSize) + 1) );
+        ptr = (void*) &(new_nvcl->dummy);
+        break;
+      } else {
+        // use the nvcl
+        if (left_nvcl != NULL) {
+          left_nvcl->set_next_chunk(nvcl->get_next_chunk());
+        } else {
+          NVMAllocator::first_free_nvcl = nvcl->get_next_chunk();
+        }
+        nvcl->next_chunk = (NonVolatileChunkLarge*) NULL;
+        nvcl->a_0_to_1();
+        ptr = (void*) &(nvcl->dummy);
+        break;
+      }
+    }
+    // try next chunk
+    left_nvcl = nvcl;
+    nvcl = left_nvcl->get_next_chunk();
+  }
+
+  // if (has_available_chunk) {
+  // }
+  // void* header_ad = NVMAllocator::large_top;
+  // // void* next_top = (void *)(((char *)NVMAllocator::large_top) + (word_size * HeapWordSize));
+  // void* ptr = (void *)(((char *)NVMAllocator::large_top) + (sizeof(NonVolatileChunkLarge)));  // header
+  // void* next_top = (void *)(((char *)ptr) + (word_size * HeapWordSize));  // allocation
+  // NVMAllocator::large_top = next_top;
+  // pthread_mutex_unlock(&NVMAllocator::allocate_mtx);
+  // if (NVMAllocator::nvm_tail <= NVMAllocator::large_top) {
+  //   report_vm_error(__FILE__, __LINE__, "Out of memory in allocate_large.");
+  // }
+
+  // NonVolatileChunkLarge* nvcl = new(header_ad) NonVolatileChunkLarge(word_size, NULL);
+  pthread_mutex_unlock(&NVMAllocator::allocate_mtx);
+  return ptr;
+}
+
+void NonVolatileChunkLarge::mark_object(void* ptr, size_t obj_word_size) {
+  NonVolatileChunkLarge* obj_header = (NonVolatileChunkLarge*) (((char*) ptr) - sizeof(NonVolatileChunkLarge));
+  // printf("mark NVCLarge this: %p, dummy: %p, size: %lu\n", (void*) obj_header, obj_header->get_dummy(), obj_header->get_word_size());
+  obj_header->m_0_to_1();
+  return;
+}
+
+void NonVolatileChunkLarge::sweep_objects() {
+  NonVolatileChunkLarge* nvcl = (NonVolatileChunkLarge*) NVMAllocator::large_head;
+  // NonVolatileChunkLarge* right_nvcl = (NonVolatileChunkLarge*) nvcl->get_next_chunk();
+  NonVolatileChunkLarge* last_free_nvcl = (NonVolatileChunkLarge*) NULL;
+
+  while ((void*)nvcl < NVMAllocator::nvm_tail) {
+    if (nvcl->get_alloc()) {
+      if (nvcl->get_mark()) {
+        // keep
+        nvcl->m_1_to_0();
+        // printf("large: keep\n");
+      } else {
+        // sweep.
+        nvcl->a_1_to_0();
+        // printf("large: sweep\n");
+        if (last_free_nvcl != NULL) {
+          if (last_free_nvcl->is_next(nvcl)) {
+            // merge
+            // printf("large: merge\n");
+
+          } else {
+            // update last_free_nvcl
+            last_free_nvcl = nvcl;
+          }
+          
+
+        } else {
+
+        }
+      }
+    }
+      size_t nvcl_byte_size = sizeof(NonVolatileChunkLarge) + ((nvcl->get_word_size()) * HeapWordSize);
+      nvcl = (NonVolatileChunkLarge*) (((char*)nvcl) + nvcl_byte_size);
+  }
+
+
+  // while (right_nvcl != NULL) {
+  //   if (right_nvcl->get_mark()) {
+  //     // keep.
+  //     nvcl = right_nvcl;
+  //     if (right_nvcl == NULL) break;
+  //     // move to right chunk
+  //     size_t nvcl_byte_size = sizeof(NonVolatileChunkLarge) + ((nvcl->get_word_size) * HeapWordSize);
+  //     right_nvcl = (NonVolatileChunkLarge*) (((char*) nvcl) + nvcl_byte_size);
+  //   } else {
+  //     // sweep.
+  //     right_nvcl->a_1_to_0();
+  //   }
+  // }
+  
+  // while (right_nvcl != NULL) {
+  //   if (right_nvcl->get_mark()) {
+  //     // keep.
+  //     nvcl = right_nvcl;
+  //     if (right_nvcl == NULL) break;
+  //     // move to right chunk
+  //     size_t nvcl_byte_size = sizeof(NonVolatileChunkLarge) + ((nvcl->get_word_size) * HeapWordSize);
+  //     right_nvcl = (NonVolatileChunkLarge*) (((char*) nvcl) + nvcl_byte_size);
+  //   } else {
+  //     // sweep, if right_nvcl is next to the chunk, merge them.
+  //     if (last_free_nvcl == nvcl)
+  //     size_t nvcl_byte_size = sizeof(NonVolatileChunkLarge) + ((nvcl->get_word_size) * HeapWordSize);
+      
+  //     if ()
+  //   }
+  // }
+
+}
+
+bool NonVolatileChunkLarge::is_next(NonVolatileChunkLarge* nvcl) {  // TODO: rename this function it is not good enough.
+  size_t this_byte_size = sizeof(NonVolatileChunkLarge) + (word_size * HeapWordSize);
+  void* next_nvcl_address = (NonVolatileChunkLarge*) (((char*)nvcl) + this_byte_size);
+  return ((void*) nvcl) == next_nvcl_address;
+}
+
+void NonVolatileChunkLarge::a_0_to_1() {
+    assert(alloc == false, "");
+    alloc = true;
+}
+
+void NonVolatileChunkLarge::a_1_to_0() {
+    assert(alloc == true, "");
+    alloc = false;
+}
+
+void NonVolatileChunkLarge::m_0_to_1() {
+    assert(mark == false, "");
+    mark = true;
+}
+
+void NonVolatileChunkLarge::m_1_to_0() {
+    assert(mark == true, "");
+    mark = false;
+}
 
 // #endif OUR_PERSIST

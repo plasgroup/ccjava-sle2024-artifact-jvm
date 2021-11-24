@@ -142,8 +142,12 @@ void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_so
 
   gch->trace_heap_after_gc(_gc_tracer);
 
-
+#ifdef OUR_PERSIST
+#ifdef USE_NVTLAB
   NonVolatileChunkSegregate::sweep_objects();
+  NonVolatileChunkLarge::sweep_objects();
+#endif // USE_NVTLAB
+#endif // OUR_PERSIST
 }
 
 void GenMarkSweep::allocate_stacks() {

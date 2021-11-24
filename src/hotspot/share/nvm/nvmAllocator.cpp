@@ -13,6 +13,7 @@ void* NVMAllocator::segregated_top = NULL;
 void* NVMAllocator::nvm_tail = NULL;
 void* NVMAllocator::large_head = NULL;
 void* NVMAllocator::large_top = NULL;
+NonVolatileChunkLarge* NVMAllocator::first_free_nvcl = (NonVolatileChunkLarge*) NULL;
 pthread_mutex_t NVMAllocator::allocate_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 void NVMAllocator::init() {
@@ -47,6 +48,15 @@ void NVMAllocator::init() {
 #ifdef USE_NVTLAB
   NVMAllocator::large_head = (void*)(((char*)NVMAllocator::nvm_head) + (NVMAllocator::SEGREGATED_REGION_SIZE_GB * 1024 * 1024 * 1024));
   NVMAllocator::large_top = NVMAllocator::large_head;
+
+  // initialize NVCLarge
+  uintptr_t uintptr_nvm_tail = (uintptr_t) NVMAllocator::nvm_tail;
+  uintptr_t uintptr_large_head = (uintptr_t) NVMAllocator::large_head;
+  size_t first_free_nvcl_word_size = (size_t) ((uintptr_nvm_tail - uintptr_large_head - sizeof(NonVolatileChunkLarge)) / HeapWordSize);
+  NVMAllocator::first_free_nvcl = new(NVMAllocator::large_head) NonVolatileChunkLarge(false, first_free_nvcl_word_size, NULL);
+  // NVMAllocator::large_head = (void*)(((char*)NVMAllocator::large_head) + sizeof(NonVolatileChunkLarge));
+  // void* hoge = (void*)(((char *)NVMAllocator::large_top) + (8 * first_free_nvcl_word_size));
+  // printf("p: %p\n", hoge);
 #endif
 }
 
@@ -58,8 +68,9 @@ void* NVMAllocator::allocate(size_t _size)
 
 #ifdef USE_NVTLAB
 
-  if (_size > 256) {
-    ptr = allocate_large(_size);
+  if (_size >= NonVolatileChunkLarge::MINIMUM_WORD_SIZE_OF_NVCLARGE_ALLOCATION) {
+    // ptr = allocate_large(_size);
+    ptr = NonVolatileChunkLarge::allocation(_size);
     // printf("large ptr: %p\n", ptr);
     fflush(stdout);
     return ptr;
@@ -145,21 +156,5 @@ void* NVMAllocator::allocate_chunksize() {
   return nvm_next;  // not ptr
 }
 
-void* NVMAllocator::allocate_large(size_t size) {
-  pthread_mutex_lock(&NVMAllocator::allocate_mtx);
-  if (NVMAllocator::nvm_head == NULL) {
-    NVMAllocator::init();
-    }
-  void* ptr = NVMAllocator::large_top;
-  void* next_top = (void *)(((char *)NVMAllocator::large_top) + (size * HeapWordSize));
-  NVMAllocator::large_top = next_top;
-  pthread_mutex_unlock(&NVMAllocator::allocate_mtx);
-  if (NVMAllocator::nvm_tail <= NVMAllocator::large_top) {
-    printf("ending...large_head: %p\n", NVMAllocator::large_top);
-    printf("nvm_tail: %p\n", NVMAllocator::nvm_tail);
-    report_vm_error(__FILE__, __LINE__, "Out of memory in allocate_large.");
-  }
-  return ptr;
-}
 
 #endif // OUR_PERSIST

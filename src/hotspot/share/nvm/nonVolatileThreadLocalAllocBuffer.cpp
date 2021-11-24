@@ -73,12 +73,12 @@ void* NonVolatileThreadLocalAllocBuffer::allocate(size_t _word_size) {
   chunk = nvc[idx];
   ptr = chunk->allocation();
   if (ptr != NULL) {
-    printf("reuse %p\n", nvc[idx]);
+    // printf("reuse %p\n", nvc[idx]->get_start());
     return ptr;
   }
 
   // define new nvc
-  printf("define new one\n");
+  // printf("define new one\n");
   nvc[idx] = NonVolatileChunkSegregate::generate_new_nvc(idx);
   chunk = nvc[idx];
   // retry

@@ -6,9 +6,12 @@
 #include "memory/allStatic.hpp"
 #include "utilities/globalDefinitions.hpp"
 
+class NonVolatileChunkLarge;
+
 class NVMAllocator : AllStatic {
   friend class NonVolatileThreadLocalAllocBuffer;
   friend class NonVolatileChunkSegregate;
+  friend class NonVolatileChunkLarge;
 public:
   static const size_t NVM_CHUNK_BYTE_SIZE = 4096;
   static const size_t SEGREGATED_REGION_SIZE_GB = 15;
@@ -18,6 +21,7 @@ public:
   static void* nvm_tail;
   static void* large_head;
   static void* large_top;
+  static NonVolatileChunkLarge* first_free_nvcl;
   static pthread_mutex_t allocate_mtx;
 
   // allocate nvm bigger than 256 word.

@@ -47,7 +47,7 @@ public:
   , is_full(false)
   , next_chunk((NonVolatileChunkSegregate*) NULL)
   {
-    printf("start: %p, end: %p\n", start, end);
+    // printf("start: %p, end: %p\n", start, end);
     if (size_class == 0) {
       printf("size_class == 0\n");
       size_class = 1;
@@ -130,6 +130,47 @@ public:
   void* allocation();
   bool is_nvc_small() { return false; }
   bool is_nvc_medium() { return true; }
+};
+
+class NonVolatileChunkLarge {
+private:
+  bool alloc;
+  bool mark;
+  size_t word_size;
+  NonVolatileChunkLarge* next_chunk;
+  uint64_t dummy[];
+public:
+  NonVolatileChunkLarge(bool _alloc, size_t _word_size, NonVolatileChunkLarge* _next_chunk)
+  : alloc(_alloc)
+  , mark(false)
+  , word_size(_word_size)
+  , next_chunk(_next_chunk)
+  {
+    // printf("new NVCLarge this: %p, dummy: %p, size: %lu\n", this, (void*)dummy, word_size);
+  }
+
+  ~NonVolatileChunkLarge();
+  static const size_t MINIMUM_WORD_SIZE_OF_NVCLARGE_ALLOCATION = 257;
+  static bool has_available_chunk; // 初回GC前や空きが無いとき(一周探索して空きがないときから、次回GCまで)はfalse
+  static void* large_head;
+
+  static void* allocation(size_t word_size);
+  static void mark_object(void* ptr, size_t obj_word_size);
+  static void sweep_objects();
+  bool is_next(NonVolatileChunkLarge* nvcl);
+
+  bool get_alloc() { return alloc; }
+  bool get_mark() { return mark; }
+  size_t get_word_size() { return word_size; }
+  void set_word_size(size_t _word_size) { word_size = _word_size; }
+  NonVolatileChunkLarge* get_next_chunk() { return next_chunk; }
+  void set_next_chunk(NonVolatileChunkLarge* _next_chunk) { next_chunk = _next_chunk; }
+  void* get_dummy() { return (void*) dummy; }
+  void a_0_to_1();
+  void a_1_to_0();
+  void m_0_to_1();
+  void m_1_to_0();
+
 };
 
 #endif // NVM_NVTLAB_HPP

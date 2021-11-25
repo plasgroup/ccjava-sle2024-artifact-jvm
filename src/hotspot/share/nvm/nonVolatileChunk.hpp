@@ -138,7 +138,7 @@ private:
   bool mark;
   size_t word_size;
   NonVolatileChunkLarge* next_chunk;
-  uint64_t dummy[];
+  uint64_t dummy[] __attribute__((aligned(HeapWordSize)));
 public:
   NonVolatileChunkLarge(bool _alloc, size_t _word_size, NonVolatileChunkLarge* _next_chunk)
   : alloc(_alloc)
@@ -158,6 +158,8 @@ public:
   static void mark_object(void* ptr, size_t obj_word_size);
   static void sweep_objects();
   bool is_next(NonVolatileChunkLarge* nvcl);
+  void merge(NonVolatileChunkLarge* nvcl);
+  static void print_free_list();
 
   bool get_alloc() { return alloc; }
   bool get_mark() { return mark; }

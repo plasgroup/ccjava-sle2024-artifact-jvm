@@ -260,7 +260,7 @@ void* NonVolatileChunkMedium::allocation() {
   return NULL;
 }
 
-// FIXME: largeの管理はbyte_sizeでやらないと。
+
 void* NonVolatileChunkLarge::allocation(size_t word_size) {
   void* ptr = NULL;
   pthread_mutex_lock(&NVMAllocator::allocate_mtx);  // TODO: Large allocation専用のlockを作るほうが高速
@@ -271,8 +271,9 @@ void* NonVolatileChunkLarge::allocation(size_t word_size) {
   NonVolatileChunkLarge* nvcl = NVMAllocator::first_free_nvcl;
   NonVolatileChunkLarge* left_nvcl = (NonVolatileChunkLarge*) NULL;
 
-  while (nvcl->get_next_chunk() != NULL || left_nvcl == NULL) {
+  while (true) {
     size_t nvcl_size = nvcl->get_word_size();
+    static_assert(sizeof(NonVolatileChunkLarge) % HeapWordSize == 0);
     if (nvcl_size >= word_size + sizeof(NonVolatileChunkLarge) || !nvcl->get_alloc()) {
       // going to use this nvcl.
       // if as large as needed size, just use.
@@ -288,10 +289,10 @@ void* NonVolatileChunkLarge::allocation(size_t word_size) {
         break;
       } else {
         // use the nvcl
-        if (left_nvcl != NULL) {
-          left_nvcl->set_next_chunk(nvcl->get_next_chunk());
-        } else {
+        if (nvcl == NVMAllocator::first_free_nvcl) {
           NVMAllocator::first_free_nvcl = nvcl->get_next_chunk();
+        } else {
+          left_nvcl->set_next_chunk(nvcl->get_next_chunk());
         }
         nvcl->next_chunk = (NonVolatileChunkLarge*) NULL;
         nvcl->a_0_to_1();
@@ -299,24 +300,15 @@ void* NonVolatileChunkLarge::allocation(size_t word_size) {
         break;
       }
     }
-    // try next chunk
+    // try next chunk or break the loop
+    if (nvcl->get_next_chunk() == NULL) {
+      // reach the tail chunk and cannot allocate
+      break;
+    }
     left_nvcl = nvcl;
     nvcl = left_nvcl->get_next_chunk();
   }
 
-  // if (has_available_chunk) {
-  // }
-  // void* header_ad = NVMAllocator::large_top;
-  // // void* next_top = (void *)(((char *)NVMAllocator::large_top) + (word_size * HeapWordSize));
-  // void* ptr = (void *)(((char *)NVMAllocator::large_top) + (sizeof(NonVolatileChunkLarge)));  // header
-  // void* next_top = (void *)(((char *)ptr) + (word_size * HeapWordSize));  // allocation
-  // NVMAllocator::large_top = next_top;
-  // pthread_mutex_unlock(&NVMAllocator::allocate_mtx);
-  // if (NVMAllocator::nvm_tail <= NVMAllocator::large_top) {
-  //   report_vm_error(__FILE__, __LINE__, "Out of memory in allocate_large.");
-  // }
-
-  // NonVolatileChunkLarge* nvcl = new(header_ad) NonVolatileChunkLarge(word_size, NULL);
   pthread_mutex_unlock(&NVMAllocator::allocate_mtx);
   return ptr;
 }
@@ -335,72 +327,59 @@ void NonVolatileChunkLarge::sweep_objects() {
 
   while ((void*)nvcl < NVMAllocator::nvm_tail) {
     if (nvcl->get_alloc()) {
+      // using nvcl. keep or sweep.
       if (nvcl->get_mark()) {
         // keep
         nvcl->m_1_to_0();
         // printf("large: keep\n");
       } else {
-        // sweep.
+        // sweep
         nvcl->a_1_to_0();
         // printf("large: sweep\n");
         if (last_free_nvcl != NULL) {
           if (last_free_nvcl->is_next(nvcl)) {
-            // merge
+            // next to last free chunk. merge.
             // printf("large: merge\n");
-
+            last_free_nvcl->merge(nvcl);
+            nvcl = last_free_nvcl;
           } else {
-            // update last_free_nvcl
-            last_free_nvcl = nvcl;
+            // not next to each other. just update last_free_chunk.
+            last_free_nvcl->set_next_chunk(nvcl);
           }
-          
-
-        } else {
-
         }
+        last_free_nvcl = nvcl;
       }
+    } else {
+      // not used. connect free list
+      if (last_free_nvcl != NULL) last_free_nvcl->set_next_chunk(nvcl);
+      last_free_nvcl = nvcl;
     }
+
+
       size_t nvcl_byte_size = sizeof(NonVolatileChunkLarge) + ((nvcl->get_word_size()) * HeapWordSize);
       nvcl = (NonVolatileChunkLarge*) (((char*)nvcl) + nvcl_byte_size);
   }
-
-
-  // while (right_nvcl != NULL) {
-  //   if (right_nvcl->get_mark()) {
-  //     // keep.
-  //     nvcl = right_nvcl;
-  //     if (right_nvcl == NULL) break;
-  //     // move to right chunk
-  //     size_t nvcl_byte_size = sizeof(NonVolatileChunkLarge) + ((nvcl->get_word_size) * HeapWordSize);
-  //     right_nvcl = (NonVolatileChunkLarge*) (((char*) nvcl) + nvcl_byte_size);
-  //   } else {
-  //     // sweep.
-  //     right_nvcl->a_1_to_0();
-  //   }
-  // }
-  
-  // while (right_nvcl != NULL) {
-  //   if (right_nvcl->get_mark()) {
-  //     // keep.
-  //     nvcl = right_nvcl;
-  //     if (right_nvcl == NULL) break;
-  //     // move to right chunk
-  //     size_t nvcl_byte_size = sizeof(NonVolatileChunkLarge) + ((nvcl->get_word_size) * HeapWordSize);
-  //     right_nvcl = (NonVolatileChunkLarge*) (((char*) nvcl) + nvcl_byte_size);
-  //   } else {
-  //     // sweep, if right_nvcl is next to the chunk, merge them.
-  //     if (last_free_nvcl == nvcl)
-  //     size_t nvcl_byte_size = sizeof(NonVolatileChunkLarge) + ((nvcl->get_word_size) * HeapWordSize);
-      
-  //     if ()
-  //   }
-  // }
-
 }
 
 bool NonVolatileChunkLarge::is_next(NonVolatileChunkLarge* nvcl) {  // TODO: rename this function it is not good enough.
   size_t this_byte_size = sizeof(NonVolatileChunkLarge) + (word_size * HeapWordSize);
-  void* next_nvcl_address = (NonVolatileChunkLarge*) (((char*)nvcl) + this_byte_size);
-  return ((void*) nvcl) == next_nvcl_address;
+  void* next_nvcl_address = (NonVolatileChunkLarge*) (((char*)this) + this_byte_size);
+  return nvcl == next_nvcl_address;
+}
+
+void NonVolatileChunkLarge::merge(NonVolatileChunkLarge* nvcl) {
+  size_t merged_this_byte_size = sizeof(NonVolatileChunkLarge) + ((word_size + nvcl->get_word_size()) * HeapWordSize);
+  assert(merged_this_byte_size % HeapWordSize == 0, "");
+  word_size = merged_this_byte_size / HeapWordSize;
+}
+
+void NonVolatileChunkLarge::print_free_list() {
+  NonVolatileChunkLarge* nvcl = NVMAllocator::first_free_nvcl;
+  while (nvcl != NULL) {
+    printf("NVCLarge %p: size %lu next %p\n", nvcl, nvcl->get_word_size(), nvcl->get_next_chunk());
+    nvcl = nvcl->get_next_chunk();
+  }
+  printf("nvm_tail: %p\n", NVMAllocator::nvm_tail);
 }
 
 void NonVolatileChunkLarge::a_0_to_1() {

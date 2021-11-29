@@ -101,57 +101,66 @@ void NonVolatileChunkSegregate::print_nvc_info() {
 }
 
 bool NonVolatileChunkSegregate::get_abit(size_t idx) {
-  if (idx > max_idx) {
-    report_vm_error(__FILE__, __LINE__, "get_abit: index out of range.");
-  }
-  return abit[idx];  // TODO:1
+  assert(idx <= max_idx, "");
+  size_t base = idx / 64;
+  size_t offset = idx % 64;
+  uint64_t mask = 1ULL << offset;
+  bool ret = (abit[base] & mask) != 0;
+  return ret;
 }
 
 bool NonVolatileChunkSegregate::get_mbit(size_t idx) {
-  if (idx > max_idx) {
-    report_vm_error(__FILE__, __LINE__, "get_mbit: index out of range.");
-  }
-  return mbit[idx];  // TODO:1
+  assert(idx <= max_idx, "");
+  size_t base = idx / 64;
+  size_t offset = idx % 64;
+  uint64_t mask = 1ULL << offset;
+  bool ret = (mbit[base] & mask) != 0;
+  return ret;
 }
 
-void NonVolatileChunkSegregate::reverse_abit(size_t idx) {
-    if (idx > max_idx) {
-    report_vm_error(__FILE__, __LINE__, "reverse_abit: index out of range.");
-  }
-  abit[idx] = !abit[idx];
-}
 
-void NonVolatileChunkSegregate::reverse_mbit(size_t idx) {
-    if (idx > max_idx) {
-    report_vm_error(__FILE__, __LINE__, "get_mbit: index out of range.");
-  }
-  mbit[idx] = !mbit[idx];
-}
-
-void NonVolatileChunkSegregate::a_0_to_1(size_t idx)
-{
-  assert(abit[idx] == 0, "");
-      abit[idx] = 1;
+void NonVolatileChunkSegregate::a_0_to_1(size_t idx) {
+  assert(idx <= max_idx, "");
+  size_t base = idx / 64;
+  size_t offset = idx % 64;
+  uint64_t mask = 1ULL << offset;
+  bool b = (abit[base] & mask) != 0;
+  assert(b == false, "");
+  abit[base] = abit[base] ^ mask;
   return;
 }
 
-void NonVolatileChunkSegregate::a_1_to_0(size_t idx)
-{
-  assert(abit[idx] == 1, "");
-      abit[idx] = 0;
+void NonVolatileChunkSegregate::a_1_to_0(size_t idx) {
+  assert(idx <= max_idx, "");
+  size_t base = idx / 64;
+  size_t offset = idx % 64;
+  uint64_t mask = 1ULL << offset;
+  bool b = (abit[base] & mask) != 0;
+  assert(b == true, "");
+  abit[base] = abit[base] ^ mask;
   return;
 }
+
 
 void NonVolatileChunkSegregate::m_0_to_1(size_t idx) {
-  assert(mbit[idx] == 0, "");
-  mbit[idx] = 1;
+  assert(idx <= max_idx, "");
+  size_t base = idx / 64;
+  size_t offset = idx % 64;
+  uint64_t mask = 1ULL << offset;
+  bool b = (mbit[base] & mask) != 0;
+  assert(b == false, "");
+  mbit[base] = mbit[base] ^ mask;
   return;
 }
 
-void NonVolatileChunkSegregate::m_1_to_0(size_t idx)
-{
-  assert(mbit[idx] == 1, "");
-      mbit[idx] = 0;
+void NonVolatileChunkSegregate::m_1_to_0(size_t idx) {
+  assert(idx <= max_idx, "");
+  size_t base = idx / 64;
+  size_t offset = idx % 64;
+  uint64_t mask = 1ULL << offset;
+  bool b = (mbit[base] & mask) != 0;
+  assert(b == true, "");
+  mbit[base] = mbit[base] ^ mask;
   return;
 }
 

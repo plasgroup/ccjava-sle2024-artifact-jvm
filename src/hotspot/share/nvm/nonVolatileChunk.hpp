@@ -20,10 +20,8 @@ protected:
   size_t allocation_top;
   bool is_using;
   bool is_full;
-  // uint64_t abit[NonVolatileThreadLocalAllocBuffer::kbyte_ber_nvc * 1024/(HeapWordSize * sizeof(unit64_t) * 8)]; // TODO:1 bit演算にする
-  // uint64_t mbit[NonVolatileThreadLocalAllocBuffer::kbyte_ber_nvc * 1024/(HeapWordSize * sizeof(unit64_t) * 8)];
-  bool abit[512]; // １つのNVCの最大オブジェクト数
-  bool mbit[512]; // １つのNVCの最大オブジェクト数
+  uint64_t abit[NonVolatileThreadLocalAllocBuffer::kbyte_per_nvc * 1024/(HeapWordSize * sizeof(uint64_t) * 8)];
+  uint64_t mbit[NonVolatileThreadLocalAllocBuffer::kbyte_per_nvc * 1024/(HeapWordSize * sizeof(uint64_t) * 8)];
   NonVolatileChunkSegregate* next_chunk;
 
   static NonVolatileChunkSegregate* standby_for_gc[40];
@@ -54,9 +52,11 @@ public:
     }
     max_idx = 512 / size_class;
 
+    size_t max_idx = NonVolatileThreadLocalAllocBuffer::kbyte_per_nvc*1024/(HeapWordSize * sizeof(u_int64_t)*8);
     for (size_t i = 0; i < max_idx; i++) {
-      abit[i] = false;
-      mbit[i] = false;
+      abit[i] = (uint64_t) 0;
+      mbit[i] = (uint64_t) 0;
+
     }
 
     set_nvc_address();

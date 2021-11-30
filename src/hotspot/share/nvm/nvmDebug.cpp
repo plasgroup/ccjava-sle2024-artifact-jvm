@@ -14,6 +14,8 @@
 #include "oops/typeArrayKlass.hpp"
 #include "runtime/fieldDescriptor.inline.hpp"
 
+int NVMDebug::obj_cnt = 0;
+
 void NVMDebug::print_native_stack() {
   char buf[2000];
   VMError::print_native_stack(tty, os::current_frame(), Thread::current(), buf, sizeof(buf));
@@ -79,7 +81,9 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
   assert(nvmHeader::is_fwd(nvm_obj), "");
 
   if (is_volatile) {
-    // TODO: unimplemented.
+    if (is_java_primitive(type)) {
+      return true;
+    }
   }
 
   union {
@@ -152,9 +156,11 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
         v1.oop_val = oop(dram_v != NULL ? dram_v->nvm_header().fwd() : NULL);
         v2.oop_val = Raw::oop_load_in_heap_at(nvm_obj, offset);
         if (v1.long_val != v2.long_val) {
-          for (int i = -80; i <= 80; i += 8) {
-            oopDesc* test = Parent::oop_load_in_heap_at(dram_obj, offset + i);
-            tty->print("dram_obj[%d]: %p\n", int(offset + i), test);
+          for (int i = dram_obj->header_size() * HeapWordSize; i < dram_obj->size() * HeapWordSize; i += HeapWordSize) {
+            oopDesc* test1 = Parent::oop_load_in_heap_at(dram_obj, i);
+            oopDesc* test2 = oop(test1 != NULL ? test1->nvm_header().fwd() : NULL);
+            oopDesc* test3 = Parent::oop_load_in_heap_at(nvm_obj, i);
+            tty->print("dram_obj[%d]: %p(nvm: %p), nvm_obj[%d]: %p\n", i, test1, test2, i, test3);
           }
           tty->print("dram_obj is_recoverable: %d\n", dram_obj->nvm_header().recoverable());
           tty->print("dram_obj is_target: %d\n", OurPersist::is_target(dram_obj->klass()));
@@ -176,7 +182,9 @@ bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
     // tty->print("doesn't have nvm copy.\n");
     return true;
   }
-  assert(nvm_obj != OURPERSIST_FWD_BUSY, "");
+
+  NVMDebug::obj_cnt++;
+
   assert(nvmHeader::is_fwd(nvm_obj), "");
   assert(dram_obj->nvm_header().recoverable(), "");
 
@@ -213,6 +221,8 @@ bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
           char str[100];
           tty->print("ik: doesn't have same field.\n");
           tty->print("ik: name: %s, offset: %ld\n", ik->name()->as_C_string(str, 100), field_offset);
+          tty->print("ik: dram_obj is_recoverable: %d\n", dram_obj->nvm_header().recoverable());
+          tty->print("ik: dram_obj is_target: %d\n", OurPersist::is_target(dram_obj->klass()));
           return false;
         }
       }

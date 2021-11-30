@@ -10,6 +10,8 @@
 class NVMDebug : AllStatic {
 private:
 public:
+  static int obj_cnt;
+
   static void print_native_stack();
   static void print_decorators(DecoratorSet ds);
   static void print_klass_id(Klass* k);

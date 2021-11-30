@@ -10,23 +10,10 @@
 
 void NVMCardTableBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                                Address dst, Register val, Register tmp1, Register tmp2) {
-  // Original assembler
-  // Parent::store_at(masm, decorators, type, dst, val, tmp1, tmp2);
-
-  // OurPersist assembler
-  // if (is_reference_type(type)) {
-  //   NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
-  // } else {
-  //   NVMCardTableBarrierSetAssembler::interpreter_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
-  // }
-
+#ifdef OURPERSIST_STORE_RUNTIME_ONLY
   // Runtime
-  // NVMCardTableBarrierSetAssembler::runtime_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
-
-  // DEBUG:
-  //NVMCardTableBarrierSetAssembler::runtime_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
-  //return;
-
+  NVMCardTableBarrierSetAssembler::runtime_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
+#else  // OURPERSIST_STORE_RUNTIME_ONLY
   // implements volatile algorithm
   assert((decorators & OURPERSIST_IS_STATIC_MASK)   != DECORATORS_NONE, "");
   assert((decorators & OURPERSIST_IS_VOLATILE_MASK) != DECORATORS_NONE, "");
@@ -45,34 +32,27 @@ void NVMCardTableBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSe
 #else  // !OURPERSIST_IGNORE_VOLATILE
   // OurPersist assembler
   if (is_reference_type(type)) {
-    NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
+    Parent::store_at(masm, decorators, type, dst, val, tmp1, tmp2);
+    //NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
   } else {
+    //Parent::store_at(masm, decorators, type, dst, val, tmp1, tmp2);
     NVMCardTableBarrierSetAssembler::interpreter_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
   }
 #endif // !OURPERSIST_IGNORE_VOLATILE
-
+#endif // OURPERSIST_STORE_RUNTIME_ONLY
 }
 
 void NVMCardTableBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                               Register dst, Address src, Register tmp1, Register tmp_thread) {
-  // Original
-  // Parent::load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
-
-  // OurPersist assembler
-  // if (is_reference_type(type)) {
-  //   NVMCardTableBarrierSetAssembler::interpreter_oop_load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
-  // } else {
-  //   NVMCardTableBarrierSetAssembler::interpreter_load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
-  // }
-
+#ifdef OURPERSIST_LOAD_RUNTIME_ONLY
   // Runtime
-  // if ((decorators & OURPERSIST_IS_STATIC_MASK) == 0) {
-  //   // TODO: TemplateInterpreterGenerator::generate_Reference_get_entry(void)
-  //   Parent::load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
-  // } else {
-  //   NVMCardTableBarrierSetAssembler::runtime_load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
-  // }
-
+  if ((decorators & OURPERSIST_IS_STATIC_MASK) == 0) {
+    // TODO: TemplateInterpreterGenerator::generate_Reference_get_entry(void)
+    Parent::load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
+  } else {
+    NVMCardTableBarrierSetAssembler::runtime_load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
+  }
+#else  // OURPERSIST_LOAD_RUNTIME_ONLY
 #ifndef OURPERSIST_IGNORE_VOLATILE
   if (decorators & OURPERSIST_IS_VOLATILE) {
     // Runtime
@@ -92,7 +72,7 @@ void NVMCardTableBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet
   // Original
   Parent::load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
 #endif // !OURPERSIST_IGNORE_VOLATILE
-
+#endif // OURPERSIST_LOAD_RUNTIME_ONLY
 }
 
 void NVMCardTableBarrierSetAssembler::interpreter_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
@@ -111,14 +91,11 @@ void NVMCardTableBarrierSetAssembler::interpreter_store_at(MacroAssembler* masm,
   __ andptr(tmp1, ~0b111);
 
   // Check nvm header.
-  __ cmpptr(tmp1, 0);
-  __ jcc(Assembler::equal, done);
-#ifdef OURPERSIST_CAS_VERSION
-  // tmp2 = BUSY
-  __ movptr(tmp2, (intptr_t)OURPERSIST_FWD_BUSY);
-  __ cmpptr(tmp1, tmp2);
-  __ jcc(Assembler::equal, done);
-#endif // OURPERSIST_CAS_VERSION
+  __ jcc(Assembler::zero, done);
+
+#ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
+    __ should_not_reach_here();
+#endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
 
   // Store in NVM.
   const Address nvm_dst(tmp1, dst.index(), dst.scale(), dst.disp());
@@ -141,9 +118,6 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
                                                                Address dst, Register val, Register _tmp1, Register _tmp2) {
   Label done_check_annotaion, val_is_null, done_set_val, done;
   Label success, failure;
-#ifdef OURPERSIST_CAS_VERSION
-  Label retry, retry_check, no_retry_1, no_retry_2;
-#endif // OURPERSIST_CAS_VERSION
   Register tmp1 = r8;
   Register tmp2 = r9;
   Address nvm_header(dst.base(), oopDesc::nvm_header_offset_in_bytes());
@@ -174,89 +148,30 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
     __ bind(done_check_annotaion);
   }
 
-#ifdef OURPERSIST_CAS_VERSION
-  assert(tmp1 != rax, "");
-  assert(tmp2 != rax, "");
-
-  __ bind(retry);
-  __ push(rax);
-
-  // CAS(nvm_header, cmpval = rax(NULL|flags), newval = tmp1(BUSY|flags)) --> rax
-  // tmp2 = flags
-  __ movptr(tmp2, nvm_header);
-  __ andptr(tmp2, 0b111);
-  // tmp1 = BUSY | flags
-  __ movptr(tmp1, (intptr_t)OURPERSIST_FWD_BUSY);
-  __ orptr(tmp1, tmp2);
-  // rax = NULL | flags
-  __ mov(rax, tmp2);
-  // CAS
-  __ lock();
-  __ cmpxchgptr(tmp1, nvm_header);
-  __ jcc(Assembler::notEqual, retry_check);
-
-  // tmp2 = NULL | flags
-  __ pop(rax);
-  __ jmp(success);
-
-  // Check to need retry.
-  __ bind(retry_check);
-  __ mov(tmp1, rax);
-  __ andptr(tmp1, 0b111);
-  // tmp1 = before flags (cas result)
-  // tmp2 = before flags (cmp_val)
-  // rax  = before value (cas result)
-  __ cmpptr(tmp1, tmp2);
-  __ jcc(Assembler::equal, no_retry_1);
-  __ pop(rax);
-  __ jmp(retry);
-
-  __ bind(no_retry_1);
-  __ movptr(tmp1, (intptr_t)OURPERSIST_FWD_BUSY);
-  __ andptr(rax, ~0b111);
-  // tmp1 = BUSY
-  // tmp2 = before flags (cmp_val)
-  // rax  = before forwarding pointer (cas result)
-  __ cmpptr(rax, tmp1);
-  __ jcc(Assembler::notEqual, no_retry_2);
-  __ pop(rax);
-  __ jmp(retry);
-
-  __ bind(no_retry_2);
-  __ mov(tmp1, rax);
-  __ pop(rax);
-  __ jmp(failure);
-
-  // tmp1 = forwarding pointer
-  // tmp2 = flags
-
-#else  // OURPERSIST_CAS_VERSION
   // fence
   __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
   // tmp1 = obj->nvm_header().fwd()
   __ movptr(tmp1, nvm_header);
   __ andptr(tmp1, ~0b111);
   __ jcc(Assembler::notZero, failure);
-
   // tmp1 = forwarding pointer
-
-#endif // OURPERSIST_CAS_VERSION
 
   // success
   __ bind(success);
-  // #ifdef OURPERSIST_CAS_VERSION --> tmp2 = NULL | flags
   // Store only in DRAM.
   __ movptr(tmp1, dst.base()); // push obj
   Parent::store_at(masm, decorators, type, dst, val, _tmp1, _tmp2);
   __ movptr(dst.base(), tmp1); // pop obj
-#ifdef OURPERSIST_CAS_VERSION
-  __ movptr(nvm_header, tmp2); // obj.nvm_header = NULL | flags
-#endif // OURPERSIST_CAS_VERSION
   __ jmp(done);
 
   // failure
   // tmp1 = forwarding pointer
   __ bind(failure);
+
+#ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
+    __ should_not_reach_here();
+#endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
+
   // if (value != NULL) OurPersist::ensure_recoverable(value);
   if (val != noreg) {
     __ cmpptr(val, 0);

@@ -380,16 +380,9 @@ void OurPersist::ensure_recoverable(oop obj) {
 
   void* nvm_obj = OurPersist::allocate_nvm(obj->size(), cur_thread);
 RETRY:
-  void* before_fwd = nvmHeader::cas_fwd(obj, NULL, nvm_obj);
-  bool success = before_fwd == NULL;
+  bool success = nvmHeader::cas_fwd_and_lock_when_swapped(obj, nvm_obj);
   assert(!success || responsible_thread(nvm_obj) == Thread::current(), "");
   if (!success) {
-#ifdef OURPERSIST_CAS_VERSION
-    if (before_fwd == OURPERSIST_FWD_BUSY) {
-      goto RETRY;
-    }
-#endif // OURPERSIST_CAS_VERSION
-
     // TODO: release nvm
 
     Thread* dependant_thread = responsible_thread(nvm_obj);
@@ -460,21 +453,13 @@ RETRY:
               } else {
                 nvm_v = OurPersist::allocate_nvm(v->size(), cur_thread);
                 while (true) {
-                  void* before_fwd = nvmHeader::cas_fwd(v, NULL, nvm_v);
-                  bool success = before_fwd == NULL;
+                  bool success = nvmHeader::cas_fwd_and_lock_when_swapped(v, nvm_v);
                   assert(!success || responsible_thread(nvm_v) == Thread::current(), "");
                   if (success) {
                     assert(responsible_thread(obj->nvm_header().fwd()) == Thread::current(), "");
                     worklist->add(v);
                     break;
                   } else {
-#ifdef OURPERSIST_CAS_VERSION
-                    if (before_fwd == OURPERSIST_FWD_BUSY) {
-                      // busy wait
-                      continue;
-                    }
-#endif // OURPERSIST_CAS_VERSION
-
                     // TODO: release nvm
 
                     nvm_v = v->nvm_header().fwd();
@@ -520,20 +505,13 @@ RETRY:
             nvm_v = OurPersist::allocate_nvm(v->size(), cur_thread);
 
             while (true) {
-              void* before_fwd = nvmHeader::cas_fwd(v, NULL, nvm_v);
-              bool success = before_fwd == NULL;
+              bool success = nvmHeader::cas_fwd_and_lock_when_swapped(v, nvm_v);
               assert(!success || responsible_thread(nvm_v) == Thread::current(), "");
               if (success) {
                 assert(responsible_thread(v->nvm_header().fwd()) == Thread::current(), "");
                 worklist->add(v);
                 break;
               } else {
-#ifdef OURPERSIST_CAS_VERSION
-                if (before_fwd == OURPERSIST_FWD_BUSY) {
-                  continue;
-                }
-#endif // OURPERSIST_CAS_VERSION
-
                 // TODO: release nvm
 
                 nvm_v = v->nvm_header().fwd();
@@ -629,6 +607,8 @@ RETRY:
     // end "for f in obj.fields"
     break;
   }
+
+  nvmHeader::unlock(obj);
 }
 
 #endif // OUR_PERSIST

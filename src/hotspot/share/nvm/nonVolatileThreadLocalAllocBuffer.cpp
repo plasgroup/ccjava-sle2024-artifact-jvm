@@ -1,4 +1,4 @@
-// #ifdef OUR_PERSIST
+#ifdef OUR_PERSIST
 
 #include "precompiled.hpp"
 #include "nvm/ourPersist.hpp"
@@ -8,24 +8,6 @@
 
 #include <pthread.h>
 
-// void NonVolatileThreadLocalAllocBuffer::initialize() {
-//   // Thread* thr = thread();
-//   // pthread_mutex_lock(&NVMAllocator::allocate_mtx);
-    
-//   // pthread_mutex_unlock(&NVMAllocator::allocate_mtx);
-
-  
-//   // pthread_mutex_lock(&NVMAllocator::allocate_mtx);
-//   // void* nvm_next = NULL;
-//   // for (size_t i = 0; i < num_of_nvc_small; i++) {
-//   //   thr->nvtlab().nvc[i] = new NonVolatileChunkSmall();
-//   //   NonVolatileChunk:: add_standby_for_gc(thr->nvtlab[i].nvc[i], i);
-//   // }
-//   // for (; i < num_of_nvc_medium; i++) {
-//   //   thr->nvtlab().nvc[i] = new NonVolatileChunkMedium();
-//   // }
-//   // thr->nvtlab().nvc[i] = new NonVolatileChunkLarge(); // expected i == 42
-// }
 
 void* NonVolatileThreadLocalAllocBuffer::allocate(size_t _word_size) {
   size_t idx = word_size_to_idx(_word_size);
@@ -34,11 +16,6 @@ void* NonVolatileThreadLocalAllocBuffer::allocate(size_t _word_size) {
     return NULL; // NVCLarge allocation
   }
   if (nvc[idx] == NULL) {
-  //   if (_word_size <= 31) { // TODO: 関数にする
-  //     nvc[idx] = NonVolatileChunkSegregate::generate_new_nvc(idx);
-  //   } else if (_word_size <= 256) {
-  //     nvc[idx] = NonVolatileChunkSegregate::generate_new_nvc(idx);
-  // }
   // NVCが割り当てられていない場合は割り当てる
     nvc[idx] = NonVolatileChunkSegregate::generate_new_nvc(idx);
   }
@@ -60,7 +37,6 @@ void* NonVolatileThreadLocalAllocBuffer::allocate(size_t _word_size) {
   pthread_mutex_lock(&NonVolatileChunkSegregate::gc_mtx);
   NonVolatileChunkSegregate* used_nvc = NonVolatileChunkSegregate::get_standby_for_gc_head(idx);  // TODO: 効率わるい
   while (used_nvc->get_next_chunk() != NULL) {
-    // used_nvc->print_nvc_info();
     if (used_nvc->get_is_using() != true && used_nvc->get_is_full() != true) {
       nvc[idx] = used_nvc;
       used_nvc->set_is_using(true);
@@ -73,12 +49,10 @@ void* NonVolatileThreadLocalAllocBuffer::allocate(size_t _word_size) {
   chunk = nvc[idx];
   ptr = chunk->allocation();
   if (ptr != NULL) {
-    // printf("reuse %p\n", nvc[idx]->get_start());
     return ptr;
   }
 
   // define new nvc
-  // printf("define new one\n");
   nvc[idx] = NonVolatileChunkSegregate::generate_new_nvc(idx);
   chunk = nvc[idx];
   // retry
@@ -172,4 +146,4 @@ size_t NonVolatileThreadLocalAllocBuffer::idx_to_minimum_word_size(size_t idx) {
   return 0;
 }
 
-// #endif // OUR_PERSIST
+#endif // OUR_PERSIST

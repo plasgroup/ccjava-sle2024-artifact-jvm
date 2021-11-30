@@ -1,4 +1,4 @@
-// #ifdef OUR_PERSIST
+#ifdef OUR_PERSIST
 // #include "gc/shared/gcUtil.hpp"
 // #include "runtime/perfData.hpp"
 #include "runtime/vm_version.hpp"
@@ -45,7 +45,6 @@ public:
   , is_full(false)
   , next_chunk((NonVolatileChunkSegregate*) NULL)
   {
-    // printf("start: %p, end: %p\n", start, end);
     if (size_class == 0) {
       printf("size_class == 0\n");
       size_class = 1;
@@ -58,9 +57,7 @@ public:
       mbit[i] = (uint64_t) 0;
 
     }
-
     set_nvc_address();
-
   }
 
   size_t get_allocation_top() { return allocation_top; }
@@ -146,7 +143,6 @@ public:
   , word_size(_word_size)
   , next_chunk(_next_chunk)
   {
-    // printf("new NVCLarge this: %p, dummy: %p, size: %lu\n", this, (void*)dummy, word_size);
   }
 
   ~NonVolatileChunkLarge();
@@ -177,4 +173,4 @@ public:
 
 #endif // NVM_NVTLAB_HPP
 
-// #endif // OUR_PERSIST
+#endif // OUR_PERSIST

@@ -228,7 +228,7 @@ void NonVolatileChunkSegregate::sweep_objects() {
           nvc->a_1_to_0(idx);
           // disable sweeped memory
           // char* c = (char*) nvc->idx_2_address(idx);
-          memset(nvc->idx_2_address(idx), 'u', HeapWordSize * nvc->get_size_class());
+          // memset(nvc->idx_2_address(idx), 'u', HeapWordSize * nvc->get_size_class());
 
           // printf("sweep %p [%lu]\n", nvc->get_start(), idx);
           nvc->set_is_full(false);

@@ -6,7 +6,7 @@
 #include "memory/allocation.hpp"
 #include "nvm/ourPersist.hpp"
 
-class NVMBarrierSync : public CHeapObj<mtNone>{
+class NVMBarrierSync : public CHeapObj<mtNone> {
  private:
   NVMBarrierSync* _parent;
   unsigned long _sync_count;
@@ -21,10 +21,11 @@ class NVMBarrierSync : public CHeapObj<mtNone>{
   }
 
   ~NVMBarrierSync() {
-    assert(_parent == NULL, "");
-    assert(_sync_count == 0, "");
+    assert(_parent == NULL, "_parent: %p", _parent);
+    assert(_sync_count == 0, "_sync_count: %lu", _sync_count);
     // NOTE: No one loads after the count reach zero.
-    assert(_ref_count == 0 || _ref_count == 18446744073709551615UL /* -1 */, "");
+    assert(_ref_count == 0 || _ref_count == 18446744073709551615UL /* -1 */,
+           "_ref_count: %lu", _ref_count);
   }
 
  private:

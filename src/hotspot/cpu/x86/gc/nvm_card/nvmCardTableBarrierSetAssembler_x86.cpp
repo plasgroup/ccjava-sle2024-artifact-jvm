@@ -32,8 +32,8 @@ void NVMCardTableBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSe
 #else  // !OURPERSIST_IGNORE_VOLATILE
   // OurPersist assembler
   if (is_reference_type(type)) {
-    Parent::store_at(masm, decorators, type, dst, val, tmp1, tmp2);
-    //NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
+    //Parent::store_at(masm, decorators, type, dst, val, tmp1, tmp2);
+    NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
   } else {
     //Parent::store_at(masm, decorators, type, dst, val, tmp1, tmp2);
     NVMCardTableBarrierSetAssembler::interpreter_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
@@ -53,25 +53,8 @@ void NVMCardTableBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet
     NVMCardTableBarrierSetAssembler::runtime_load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
   }
 #else  // OURPERSIST_LOAD_RUNTIME_ONLY
-#ifndef OURPERSIST_IGNORE_VOLATILE
-  if (decorators & OURPERSIST_IS_VOLATILE) {
-    // Runtime
-    if ((decorators & OURPERSIST_IS_STATIC_MASK) == 0) {
-      // TODO: TemplateInterpreterGenerator::generate_Reference_get_entry(void)
-      Parent::load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
-    } else {
-      assert((decorators & OURPERSIST_IS_STATIC_MASK)   != DECORATORS_NONE, "");
-      assert((decorators & OURPERSIST_IS_VOLATILE_MASK) != DECORATORS_NONE, "");
-      NVMCardTableBarrierSetAssembler::runtime_load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
-    }
-  } else {
-    // Original
-    Parent::load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
-  }
-#else  // !OURPERSIST_IGNORE_VOLATILE
   // Original
   Parent::load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
-#endif // !OURPERSIST_IGNORE_VOLATILE
 #endif // OURPERSIST_LOAD_RUNTIME_ONLY
 }
 
@@ -117,7 +100,6 @@ void NVMCardTableBarrierSetAssembler::interpreter_store_at(MacroAssembler* masm,
 void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                                                Address dst, Register val, Register _tmp1, Register _tmp2) {
   Label done_check_annotaion, val_is_null, done_set_val, done;
-  Label success, failure;
   Register tmp1 = r8;
   Register tmp2 = r9;
   Address nvm_header(dst.base(), oopDesc::nvm_header_offset_in_bytes());
@@ -148,25 +130,18 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
     __ bind(done_check_annotaion);
   }
 
+  // Store only in DRAM.
+  __ movptr(tmp1, dst.base()); // push obj
+  Parent::store_at(masm, decorators, type, dst, val, _tmp1, _tmp2);
+  __ movptr(dst.base(), tmp1); // pop obj
+
   // fence
   __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
   // tmp1 = obj->nvm_header().fwd()
   __ movptr(tmp1, nvm_header);
   __ andptr(tmp1, ~0b111);
-  __ jcc(Assembler::notZero, failure);
+  __ jcc(Assembler::zero, done);
   // tmp1 = forwarding pointer
-
-  // success
-  __ bind(success);
-  // Store only in DRAM.
-  __ movptr(tmp1, dst.base()); // push obj
-  Parent::store_at(masm, decorators, type, dst, val, _tmp1, _tmp2);
-  __ movptr(dst.base(), tmp1); // pop obj
-  __ jmp(done);
-
-  // failure
-  // tmp1 = forwarding pointer
-  __ bind(failure);
 
 #ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
     __ should_not_reach_here();
@@ -179,11 +154,6 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
     NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, noreg, noreg, noreg, noreg);
     __ bind(val_is_null);
   }
-
-  // Store in DRAM.
-  __ movptr(tmp2, dst.base()); // push dst.base
-  Parent::store_at(masm, decorators, type, dst, val, _tmp1, _tmp2);
-  __ movptr(dst.base(), tmp2); // pop dst.base
 
   // Store in NVM.
   // tmp1 = forwarding pointer
@@ -216,18 +186,6 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
 #endif
 
   __ bind(done);
-}
-
-void NVMCardTableBarrierSetAssembler::interpreter_load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
-                                                          Register dst, Address src, Register tmp1, Register tmp_thread) {
-  // TODO:
-  __ unimplemented();
-}
-
-void NVMCardTableBarrierSetAssembler::interpreter_oop_load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
-                                                              Register dst, Address src, Register tmp1, Register tmp_thread) {
-  // TODO:
-  __ unimplemented();
 }
 
 #define CHECK_PUSH_POP(reg) if (reg != tmp1 && reg != tmp2)

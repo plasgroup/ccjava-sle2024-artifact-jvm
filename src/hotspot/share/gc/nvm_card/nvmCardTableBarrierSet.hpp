@@ -46,66 +46,32 @@ public:
 
       assert(OurPersist::is_volatile_and_non_mirror(base, offset, decorators), "");
 
-      _mm_mfence();
-      void* before_fwd = base->nvm_header().fwd();
-      bool success = before_fwd == NULL;
-
-      if (success) {
-        // Store only in DRAM.
-        Raw::oop_store_in_heap_at(base, offset, value);
-        return;
-      }
-
-      assert(nvmHeader::is_fwd(before_fwd), "");
-      if (value != NULL) {
-        OurPersist::ensure_recoverable(value);
-      }
       // Store in DRAM.
       Raw::oop_store_in_heap_at(base, offset, value);
-      // Store in NVM.
-      oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
-      if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
-        // Skip
-        nvm_val = NULL;
+
+      _mm_mfence();
+      void* before_fwd = base->nvm_header().fwd();
+
+      if (before_fwd != NULL) {
+        assert(nvmHeader::is_fwd(before_fwd), "");
+        if (value != NULL) {
+          OurPersist::ensure_recoverable(value);
+        }
+
+        // Store in NVM.
+        oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
+        if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
+          // Skip
+          nvm_val = NULL;
+        }
+        Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
       }
-      Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
-      NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
     }
 
     // primitive
     template <typename T>
     static T load_in_heap_at(oop base, ptrdiff_t offset) {
-      // Skip markWord.
-      if (offset == oopDesc::mark_offset_in_bytes()) {
-        // Store in DRAM.
-        T result = Parent::template load_in_heap_at<T>(base, offset);
-        return result;
-      }
-
-#ifndef OURPERSIST_IGNORE_VOLATILE
-      // Volatile
-      if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
-        assert(offset != oopDesc::mark_offset_in_bytes(), "");
-
-        _mm_mfence();
-        void* nvm_fwd = base->nvm_header().fwd();
-
-        T result;
-        if (nvm_fwd == NULL) {
-          result = Parent::template load_in_heap_at<T>(base, offset);
-        } else {
-#ifdef OURPERSIST_VOLATILE_PRIM_CAS
-          result = Parent::template load_in_heap_at<T>(base, offset);
-#else  // OURPERSIST_VOLATILE_PRIM_CAS
-          result = Parent::template load_in_heap_at<T>(oop(nvm_fwd), offset);
-#endif // OURPERSIST_VOLATILE_PRIM_CAS
-        }
-
-        return result;
-      }
-#endif // !OURPERSIST_IGNORE_VOLATILE
-
-      // Non volatile
       T result = Parent::template load_in_heap_at<T>(base, offset);
       return result;
     }
@@ -129,31 +95,18 @@ public:
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         assert(offset != oopDesc::mark_offset_in_bytes(), "");
 
-        bool success;
-        void* before_fwd;
+        nvmHeader::lock(base);
 
-        _mm_mfence();
-        before_fwd = base->nvm_header().fwd();
-        success = before_fwd == NULL;
-
-        if (success) {
-          // Store only in DRAM.
-          Parent::store_in_heap_at(base, offset, value);
-        } else {
-#ifdef OURPERSIST_VOLATILE_PRIM_CAS
-          nvmHeader::lock(base);
-          // Store in DRAM.
-          Parent::store_in_heap_at(base, offset, value);
+        void* before_fwd = base->nvm_header().fwd();
+        if (before_fwd != NULL) {
           // Store in NVM.
           Raw::store_in_heap_at(oop(before_fwd), offset, value);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          nvmHeader::unlock(base);
-#else  // OURPERSIST_VOLATILE_PRIM_CAS
-          // Store only in NVM.
-          Raw::store_in_heap_at(oop(before_fwd), offset, value);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-#endif // OURPERSIST_VOLATILE_PRIM_CAS
         }
+        // Store in DRAM.
+        Parent::store_in_heap_at(base, offset, value);
+
+        nvmHeader::unlock(base);
         return;
       }
 #endif // !OURPERSIST_IGNORE_VOLATILE
@@ -193,55 +146,19 @@ public:
         return Parent::atomic_xchg_in_heap_at(base, offset, new_value);
       }
 
-#ifndef OURPERSIST_IGNORE_VOLATILE
-      // Volatile
-      if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
-        bool success;
-        void* before_fwd;
-
-        _mm_mfence();
-        before_fwd = base->nvm_header().fwd();
-        success = before_fwd == NULL;
-
-        T result;
-        if (success) {
-          // Store only in DRAM.
-          result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
-        } else {
-#ifdef OURPERSIST_VOLATILE_PRIM_CAS
-          nvmHeader::lock(base);
-          // Store and load in DRAM.
-          result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
-          // Store in NVM.
-          Raw::atomic_xchg_in_heap_at(oop(before_fwd), offset, new_value);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          nvmHeader::unlock(base);
-#else  // OURPERSIST_VOLATILE_PRIM_CAS
-          // Store only in NVM.
-          result = Raw::atomic_xchg_in_heap_at(oop(before_fwd), offset, new_value);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-#endif // OURPERSIST_VOLATILE_PRIM_CAS
-        }
-
-        return result;
-      }
-#endif // !OURPERSIST_IGNORE_VOLATILE
-
-      // Non volatile
       nvmHeader::lock(base);
+      T result = Parent::template load_in_heap_at<T>(base, offset);
 
-      T result = load_in_heap_at<T>(base, offset);
+      void* before_fwd = base->nvm_header().fwd();
+      if (before_fwd != NULL) {
+        // Store in NVM.
+        Raw::store_in_heap_at(oop(before_fwd), offset, new_value);
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+      }
+      // Store and load in DRAM.
       Parent::store_in_heap_at(base, offset, new_value);
 
-      _mm_mfence();
-      void* nvm_fwd = base->nvm_header().fwd();
-      if (nvm_fwd != NULL) {
-        Raw::store_in_heap_at(oop(nvm_fwd), offset, new_value);
-        NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
-      }
-
       nvmHeader::unlock(base);
-
       return result;
     }
 
@@ -258,64 +175,27 @@ public:
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
       // Skip
-      if (!OurPersist::is_target(base->klass())) {
+      if (offset == oopDesc::mark_offset_in_bytes() || !OurPersist::is_target(base->klass())) {
         // Store in DRAM.
         return Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
       }
 
-#ifndef OURPERSIST_IGNORE_VOLATILE
-      // Volatile
-      if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
-        bool success;
-        void* before_fwd;
+      nvmHeader::lock(base);
+      T result = load_in_heap_at<T>(base, offset);
 
-        _mm_mfence();
-        before_fwd = base->nvm_header().fwd();
-        success = before_fwd == NULL;
-
-        T result;
-        if (success) {
-          // Store only in DRAM.
-          result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
-        } else {
-#ifdef OURPERSIST_VOLATILE_PRIM_CAS
-          nvmHeader::lock(base);
-          // Store and load in DRAM.
-          result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+      bool swap = result == compare_value;
+      if (swap) {
+        void* nvm_fwd = base->nvm_header().fwd();
+        if (nvm_fwd != NULL) {
           // Store in NVM.
-          Raw::atomic_cmpxchg_in_heap_at(oop(before_fwd), offset, compare_value, new_value);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          nvmHeader::unlock(base);
-#else  // OURPERSIST_VOLATILE_PRIM_CAS
-          // Store only in NVM.
-          result = Raw::atomic_cmpxchg_in_heap_at(oop(before_fwd), offset, compare_value, new_value);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-#endif // OURPERSIST_VOLATILE_PRIM_CAS
+          Raw::store_in_heap_at(oop(nvm_fwd), offset, new_value);
+          NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
         }
-
-        return result;
+        // Store in DRAM.
+        Parent::store_in_heap_at(base, offset, new_value);
       }
-#endif // !OURPERSIST_IGNORE_VOLATILE
 
-      // Non volatile
-      T result;
-      if (offset == oopDesc::mark_offset_in_bytes()) {
-        result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
-      } else {
-        nvmHeader::lock(base);
-        result = load_in_heap_at<T>(base, offset);
-        bool swap = result == compare_value;
-        if (swap) {
-          Parent::store_in_heap_at(base, offset, new_value);
-          _mm_mfence();
-          void* nvm_fwd = base->nvm_header().fwd();
-          if (nvm_fwd != NULL) {
-            Raw::store_in_heap_at(oop(nvm_fwd), offset, new_value);
-            NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
-          }
-        }
-        nvmHeader::unlock(base);
-      }
+      nvmHeader::unlock(base);
 
       return result;
     }
@@ -360,7 +240,6 @@ public:
 
     // oop
     static oop oop_load_in_heap_at(oop base, ptrdiff_t offset) {
-      // Volatile & non volatile
       oop result = Parent::oop_load_in_heap_at(base, offset);
       return result;
     }
@@ -389,26 +268,16 @@ public:
 #ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
-        bool success;
-        void* before_fwd;
+        nvmHeader::lock(base);
 
-        _mm_mfence();
-        before_fwd = base->nvm_header().fwd();
-        success = before_fwd == NULL;
-
-        if (success) {
-          // Store only in DRAM.
-          Parent::oop_store_in_heap_at(base, offset, value);
-        } else {
+        void* before_fwd = base->nvm_header().fwd();
+        if (before_fwd != NULL) {
           assert(nvmHeader::is_fwd(before_fwd), "");
 
           if (value != NULL) {
             OurPersist::ensure_recoverable(value);
           }
 
-          nvmHeader::lock(base);
-          // Store in DRAM.
-          Parent::oop_store_in_heap_at(base, offset, value);
           // Store in NVM.
           oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
           if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
@@ -417,41 +286,35 @@ public:
           }
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          nvmHeader::unlock(base);
         }
+        // Store in DRAM.
+        Parent::oop_store_in_heap_at(base, offset, value);
 
+        nvmHeader::unlock(base);
         return;
       }
 #endif // !OURPERSIST_IGNORE_VOLATILE
 
       // Non volatile
-      bool success;
-      void* before_fwd;
-
-      _mm_mfence();
-      before_fwd = base->nvm_header().fwd();
-      success = before_fwd == NULL;
-
-      if (success) {
-        // Store only in DRAM.
-        Parent::oop_store_in_heap_at(base, offset, value);
-        return;
-      }
-
-      assert(nvmHeader::is_fwd(before_fwd), "");
-      if (value != NULL) {
-        OurPersist::ensure_recoverable(value);
-      }
       // Store in DRAM.
       Parent::oop_store_in_heap_at(base, offset, value);
-      // Store in NVM.
-      oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
-      if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
-        // Skip
-        nvm_val = NULL;
+
+      _mm_mfence();
+      void* before_fwd = base->nvm_header().fwd();
+      if (before_fwd != NULL) {
+        assert(nvmHeader::is_fwd(before_fwd), "");
+        if (value != NULL) {
+          OurPersist::ensure_recoverable(value);
+        }
+        // Store in NVM.
+        oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
+        if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
+          // Skip
+          nvm_val = NULL;
+        }
+        Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
       }
-      Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
-      NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
     }
 
     static oop oop_atomic_xchg_in_heap_at(oop base, ptrdiff_t offset, oop new_value) {
@@ -475,65 +338,19 @@ public:
         return Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
       }
 
-#ifndef OURPERSIST_IGNORE_VOLATILE
-      // Volatile
-      if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
-        bool success;
-        void* before_fwd;
+      nvmHeader::lock(base);
+      oop result = Parent::oop_load_in_heap_at(base, offset);
 
-        _mm_mfence();
-        before_fwd = base->nvm_header().fwd();
-        success = before_fwd == NULL;
+      void* before_fwd = base->nvm_header().fwd();
 
-        oop result;
-        if (success) {
-          // Store only in DRAM.
-          result = Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
-        } else {
-          assert(nvmHeader::is_fwd(before_fwd), "");
+      if (before_fwd != NULL) {
+        assert(nvmHeader::is_fwd(before_fwd), "");
 
-          if (new_value != NULL) {
-            OurPersist::ensure_recoverable(new_value);
-          }
-
-          nvmHeader::lock(base);
-          result = Parent::oop_load_in_heap_at(base, offset);
-          // Store in DRAM.
-          Parent::oop_store_in_heap_at(base, offset, new_value);
-          // Store in NVM.
-          oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
-          if (nvm_val != NULL && !OurPersist::is_target(new_value->klass())) {
-            // Skip
-            nvm_val = NULL;
-          }
-          Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          nvmHeader::unlock(base);
-        }
-
-        return result;
-      }
-#endif // !OURPERSIST_IGNORE_VOLATILE
-
-      // Non volatile
-      bool success;
-      void* before_fwd;
-
-      _mm_mfence();
-      before_fwd = base->nvm_header().fwd();
-      success = before_fwd == NULL;
-
-      oop result;
-      if (success) {
-        result = Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
-      } else {
         if (new_value != NULL) {
           OurPersist::ensure_recoverable(new_value);
         }
 
-        nvmHeader::lock(base);
-        result = Parent::oop_load_in_heap_at(base, offset);
-        Parent::oop_store_in_heap_at(base, offset, new_value);
+        // Store in NVM.
         oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
         if (nvm_val != NULL && !OurPersist::is_target(new_value->klass())) {
           // Skip
@@ -541,9 +358,11 @@ public:
         }
         Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-        nvmHeader::unlock(base);
       }
+      // Store in DRAM.
+      Parent::oop_store_in_heap_at(base, offset, new_value);
 
+      nvmHeader::unlock(base);
       return result;
     }
 
@@ -568,66 +387,18 @@ public:
         return Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
       }
 
-#ifndef OURPERSIST_IGNORE_VOLATILE
-      // Volatile
-      if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
-        bool success;
-        void* before_fwd;
+      nvmHeader::lock(base);
+      oop result = oop_load_in_heap_at(base, offset);
 
-        _mm_mfence();
-        before_fwd = base->nvm_header().fwd();
-        success = before_fwd == NULL;
-
-        oop result;
-        if (success) {
-          result = Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
-        } else {
+      bool swap = result == compare_value;
+      if (swap) {
+        void* before_fwd = base->nvm_header().fwd();
+        if (before_fwd != NULL) {
           if (new_value != NULL) {
             OurPersist::ensure_recoverable(new_value);
           }
 
-          nvmHeader::lock(base);
-          result = oop_load_in_heap_at(base, offset);
-          bool swap = result == compare_value;
-          if (swap) {
-            // Store in DRAM.
-            Parent::oop_store_in_heap_at(base, offset, new_value);
-            // Store in NVM.
-            oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
-            if (nvm_val != NULL && !OurPersist::is_target(new_value->klass())) {
-              // Skip
-              nvm_val = NULL;
-            }
-            Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
-            NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          }
-          nvmHeader::unlock(base);
-        }
-
-        return result;
-      }
-#endif // !OURPERSIST_IGNORE_VOLATILE
-
-      // Non volatile
-      bool success;
-      void* before_fwd;
-
-      _mm_mfence();
-      before_fwd = base->nvm_header().fwd();
-      success = before_fwd == NULL;
-
-      oop result;
-      if (success) {
-        result = Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
-      } else {
-        if (new_value != NULL) {
-          OurPersist::ensure_recoverable(new_value);
-        }
-        nvmHeader::lock(base);
-        result = oop_load_in_heap_at(base, offset);
-        bool swap = result == compare_value;
-        if (swap) {
-          Parent::oop_store_in_heap_at(base, offset, new_value);
+          // Store in NVM.
           oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
           if (nvm_val != NULL && !OurPersist::is_target(new_value->klass())) {
             // Skip
@@ -636,9 +407,11 @@ public:
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
         }
-        nvmHeader::unlock(base);
+        // Store in DRAM.
+        Parent::oop_store_in_heap_at(base, offset, new_value);
       }
 
+      nvmHeader::unlock(base);
       return result;
     }
 

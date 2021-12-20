@@ -22,10 +22,6 @@ public:
                             Address dst, Register val, Register tmp1, Register tmp2);
   void interpreter_oop_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                 Address dst, Register val, Register tmp1, Register tmp2);
-  void interpreter_load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
-                           Register dst, Address src, Register tmp1, Register tmp_thread);
-  void interpreter_oop_load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
-                               Register dst, Address src, Register tmp1, Register tmp_thread);
 
   // call runtime
   void runtime_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,

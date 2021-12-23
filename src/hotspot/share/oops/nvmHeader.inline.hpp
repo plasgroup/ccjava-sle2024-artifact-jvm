@@ -22,18 +22,19 @@ bool nvmHeader::cas_fwd_and_lock_when_swapped(oop obj, void* after_fwd) {
   bool success;
   while (true) {
     uintptr_t _flags = obj->nvm_header().flags();
-    //uintptr_t compare_val = uintptr_t(NULL) | (_flags & (~lock_mask_in_place));
-    uintptr_t compare_val = uintptr_t(NULL) | _flags;
+    uintptr_t compare_val = uintptr_t(NULL) | (_flags & (~lock_mask_in_place));
     uintptr_t after_val   = uintptr_t(after_fwd) | _flags | lock_mask_in_place;
 
     uintptr_t before_val = Atomic::cmpxchg(header_addr, compare_val, after_val);
 
-    if (nvmHeader(before_val).fwd() != NULL) {
+    if (nvmHeader(compare_val).fwd() != nvmHeader(before_val).fwd()) {
       success = false;
       break;
     }
-    if (_flags == nvmHeader(before_val).flags()) {
-      success = compare_val == before_val;
+
+    if (nvmHeader(compare_val).flags() == nvmHeader(before_val).flags()) {
+      // fwd1 == fwd2 && flag1 == flag2 <--> val1 == val2 <--> true
+      success = true;
       break;
     }
   }

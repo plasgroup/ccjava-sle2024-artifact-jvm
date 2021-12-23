@@ -204,7 +204,7 @@ bool OurPersist::cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, BasicType
 }
 
 Thread* OurPersist::responsible_thread(void* nvm_obj) {
-  assert(nvmHeader::is_fwd(nvm_obj), "nvm_obj = %p", nvm_obj);
+  assert(nvmHeader::is_fwd(nvm_obj), "nvm_obj: %p", nvm_obj);
 
   return (Thread*)oop(nvm_obj)->nvm_header().fwd();
 }
@@ -226,7 +226,7 @@ void OurPersist::set_responsible_thread(void* nvm_obj, Thread* cur_thread) {
 }
 
 void OurPersist::clear_responsible_thread(Thread* cur_thread) {
-  assert(cur_thread != NULL, "");
+  assert(cur_thread != NULL, "cur_thread: %p", cur_thread);
 
   void* dependent_obj = cur_thread->dependent_obj_list_head();
 
@@ -381,7 +381,6 @@ void OurPersist::ensure_recoverable(oop obj) {
   void* nvm_obj = OurPersist::allocate_nvm(obj->size(), cur_thread);
 RETRY:
   bool success = nvmHeader::cas_fwd_and_lock_when_swapped(obj, nvm_obj);
-  assert(!success || responsible_thread(nvm_obj) == Thread::current(), "");
   if (!success) {
     // TODO: release nvm
 
@@ -395,7 +394,10 @@ RETRY:
     return;
   }
 
-  assert(responsible_thread(obj->nvm_header().fwd()) == Thread::current(), "");
+  assert(nvm_obj == obj->nvm_header().fwd(),
+         "nvm_obj: %p, fwd: %p", nvm_obj, obj->nvm_header().fwd());
+  assert(responsible_thread(obj->nvm_header().fwd()) == Thread::current(),
+         "fwd: %p", obj->nvm_header().fwd());
   worklist->add(obj);
 
   while (worklist->empty() == false) {
@@ -411,7 +413,10 @@ RETRY:
 }
 
 void OurPersist::copy_object(oop obj) {
-  assert(responsible_thread(obj->nvm_header().fwd()) == Thread::current(), "");
+  assert(obj != NULL, "obj: %p", OOP_TO_VOID(obj));
+  assert(obj->nvm_header().fwd() != NULL, "fwd: %p", obj->nvm_header().fwd());
+  assert(responsible_thread(obj->nvm_header().fwd()) == Thread::current(),
+         "fwd: %p", obj->nvm_header().fwd());
 
   Klass* klass = obj->klass();
   void* nvm_obj = obj->nvm_header().fwd();
@@ -454,15 +459,18 @@ RETRY:
                 nvm_v = OurPersist::allocate_nvm(v->size(), cur_thread);
                 while (true) {
                   bool success = nvmHeader::cas_fwd_and_lock_when_swapped(v, nvm_v);
-                  assert(!success || responsible_thread(nvm_v) == Thread::current(), "");
                   if (success) {
-                    assert(responsible_thread(obj->nvm_header().fwd()) == Thread::current(), "");
+                    assert(nvm_v == v->nvm_header().fwd(),
+                           "nvm_v: %p, fwd: %p", nvm_v, v->nvm_header().fwd());
+                    assert(responsible_thread(v->nvm_header().fwd()) == Thread::current(),
+                           "fwd: %p", v->nvm_header().fwd());
                     worklist->add(v);
                     break;
                   } else {
                     // TODO: release nvm
 
                     nvm_v = v->nvm_header().fwd();
+                    assert(nvmHeader::is_fwd(nvm_v), "nvm_v: %p", nvm_v);
 
                     Thread* dependant_thread = OurPersist::responsible_thread(nvm_v);
                     if (dependant_thread != NULL && dependant_thread != cur_thread) {
@@ -506,15 +514,18 @@ RETRY:
 
             while (true) {
               bool success = nvmHeader::cas_fwd_and_lock_when_swapped(v, nvm_v);
-              assert(!success || responsible_thread(nvm_v) == Thread::current(), "");
               if (success) {
-                assert(responsible_thread(v->nvm_header().fwd()) == Thread::current(), "");
+                assert(nvm_v == v->nvm_header().fwd(),
+                       "nvm_v: %p, fwd: %p", nvm_v, v->nvm_header().fwd());
+                assert(responsible_thread(v->nvm_header().fwd()) == Thread::current(),
+                       "fwd: %p", v->nvm_header().fwd());
                 worklist->add(v);
                 break;
               } else {
                 // TODO: release nvm
 
                 nvm_v = v->nvm_header().fwd();
+                assert(nvmHeader::is_fwd(nvm_v), "nvm_v: %p", nvm_v);
 
                 Thread* dependant_thread = responsible_thread(nvm_v);
                 if (dependant_thread != NULL && dependant_thread != cur_thread) {

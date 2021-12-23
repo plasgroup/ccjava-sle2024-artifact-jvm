@@ -36,8 +36,9 @@ inline unsigned long NVMBarrierSync::atomic_sync_count() {
   return Atomic::load(&_sync_count);
 }
 
-inline void NVMBarrierSync::add_sync_count(unsigned long val) {
-  _sync_count += val;
+inline void NVMBarrierSync::move_sync_count(NVMBarrierSync* from) {
+  _sync_count += from->_sync_count;
+  from->_sync_count = 0;
 }
 
 inline void NVMBarrierSync::dec_sync_count() {
@@ -69,6 +70,15 @@ inline void NVMBarrierSync::atomic_dec_ref_count() {
 }
 
 inline void NVMBarrierSync::init() {
+#ifdef ASSERT
+    bool parent_verify     = _parent == NULL;
+    bool sync_count_verify = _sync_count == 0;
+    // NOTE: No one loads after the count reach zero.
+    bool ref_count_verify  = _ref_count == 0 || _ref_count == 18446744073709551615UL /* -1 */;
+    assert(parent_verify && sync_count_verify && ref_count_verify,
+           "_parent: %p, _sync_count: %lu, _ref_count: %lu",
+           _parent, _sync_count, _ref_count);
+#endif
   _parent = this;
   _sync_count = 1;
   _ref_count = 0;
@@ -100,7 +110,7 @@ inline void NVMBarrierSync::add(NVMBarrierSync* node, oop obj) {
     return;
   }
 
-  new_leader->add_sync_count(cur_sync_count);
+  new_leader->move_sync_count(cur_leader);
   new_leader->inc_ref_count();
   cur_leader->set_parent(new_leader);
 

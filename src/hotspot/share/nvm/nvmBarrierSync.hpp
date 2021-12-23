@@ -21,11 +21,15 @@ class NVMBarrierSync : public CHeapObj<mtNone> {
   }
 
   ~NVMBarrierSync() {
-    assert(_parent == NULL, "_parent: %p", _parent);
-    assert(_sync_count == 0, "_sync_count: %lu", _sync_count);
+#ifdef ASSERT
+    bool parent_verify     = _parent == NULL;
+    bool sync_count_verify = _sync_count == 0;
     // NOTE: No one loads after the count reach zero.
-    assert(_ref_count == 0 || _ref_count == 18446744073709551615UL /* -1 */,
-           "_ref_count: %lu", _ref_count);
+    bool ref_count_verify  = _ref_count == 0 || _ref_count == 18446744073709551615UL /* -1 */;
+    assert(parent_verify && sync_count_verify && ref_count_verify,
+           "_parent: %p, _sync_count: %lu, _ref_count: %lu",
+           _parent, _sync_count, _ref_count);
+#endif
   }
 
  private:
@@ -36,7 +40,7 @@ class NVMBarrierSync : public CHeapObj<mtNone> {
 
   inline unsigned long sync_count();
   inline unsigned long atomic_sync_count();
-  inline void add_sync_count(unsigned long val);
+  inline void move_sync_count(NVMBarrierSync* from);
   inline void dec_sync_count();
 
   inline unsigned long ref_count();

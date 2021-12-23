@@ -98,14 +98,13 @@ public:
   inline static void set_header(HeapWord* mem, nvmHeader h);
   inline static void set_header(oop obj, nvmHeader h);
 
+  // NOTE: for OurPersist::set_responsible_thread and OurPersist::clear_responsible_thread
   inline static void set_fwd(oop obj, void* ptr);
-  // TODO: unimplemented
-#ifdef OURPERSIST_LOCK_VERSION
-  inline static bool lock_when_not_recoverable(oop obj);
-#endif // OURPERSIST_LOCK_VERSION
+  inline static bool cas_fwd(oop obj, void* after_fwd);
+  // NOTE: unused
+  inline static bool cas_fwd_and_lock_when_swapped(oop obj, void* after_fwd);
 
   inline static nvmHeader lock(oop obj);
-  inline static bool cas_fwd_and_lock_when_swapped(oop obj, void* after_fwd);
   inline static void unlock(oop obj);
 };
 

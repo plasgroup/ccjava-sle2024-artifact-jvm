@@ -380,7 +380,7 @@ void OurPersist::ensure_recoverable(oop obj) {
 
   void* nvm_obj = OurPersist::allocate_nvm(obj->size(), cur_thread);
 RETRY:
-  bool success = nvmHeader::cas_fwd_and_lock_when_swapped(obj, nvm_obj);
+  bool success = nvmHeader::cas_fwd(obj, nvm_obj);
   if (!success) {
     // TODO: release nvm
 
@@ -426,6 +426,8 @@ void OurPersist::copy_object(oop obj) {
   NVMWorkListStack* worklist = cur_thread->nvm_work_list();
   NVMBarrierSync* barrier_sync = cur_thread->nvm_barrier_sync();
 
+  nvmHeader::lock(obj);
+
 RETRY:
   while (true) {
     // begin "for f in obj.fields"
@@ -458,7 +460,7 @@ RETRY:
               } else {
                 nvm_v = OurPersist::allocate_nvm(v->size(), cur_thread);
                 while (true) {
-                  bool success = nvmHeader::cas_fwd_and_lock_when_swapped(v, nvm_v);
+                  bool success = nvmHeader::cas_fwd(v, nvm_v);
                   if (success) {
                     assert(nvm_v == v->nvm_header().fwd(),
                            "nvm_v: %p, fwd: %p", nvm_v, v->nvm_header().fwd());
@@ -513,7 +515,7 @@ RETRY:
             nvm_v = OurPersist::allocate_nvm(v->size(), cur_thread);
 
             while (true) {
-              bool success = nvmHeader::cas_fwd_and_lock_when_swapped(v, nvm_v);
+              bool success = nvmHeader::cas_fwd(v, nvm_v);
               if (success) {
                 assert(nvm_v == v->nvm_header().fwd(),
                        "nvm_v: %p, fwd: %p", nvm_v, v->nvm_header().fwd());

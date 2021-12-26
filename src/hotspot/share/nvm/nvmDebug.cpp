@@ -72,19 +72,156 @@ void NVMDebug::print_decorators(DecoratorSet ds) {
   tty->print("--\n");
 }
 
+void NVMDebug::print_dram_and_nvm_val(oop dram_obj, ptrdiff_t offset, BasicType type) {
+  const DecoratorSet ds = MO_UNORDERED | AS_NORMAL | IN_HEAP;
+  typedef CardTableBarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet> Parent;
+  typedef BarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet> Raw;
+
+  union {
+    jbyte byte_val;
+    jchar char_val;
+    jdouble double_val;
+    jfloat float_val;
+    jint int_val;
+    jlong long_val;
+    jshort short_val;
+    jboolean bool_val;
+    oopDesc* oop_val;
+  } v1, v2, v3;
+  v1.long_val = 0L;
+  v2.long_val = 0L;
+  v3.long_val = 0L;
+
+  void* nvm_fwd = dram_obj->nvm_header().fwd();
+  oop nvm_obj = nvmHeader::is_fwd(nvm_fwd) ? oop(nvm_fwd) : NULL;
+
+  switch(type) {
+    case T_BYTE:
+      {
+        v1.byte_val = Parent::load_in_heap_at<jbyte>(dram_obj, offset);
+        if (nvm_obj != NULL) v2.byte_val = Raw::load_in_heap_at<jbyte>(nvm_obj, offset);
+        break;
+      }
+    case T_CHAR:
+      {
+        v1.char_val = Parent::load_in_heap_at<jchar>(dram_obj, offset);
+        if (nvm_obj != NULL) v2.char_val = Raw::load_in_heap_at<jchar>(nvm_obj, offset);
+        break;
+      }
+    case T_DOUBLE:
+      {
+        v1.double_val = Parent::load_in_heap_at<jdouble>(dram_obj, offset);
+        if (nvm_obj != NULL) v2.double_val = Raw::load_in_heap_at<jdouble>(nvm_obj, offset);
+        break;
+      }
+    case T_FLOAT:
+      {
+        v1.float_val = Parent::load_in_heap_at<jfloat>(dram_obj, offset);
+        if (nvm_obj != NULL) v2.float_val = Raw::load_in_heap_at<jfloat>(nvm_obj, offset);
+        break;
+      }
+    case T_INT:
+      {
+        v1.int_val = Parent::load_in_heap_at<jint>(dram_obj, offset);
+        if (nvm_obj != NULL) v2.int_val = Raw::load_in_heap_at<jint>(nvm_obj, offset);
+        break;
+      }
+    case T_LONG:
+      {
+        v1.long_val = Parent::load_in_heap_at<jlong>(dram_obj, offset);
+        if (nvm_obj != NULL) v2.long_val = Raw::load_in_heap_at<jlong>(nvm_obj, offset);
+        break;
+      }
+    case T_SHORT:
+      {
+        v1.short_val = Parent::load_in_heap_at<jshort>(dram_obj, offset);
+        if (nvm_obj != NULL) v2.short_val = Raw::load_in_heap_at<jshort>(nvm_obj, offset);
+        break;
+      }
+    case T_BOOLEAN:
+      {
+        v1.bool_val = Parent::load_in_heap_at<jboolean>(dram_obj, offset) & 0x1;
+        if (nvm_obj != NULL) v2.bool_val = Raw::load_in_heap_at<jboolean>(nvm_obj, offset) & 0x1;
+        break;
+      }
+    case T_OBJECT:
+    case T_ARRAY:
+      {
+        oop dram_v = Parent::oop_load_in_heap_at(dram_obj, offset);
+        v1.oop_val = dram_v;
+        if (nvm_obj != NULL) v2.oop_val = Raw::oop_load_in_heap_at(nvm_obj, offset);
+        v3.oop_val = oop(dram_v != NULL ? dram_v->nvm_header().fwd() : NULL);
+        break;
+      }
+    default:
+      report_vm_error(__FILE__, __LINE__, "Illegal field type.");
+  }
+
+  if (!is_reference_type(type)) {
+    tty->print("dram_obj[%ld]: %ld", offset, v1.long_val);
+    if (nvm_obj != NULL) tty->print(", nvm_obj[%ld]: %ld", offset, v2.long_val);
+    tty->cr();
+  } else {
+    tty->print("dram_obj[%ld]: %p(nvm_fwd: %p)", offset, v1.oop_val, v3.oop_val);
+    if (nvm_obj != NULL) tty->print(", nvm_obj[%ld]: %p", offset, v2.oop_val);
+    tty->cr();
+  }
+}
+
+void NVMDebug::print_dram_and_nvm_obj(oop dram_obj) {
+  Klass* klass = dram_obj->klass();
+  bool has_same_field;
+
+  if (klass->is_instance_klass()) {
+    InstanceKlass* ik = (InstanceKlass*)klass;
+    while (ik != NULL) {
+      int cnt = ik->java_fields_count();
+      for (int i = 0; i < cnt; i++) {
+        AccessFlags field_flags = accessFlags_from(ik->field_access_flags(i));
+        Symbol* field_sig = ik->field_signature(i);
+        BasicType field_type = Signature::basic_type(field_sig);
+        ptrdiff_t field_offset = ik->field_offset(i);
+
+        if (field_flags.is_static()) {
+          continue;
+        }
+
+        NVMDebug::print_dram_and_nvm_val(dram_obj, field_offset, field_type);
+      }
+      ik = (InstanceKlass*)ik->super();
+    }
+  } else if (klass->is_objArray_klass()) {
+    ObjArrayKlass* oak = (ObjArrayKlass*)klass;
+    objArrayOop oao = (objArrayOop)dram_obj;
+    BasicType array_type = ((ArrayKlass*)oak)->element_type();
+    int array_length = oao->length();
+
+    for (int i = 0; i < array_length; i++) {
+      ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
+      NVMDebug::print_dram_and_nvm_val(dram_obj, field_offset, array_type);
+    }
+  } else if (klass->is_typeArray_klass()) {
+    TypeArrayKlass* tak = (TypeArrayKlass*)klass;
+    typeArrayOop tao = (typeArrayOop)dram_obj;
+    BasicType array_type = ((ArrayKlass*)tak)->element_type();
+    int array_length = tao->length();
+
+    for (int i = 0; i < array_length; i++) {
+      ptrdiff_t field_offset = arrayOopDesc::base_offset_in_bytes(array_type) + type2aelembytes(array_type) * i;
+      NVMDebug::print_dram_and_nvm_val(dram_obj, field_offset, array_type);
+    }
+  } else {
+    report_vm_error(__FILE__, __LINE__, "Illegal field type.");
+  }
+}
+
 bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
-                                    BasicType type, bool is_volatile) {
+                                    BasicType type, AccessFlags field_flags) {
   const DecoratorSet ds = MO_UNORDERED | AS_NORMAL | IN_HEAP;
   typedef CardTableBarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet> Parent;
   typedef BarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet> Raw;
 
   assert(nvmHeader::is_fwd(nvm_obj), "");
-
-  if (is_volatile) {
-    if (is_java_primitive(type)) {
-      return true;
-    }
-  }
 
   union {
     jbyte byte_val;
@@ -156,17 +293,15 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
         v1.oop_val = oop(dram_v != NULL ? dram_v->nvm_header().fwd() : NULL);
         v2.oop_val = Raw::oop_load_in_heap_at(nvm_obj, offset);
         if (v1.long_val != v2.long_val) {
-          for (int i = dram_obj->header_size() * HeapWordSize; i < dram_obj->size() * HeapWordSize; i += HeapWordSize) {
-            oopDesc* test1 = Parent::oop_load_in_heap_at(dram_obj, i);
-            oopDesc* test2 = oop(test1 != NULL ? test1->nvm_header().fwd() : NULL);
-            oopDesc* test3 = Parent::oop_load_in_heap_at(nvm_obj, i);
-            tty->print("dram_obj[%d]: %p(nvm: %p), nvm_obj[%d]: %p\n", i, test1, test2, i, test3);
-          }
-          tty->print("dram_obj is_recoverable: %d\n", dram_obj->nvm_header().recoverable());
-          tty->print("dram_obj is_target: %d\n", OurPersist::is_target(dram_obj->klass()));
-          tty->print("dram_v is_recoverable: %d\n", dram_v->nvm_header().recoverable());
-          tty->print("dram_v is_target: %d\n", OurPersist::is_target(dram_v->klass()));
+          tty->print("dram_obj: %p, is_recoverable: %d, is_target: %d\n",
+            OOP_TO_VOID(dram_obj), dram_obj->nvm_header().recoverable(),
+            OurPersist::is_target(dram_obj->klass()));
+          tty->print("dram_v: %p, is_recoverable: %d, is_target: %d\n",
+            OOP_TO_VOID(dram_v), dram_v->nvm_header().recoverable(), OurPersist::is_target(dram_v->klass()));
+          tty->print("nvm_obj: %p\n", OOP_TO_VOID(nvm_obj));
           tty->print("%p != %p\n", v1.oop_val, v2.oop_val);
+
+          NVMDebug::print_dram_and_nvm_obj(dram_obj);
         }
         break;
       }
@@ -213,7 +348,7 @@ bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
         }
 
         has_same_field = NVMDebug::cmp_dram_and_nvm_val(dram_obj, nvm_obj, field_offset,
-                                                        field_type, field_flags.is_volatile());
+                                                        field_type, field_flags);
         if (has_same_field) {
           // tty->print("ik: has same field.\n");
           // tty->print("field name: %s\n", field_sig->as_klass_external_name());
@@ -231,14 +366,14 @@ bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
   } else if (klass->is_objArray_klass()) {
     // tty->print("ObjArrayKlass\n");
 
-    ObjArrayKlass* oak = (ObjArrayKlass*) klass;
-    objArrayOop oao = (objArrayOop) dram_obj;
+    ObjArrayKlass* oak = (ObjArrayKlass*)klass;
+    objArrayOop oao = (objArrayOop)dram_obj;
     BasicType array_type = ((ArrayKlass*)oak)->element_type();
     int array_length = oao->length();
 
     for (int i = 0; i < array_length; i++) {
       ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
-      has_same_field = NVMDebug::cmp_dram_and_nvm_val(dram_obj, nvm_obj, field_offset, T_OBJECT, false);
+      has_same_field = NVMDebug::cmp_dram_and_nvm_val(dram_obj, nvm_obj, field_offset, T_OBJECT, AccessFlags());
       if (has_same_field) {
         // tty->print("oak: has same field.\n");
       } else {
@@ -251,14 +386,14 @@ bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
   } else if (klass->is_typeArray_klass()) {
     // tty->print("TypeArrayKlass\n");
 
-    TypeArrayKlass* tak = (TypeArrayKlass*) klass;
-    typeArrayOop tao = (typeArrayOop) dram_obj;
+    TypeArrayKlass* tak = (TypeArrayKlass*)klass;
+    typeArrayOop tao = (typeArrayOop)dram_obj;
     BasicType array_type = ((ArrayKlass*)tak)->element_type();
     int array_length = tao->length();
 
     for (int i = 0; i < array_length; i++) {
       ptrdiff_t field_offset = arrayOopDesc::base_offset_in_bytes(array_type) + type2aelembytes(array_type) * i;
-      has_same_field = NVMDebug::cmp_dram_and_nvm_val(dram_obj, nvm_obj, field_offset, array_type, false);
+      has_same_field = NVMDebug::cmp_dram_and_nvm_val(dram_obj, nvm_obj, field_offset, array_type, AccessFlags());
       if (has_same_field) {
         // tty->print("tak: has same field.\n");
       } else {

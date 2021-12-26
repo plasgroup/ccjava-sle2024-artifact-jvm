@@ -27,6 +27,25 @@ inline bool OurPersist::enable() {
 
 inline bool OurPersist::is_target(Klass* klass) {
   assert(klass != NULL, "");
+  assert(OurPersist::is_target_slow(klass) == OurPersist::is_target_fast(klass), "");
+
+  return OurPersist::is_target_fast(klass);
+}
+
+#ifdef ASSERT
+inline bool OurPersist::is_target_slow(Klass* klass) {
+  while (klass != NULL) {
+    if (!OurPersist::is_target_fast(klass)) {
+      return false;
+    }
+    klass = klass->super();
+  }
+
+  return true;
+}
+#endif // ASSERT
+
+inline bool OurPersist::is_target_fast(Klass* klass) {
   int klass_id = klass->id();
 
   if (klass_id == InstanceMirrorKlassID) {
@@ -37,11 +56,6 @@ inline bool OurPersist::is_target(Klass* klass) {
   }
   if (klass_id == InstanceClassLoaderKlassID) {
     return false;
-  }
-
-  Klass* super = klass->super();
-  if (super != NULL) {
-    return OurPersist::is_target(super);
   }
 
   return true;

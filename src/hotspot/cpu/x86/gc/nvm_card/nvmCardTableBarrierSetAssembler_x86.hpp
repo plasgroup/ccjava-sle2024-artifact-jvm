@@ -31,7 +31,10 @@ public:
   void writeback(MacroAssembler* masm, Address field, Register tmp);
   void lock_nvmheader(MacroAssembler* masm, Register base, Register tmp1, Register tmp2);
   void unlock_nvmheader(MacroAssembler* masm, Register base, Register tmp);
+  // NOTE: set EFLAGS
   void load_nvm_fwd(MacroAssembler* masm, Register dst, Register base);
+  // NOTE: set EFLAGS
+  void is_target(MacroAssembler* masm, Register dst, Register base, Register tmp);
 
   // assertions
 #ifdef ASSERT

@@ -31,6 +31,11 @@ class OurPersist : AllStatic {
   static void copy_object(oop obj);
   //static void shade();
 
+  #ifdef ASSERT
+  inline static bool is_target_slow(Klass* klass);
+#endif // ASSERT
+  inline static bool is_target_fast(Klass* klass);
+
  public:
   inline static bool enable();
   inline static bool is_target(Klass* klass);

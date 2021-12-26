@@ -22,6 +22,21 @@ public:
                             Address dst, Register val, Register tmp1, Register tmp2);
   void interpreter_oop_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                 Address dst, Register val, Register tmp1, Register tmp2);
+  void interpreter_volatile_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
+                                     Address dst, Register val, Register tmp1, Register tmp2);
+  void interpreter_volatile_oop_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
+                                         Address dst, Register val, Register tmp1, Register tmp2);
+
+  // utilities
+  void writeback(MacroAssembler* masm, Address field, Register tmp);
+  void lock_nvmheader(MacroAssembler* masm, Register base, Register tmp1, Register tmp2);
+  void unlock_nvmheader(MacroAssembler* masm, Register base, Register tmp);
+  void load_nvm_fwd(MacroAssembler* masm, Register dst, Register base);
+
+  // assertions
+#ifdef ASSERT
+  bool assert_sign_extended(uintptr_t mask);
+#endif // ASSERT
 
   // call runtime
   void runtime_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,

@@ -101,6 +101,10 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
   Register tmp1 = r8;
   Register tmp2 = r9;
 
+  // DEBUG:
+  assert(_tmp1 != noreg, "");
+  assert(_tmp2 != noreg, "");
+
   // Check annotation
   assert((decorators & OURPERSIST_IS_STATIC_MASK) != 0, "");
   if ((val != noreg) && (decorators & OURPERSIST_IS_STATIC)) {
@@ -147,7 +151,7 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
   if (val != noreg) {
     __ cmpptr(val, 0);
     __ jcc(Assembler::equal, val_is_null);
-    NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, noreg, noreg, noreg, noreg);
+    NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, _tmp1, _tmp2, noreg, tmp2);
     __ bind(val_is_null);
   }
 
@@ -178,7 +182,9 @@ void NVMCardTableBarrierSetAssembler::push_or_pop_all(MacroAssembler* masm, bool
                                                       Register tmp1, Register tmp2, Register tmp3,
                                                       Register tmp4, Register tmp5, Register tmp6,
                                                       Register tmp7, Register tmp8, Register tmp9) {
-  Register list[] = {rax, rcx, rdx, r8, r9}; // rsi, rdi, r10, r11
+  bool print_debug_msg = false; // DEBUG:
+
+  Register list[] = {rax, rcx, rdx, r8, r9}; // r10(rscratch1), r11(rscratch2)
   const int list_n = sizeof(list) / sizeof(Register);
   Register tmp[] = {tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8, tmp9};
   const int tmp_n = sizeof(tmp) / sizeof(Register);
@@ -194,43 +200,80 @@ void NVMCardTableBarrierSetAssembler::push_or_pop_all(MacroAssembler* masm, bool
     }
   }
 
-  // DEBUG:
-  // tty->print_cr("push_or_pop_all: is_push=%d, target_n=%d", is_push, target_n);
-  // tty->print("tmp:");
-  // for (int i = 0; i < tmp_n; i++) {
-  //   tty->print(" %s", tmp[i]->name());
-  // }
-  // tty->cr();
+  // TODO:
+  Register scratch[] = {noreg, noreg, noreg}; // rsi, rdi, r12(r12_heapbase)
+  int scratch_n = 0;
+  if (!UseCompressedOops) {
+    scratch[scratch_n] = r12_heapbase;
+    scratch_n++;
+  }
 
-  // push or pop
-  if (target_n != 0) {
+  bool only_with_scratch = target_n <= scratch_n;
+  int mov_n = only_with_scratch ? target_n : scratch_n;
+  int mem_n = only_with_scratch ? 0 : target_n - scratch_n;
+
+  if (print_debug_msg) {
+    tty->print_cr("push_or_pop_all: is_push=%d, target_n=%d, mov_n=%d, mem_n=%d",
+      is_push, target_n, mov_n, mem_n);
+    tty->print("tmp:");
+    for (int i = 0; i < tmp_n; i++) {
+      tty->print(" %s", tmp[i]->name());
+    }
+    tty->cr();
+  }
+
+  // save or restore with register
+  if (mov_n != 0) {
+    if (print_debug_msg) tty->print("mov(%s):", is_push ? "push" : "pop");
+    int n = 0;
+    for (int i = 0; n < mov_n && i < list_n; i++) {
+      if (list[i] != noreg) {
+        if (is_push) {
+          __ movq(scratch[n], list[i]);
+          if (print_debug_msg) tty->print(" %s <- %s", scratch[n]->name(), list[i]->name());
+        } else {
+          __ movq(list[i], scratch[n]);
+          if (print_debug_msg) tty->print(" %s <- %s", list[i]->name(), scratch[n]->name());
+        }
+        list[i] = noreg;
+        n++;
+      }
+    }
+    assert(n == mov_n, "");
+    if (print_debug_msg) tty->cr();
+  }
+
+  // save or restore with memory
+  if (mem_n != 0) {
     if (is_push) {
-      // tty->print("push"); // DEBUG:
-      __ subq(rsp, target_n * wordSize);
-      int n = target_n - 1;
+      if (print_debug_msg) tty->print("push");
+      int n = mem_n - 1;
+      __ subq(rsp, mem_n * wordSize);
       for (int i = list_n - 1; 0 <= i; i--) {
         if (list[i] != noreg) {
-          // tty->print(" %s", list[i]->name()); // DEBUG:
+          if (print_debug_msg) tty->print(" %s", list[i]->name());
           __ movq(Address(rsp, n * wordSize), list[i]);
           n--;
         }
       }
-      // tty->cr(); // DEBUG:
+      assert(n == -1, "");
+      if (print_debug_msg) tty->cr();
     } else {
-      // tty->print("pop"); // DEBUG:
+      if (print_debug_msg) tty->print("pop");
       int n = 0;
       for (int i = 0; i < list_n; i++) {
         if (list[i] != noreg) {
-          // tty->print(" %s", list[i]->name()); // DEBUG:
+          if (print_debug_msg) tty->print(" %s", list[i]->name());
           __ movq(list[i], Address(rsp, n * wordSize));
           n++;
         }
       }
-      // tty->cr(); // DEBUG:
-      __ addq(rsp, target_n * wordSize);
+      assert(n = mem_n, "");
+      if (print_debug_msg) tty->cr();
+      __ addq(rsp, mem_n * wordSize);
     }
   }
-  // tty->cr(); // DEBUG:
+  if (print_debug_msg) tty->cr();
 }
 
 void NVMCardTableBarrierSetAssembler::runtime_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
@@ -398,6 +441,10 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
   Register tmp1 = r8;
   Register tmp2 = r9;
 
+  // DEBUG:
+  assert(_tmp1 != noreg, "");
+  assert(_tmp2 != noreg, "");
+
   // Check annotation
   assert((decorators & OURPERSIST_IS_STATIC_MASK) != 0, "");
   if ((val != noreg) && (decorators & OURPERSIST_IS_STATIC)) {
@@ -442,7 +489,7 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
   if (val != noreg) {
     __ cmpptr(val, 0);
     __ jcc(Assembler::equal, val_is_null);
-    NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, noreg, noreg, noreg, noreg);
+    NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, _tmp1, _tmp2, noreg, tmp2);
     __ bind(val_is_null);
   }
 

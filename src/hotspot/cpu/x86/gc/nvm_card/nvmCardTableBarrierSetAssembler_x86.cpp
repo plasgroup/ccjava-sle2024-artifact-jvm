@@ -546,7 +546,7 @@ void NVMCardTableBarrierSetAssembler::load_nvm_fwd(MacroAssembler* masm, Registe
 }
 
 void NVMCardTableBarrierSetAssembler::is_target(MacroAssembler* masm, Register dst, Register base, Register _tmp) {
-  Label loop_super_klass, is_not_target, is_target, done;
+  Label is_not_target, is_target, done;
   Register tmp = _tmp;
   Register sub_tmp = rbx;
 
@@ -558,35 +558,31 @@ void NVMCardTableBarrierSetAssembler::is_target(MacroAssembler* masm, Register d
   assert_different_registers(dst, base, tmp);
 
   __ load_klass(dst, base, tmp);
-  __ bind(loop_super_klass);
   __ movl(tmp, Address(dst, Klass::id_offset()));
   // dst = klass, tmp = KlassID
 
 #ifdef ASSERT
-  Label is_zero;
+  Label assert_is_zero;
   uintptr_t mask_8bit_to_64bit = ~0b111;
   // 0 < KlassID < 6 (KLASS_ID_COUNT)
   assert(NVMCardTableBarrierSetAssembler::assert_sign_extended(mask_8bit_to_64bit), "");
   __ testq(tmp, mask_8bit_to_64bit);
-  __ jcc(Assembler::zero, is_zero);
+  __ jcc(Assembler::zero, assert_is_zero);
   __ stop("sizeof(KlassID) = 4bytes, 0 < KlassID < 6. The upper bits should be zero.");
-  __ bind(is_zero);
+  __ bind(assert_is_zero);
 #endif // ASSERT
 
   // tmp = klass->id()
-  __ cmp32(tmp, InstanceMirrorKlassID);
-  __ jcc(Assembler::equal, is_not_target);
-  __ cmp32(tmp, InstanceRefKlassID);
-  __ jcc(Assembler::equal, is_not_target);
-  __ cmp32(tmp, InstanceClassLoaderKlassID);
-  __ jcc(Assembler::equal, is_not_target);
-
-  // check super klass
-  __ movptr(dst, Address(dst, Klass::super_offset()));
-  __ cmpptr(dst, 0);
-  __ jcc(Assembler::notZero, loop_super_klass);
+  assert(InstanceRefKlassID         == 1, "");
+  assert(InstanceMirrorKlassID      == 2, "");
+  assert(InstanceClassLoaderKlassID == 3, "");
+  // if (tmp - 1 <= 2) --> is_not_target
+  __ subl(tmp, 1);
+  __ cmp32(tmp, 2);
+  __ jcc(Assembler::belowEqual, is_not_target);
 
   // is target
+  __ bind(is_target);
   __ movl(dst, 1);
   __ jmp(done);
 
@@ -597,12 +593,12 @@ void NVMCardTableBarrierSetAssembler::is_target(MacroAssembler* masm, Register d
   __ bind(done);
 
 #ifdef ASSERT
-  Label is_same;
+  Label assert_is_same;
   NVMCardTableBarrierSetAssembler::runtime_is_target(masm, tmp, base, noreg, noreg, noreg, noreg);
   __ cmpq(tmp, dst);
-  __ jcc(Assembler::equal, is_same);
+  __ jcc(Assembler::equal, assert_is_same);
   __ stop("is_target() failed.");
-  __ bind(is_same);
+  __ bind(assert_is_same);
 #endif // ASSERT
 
   // pop if necessary

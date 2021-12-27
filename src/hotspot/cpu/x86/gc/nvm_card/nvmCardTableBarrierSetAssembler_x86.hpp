@@ -35,6 +35,10 @@ public:
   void load_nvm_fwd(MacroAssembler* masm, Register dst, Register base);
   // NOTE: set EFLAGS
   void is_target(MacroAssembler* masm, Register dst, Register base, Register tmp);
+  void push_or_pop_all(MacroAssembler* masm, bool is_push,
+                       Register tmp1 = noreg, Register tmp2 = noreg, Register tmp3 = noreg,
+                       Register tmp4 = noreg, Register tmp5 = noreg, Register tmp6 = noreg,
+                       Register tmp7 = noreg, Register tmp8 = noreg, Register tmp9 = noreg);
 
   // assertions
 #ifdef ASSERT

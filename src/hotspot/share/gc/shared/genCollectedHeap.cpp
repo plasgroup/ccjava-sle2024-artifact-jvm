@@ -593,7 +593,7 @@ void GenCollectedHeap::do_collection(bool           full,
 
     gc_prologue(complete);
     increment_total_collections(complete);
-
+    // printf("young collection\n");
     collect_generation(_young_gen,
                        full,
                        size,
@@ -653,7 +653,7 @@ void GenCollectedHeap::do_collection(bool           full,
     if (!complete) {
       increment_total_full_collections();
     }
-
+    // printf("old collection\n");
     collect_generation(_old_gen,
                        full,
                        size,

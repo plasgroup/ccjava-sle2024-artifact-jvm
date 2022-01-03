@@ -100,20 +100,33 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
   Label done_check_annotaion, val_is_null, done_set_val, done;
   Register tmp1 = r8;
   Register tmp2 = r9;
+  Register tmp3 = noreg;
+  // WARNING: tmp4 is available after store.
+  Register tmp4 = noreg;
 
-  // DEBUG:
-  assert(_tmp1 != noreg, "");
-  assert(_tmp2 != noreg, "");
+  // set tmp3 and tmp4
+  assert_different_registers(tmp1, tmp2, _tmp1, _tmp2, noreg);
+  assert(dst.base() == _tmp1 || dst.index() == _tmp2, "");
+  if (dst.base() == _tmp1) {
+    assert_different_registers(_tmp1, _tmp2, dst.index());
+    tmp3 = _tmp2;
+    tmp4 = _tmp1;
+  } else {
+    assert(dst.index() == _tmp2, "");
+    assert_different_registers(_tmp1, _tmp2, dst.base());
+    tmp3 = _tmp1;
+    tmp4 = _tmp2;
+  }
 
   // Check annotation
   assert((decorators & OURPERSIST_IS_STATIC_MASK) != 0, "");
   if ((val != noreg) && (decorators & OURPERSIST_IS_STATIC)) {
-    __ cmpptr(val, 0);
-    __ jcc(Assembler::equal, done_check_annotaion);
+    __ testptr(val, val);
+    __ jcc(Assembler::zero, done_check_annotaion);
 
 #ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
     // True
-    NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, _tmp1, _tmp2, tmp1, tmp2);
+    NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, tmp1, tmp2, tmp3, noreg);
     __ jmp(done_check_annotaion);
 #endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
 
@@ -132,14 +145,13 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
   }
 
   // Store in DRAM.
-  __ movptr(tmp1, dst.base()); // push obj
-  Parent::store_at(masm, decorators, type, dst, val, _tmp1, _tmp2);
-  __ movptr(dst.base(), tmp1); // pop obj
+  __ movptr(tmp2, dst.base()); // save dst.base()
+  Parent::store_at(masm, decorators, type, dst, val, tmp3, noreg); // dst.base() are broken
 
   // fence
   __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
   // tmp1 = obj->nvm_header().fwd()
-  NVMCardTableBarrierSetAssembler::load_nvm_fwd(masm, tmp1, dst.base());
+  NVMCardTableBarrierSetAssembler::load_nvm_fwd(masm, tmp1, tmp2);
   __ jcc(Assembler::zero, done);
   // tmp1 = forwarding pointer
 
@@ -149,9 +161,9 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
 
   // if (value != NULL) OurPersist::ensure_recoverable(value);
   if (val != noreg) {
-    __ cmpptr(val, 0);
-    __ jcc(Assembler::equal, val_is_null);
-    NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, _tmp1, _tmp2, noreg, tmp2);
+    __ testptr(val, val);
+    __ jcc(Assembler::zero, val_is_null);
+    NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, noreg, tmp2, tmp3, noreg);
     __ bind(val_is_null);
   }
 
@@ -160,18 +172,18 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
   // tmp2 = value
   __ xorl(tmp2, tmp2);
   if (val != noreg) {
-    __ cmpptr(val, 0);
-    __ jcc(Assembler::equal, done_set_val);
+    __ testptr(val, val);
+    __ jcc(Assembler::zero, done_set_val);
 
     // Check klass
-    NVMCardTableBarrierSetAssembler::is_target(masm, tmp2, val, noreg);
+    NVMCardTableBarrierSetAssembler::is_target(masm, tmp2, val, tmp3);
     __ jcc(Assembler::zero, done_set_val);
 
     NVMCardTableBarrierSetAssembler::load_nvm_fwd(masm, tmp2, val);
     __ bind(done_set_val);
   }
   const Address nvm_field(tmp1, dst.index(), dst.scale(), dst.disp());
-  Raw::store_at(masm, decorators, type, nvm_field, tmp2, _tmp1, _tmp2);
+  Raw::store_at(masm, decorators, type, nvm_field, tmp2, noreg, noreg);
   // Write back.
   NVMCardTableBarrierSetAssembler::writeback(masm, nvm_field, tmp2);
 
@@ -179,10 +191,11 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
 }
 
 void NVMCardTableBarrierSetAssembler::push_or_pop_all(MacroAssembler* masm, bool is_push,
+                                                      bool can_use_rdi, bool can_use_rsi,
                                                       Register tmp1, Register tmp2, Register tmp3,
                                                       Register tmp4, Register tmp5, Register tmp6,
                                                       Register tmp7, Register tmp8, Register tmp9) {
-  bool print_debug_msg = false; // DEBUG:
+  bool print_debug_msg = false;
 
   Register list[] = {rax, rcx, rdx, r8, r9}; // r10(rscratch1), r11(rscratch2)
   const int list_n = sizeof(list) / sizeof(Register);
@@ -200,12 +213,26 @@ void NVMCardTableBarrierSetAssembler::push_or_pop_all(MacroAssembler* masm, bool
     }
   }
 
-  // TODO:
-  Register scratch[] = {noreg, noreg, noreg}; // rsi, rdi, r12(r12_heapbase)
+  Register scratch[] = {noreg, noreg, noreg}; // rdi, rsi, r12(r12_heapbase)
   int scratch_n = 0;
+  if (can_use_rdi) {
+    for (int i = 0; i < tmp_n; i++) {
+      if (tmp[i] == rdi) {
+        //scratch[scratch_n++] = rdi;
+        break;
+      }
+    }
+  }
+  if (can_use_rsi) {
+    for (int i = 0; i < tmp_n; i++) {
+      if (tmp[i] == rsi) {
+        //scratch[scratch_n++] = rsi;
+        break;
+      }
+    }
+  }
   if (!UseCompressedOops) {
-    scratch[scratch_n] = r12_heapbase;
-    scratch_n++;
+    scratch[scratch_n++] = r12_heapbase;
   }
 
   bool only_with_scratch = target_n <= scratch_n;
@@ -278,8 +305,11 @@ void NVMCardTableBarrierSetAssembler::push_or_pop_all(MacroAssembler* masm, bool
 
 void NVMCardTableBarrierSetAssembler::runtime_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                                        Address dst, Register val, Register tmp1, Register tmp2) {
+  Register tmp3 = r8;
+  Register tmp4 = r9;
+
   // push all
-  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, true, tmp1, tmp2, r8, r9, rscratch1, rscratch2, dst.base(), dst.index(), val);
+  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, true, false, false, tmp1, tmp2, tmp3, tmp4, dst.base(), dst.index(), val);
 
   // arg1 = obj
   if (c_rarg0 != dst.base()) {
@@ -319,18 +349,21 @@ void NVMCardTableBarrierSetAssembler::runtime_store_at(MacroAssembler* masm, Dec
   }
 
   // pop all
-  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, false, tmp1, tmp2, r8, r9, rscratch1, rscratch2, dst.base(), dst.index(), val);
+  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, false, false, false, tmp1, tmp2, tmp3, tmp4, dst.base(), dst.index(), val);
 }
 
 void NVMCardTableBarrierSetAssembler::runtime_load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                                       Register dst, Address src, Register tmp1, Register tmp_thread) {
+  Register tmp3 = r8;
+  Register tmp4 = r9;
+
   if (type == T_LONG) {
     assert(dst == noreg, "");
     dst = rax;
   }
 
   // push all
-  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, true, tmp1, tmp_thread, dst, r8, r9, rscratch1, rscratch2, src.base(), src.index());
+  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, true, false, false, tmp1, tmp_thread, tmp3, tmp4, dst, src.base(), src.index());
 
   // arg1 = obj
   if (c_rarg0 != src.base()) {
@@ -363,7 +396,7 @@ void NVMCardTableBarrierSetAssembler::runtime_load_at(MacroAssembler* masm, Deco
   }
 
   // pop all
-  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, false, tmp1, tmp_thread, dst, r8, r9, rscratch1, rscratch2, src.base(), src.index());
+  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, false, false, false, tmp1, tmp_thread, tmp3, tmp4, dst, src.base(), src.index());
 }
 
 void NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(MacroAssembler* masm, Register obj,
@@ -371,14 +404,14 @@ void NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(MacroAssembler*
   assert(obj != noreg, "");
 
   // push all
-  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, true, tmp1, tmp2, tmp3, tmp4);
+  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, true, false, false, tmp1, tmp2, tmp3, tmp4);
 
   // call
   address ensure_recoverable_func = CAST_FROM_FN_PTR(address, CallRuntimeBarrierSet::ensure_recoverable_ptr());
   __ call_VM_leaf(ensure_recoverable_func, obj);
 
   // pop all
-  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, false, tmp1, tmp2, tmp3, tmp4);
+  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, false, false, false, tmp1, tmp2, tmp3, tmp4);
 }
 
 void NVMCardTableBarrierSetAssembler::runtime_is_target(MacroAssembler* masm, Register dst, Register obj,
@@ -386,7 +419,7 @@ void NVMCardTableBarrierSetAssembler::runtime_is_target(MacroAssembler* masm, Re
   assert(obj != noreg, "");
 
   // push all
-  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, true, tmp1, tmp2, tmp3, tmp4, dst);
+  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, true, false, false, tmp1, tmp2, tmp3, tmp4, dst);
 
   // call
   address is_target_func = CAST_FROM_FN_PTR(address, CallRuntimeBarrierSet::is_target_ptr());
@@ -394,7 +427,7 @@ void NVMCardTableBarrierSetAssembler::runtime_is_target(MacroAssembler* masm, Re
   __ mov(dst, rax);
 
   // pop all
-  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, false, tmp1, tmp2, tmp3, tmp4, dst);
+  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, false, false, false, tmp1, tmp2, tmp3, tmp4, dst);
 
   // mask result
   __ andl(dst, 0b1);
@@ -440,20 +473,33 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
   Label done_check_annotaion, val_is_null, done_set_val, dram_only;
   Register tmp1 = r8;
   Register tmp2 = r9;
+  Register tmp3 = noreg;
+  // WARNING: tmp4 is available after store.
+  Register tmp4 = noreg;
 
-  // DEBUG:
-  assert(_tmp1 != noreg, "");
-  assert(_tmp2 != noreg, "");
+  // set tmp3 and tmp4
+  assert_different_registers(tmp1, tmp2, _tmp1, _tmp2, noreg);
+  assert(dst.base() == _tmp1 || dst.index() == _tmp2, "");
+  if (dst.base() == _tmp1) {
+    assert_different_registers(_tmp1, _tmp2, dst.index());
+    tmp3 = _tmp2;
+    tmp4 = _tmp1;
+  } else {
+    assert(dst.index() == _tmp2, "");
+    assert_different_registers(_tmp1, _tmp2, dst.base());
+    tmp3 = _tmp1;
+    tmp4 = _tmp2;
+  }
 
   // Check annotation
   assert((decorators & OURPERSIST_IS_STATIC_MASK) != 0, "");
   if ((val != noreg) && (decorators & OURPERSIST_IS_STATIC)) {
-    __ cmpptr(val, 0);
-    __ jcc(Assembler::equal, done_check_annotaion);
+    __ testptr(val, val);
+    __ jcc(Assembler::zero, done_check_annotaion);
 
 #ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
     // True
-    NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, _tmp1, _tmp2, tmp1, tmp2);
+    NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, tmp1, tmp2, tmp3, noreg);
     __ jmp(done_check_annotaion);
 #endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
 
@@ -487,9 +533,9 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
 
   // if (value != NULL) OurPersist::ensure_recoverable(value);
   if (val != noreg) {
-    __ cmpptr(val, 0);
-    __ jcc(Assembler::equal, val_is_null);
-    NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, _tmp1, _tmp2, noreg, tmp2);
+    __ testptr(val, val);
+    __ jcc(Assembler::zero, val_is_null);
+    NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, noreg, tmp2, tmp3, noreg);
     __ bind(val_is_null);
   }
 
@@ -498,25 +544,25 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
   // tmp2 = value
   __ xorl(tmp2, tmp2);
   if (val != noreg) {
-    __ cmpptr(val, 0);
-    __ jcc(Assembler::equal, done_set_val);
+    __ testptr(val, val);
+    __ jcc(Assembler::zero, done_set_val);
 
     // Check klass
-    NVMCardTableBarrierSetAssembler::is_target(masm, tmp2, val, noreg);
+    NVMCardTableBarrierSetAssembler::is_target(masm, tmp2, val, tmp3);
     __ jcc(Assembler::zero, done_set_val);
 
     NVMCardTableBarrierSetAssembler::load_nvm_fwd(masm, tmp2, val);
     __ bind(done_set_val);
   }
   const Address nvm_field(tmp1, dst.index(), dst.scale(), dst.disp());
-  Raw::store_at(masm, decorators, type, nvm_field, tmp2, _tmp1, _tmp2);
+  Raw::store_at(masm, decorators, type, nvm_field, tmp2, noreg, noreg);
   // Write back.
   NVMCardTableBarrierSetAssembler::writeback(masm, nvm_field, tmp2);
 
   __ bind(dram_only);
   // Store in DRAM.
   __ movptr(tmp1, dst.base()); // for unlock
-  Parent::store_at(masm, decorators, type, dst, val, _tmp1, _tmp2);
+  Parent::store_at(masm, decorators, type, dst, val, tmp3, noreg);
 
   // unlock
   NVMCardTableBarrierSetAssembler::unlock_nvmheader(masm, tmp1, tmp2);
@@ -526,8 +572,11 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
 void NVMCardTableBarrierSetAssembler::writeback(MacroAssembler* masm, Address field, Register tmp) {
 #ifdef ENABLE_NVM_WRITEBACK
 #ifdef USE_CLWB
-  __ lea(tmp, field);
-  __ clwb(Address(tmp, 0));
+  if (field.index() != noreg || field.disp() != 0) {
+    __ lea(tmp, field);
+    field = Address(tmp, 0);
+  }
+  __ clwb(field);
 #else
   __ clflush(field);
 #endif
@@ -619,16 +668,8 @@ void NVMCardTableBarrierSetAssembler::load_nvm_fwd(MacroAssembler* masm, Registe
   // The status register is used in the following instructions.
 }
 
-void NVMCardTableBarrierSetAssembler::is_target(MacroAssembler* masm, Register dst, Register base, Register _tmp) {
+void NVMCardTableBarrierSetAssembler::is_target(MacroAssembler* masm, Register dst, Register base, Register tmp) {
   Label is_not_target, is_target, done;
-  Register tmp = _tmp;
-  Register sub_tmp = rbx;
-
-  // push if necessary
-  if (_tmp == noreg) {
-    __ push(sub_tmp);
-    tmp = sub_tmp;
-  }
   assert_different_registers(dst, base, tmp);
 
   __ load_klass(dst, base, tmp);
@@ -674,11 +715,6 @@ void NVMCardTableBarrierSetAssembler::is_target(MacroAssembler* masm, Register d
   __ stop("is_target() failed.");
   __ bind(assert_is_same);
 #endif // ASSERT
-
-  // pop if necessary
-  if (_tmp == noreg) {
-    __ pop(sub_tmp);
-  }
 
   __ andl(dst, 0b1);
   // WARNING: Don't do anything after andptr instruction.

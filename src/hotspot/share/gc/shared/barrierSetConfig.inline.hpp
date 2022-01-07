@@ -45,5 +45,8 @@
 #ifdef OUR_PERSIST
 #include "gc/nvm_card/nvmCardTableBarrierSet.inline.hpp"
 #endif // OUR_PERSIST
+#ifdef AUTO_PERSIST
+#include "gc/auto_persist/autoPersistBarrierSet.hpp"
+#endif // AUTO_PERSIST
 
 #endif // SHARE_GC_SHARED_BARRIERSETCONFIG_INLINE_HPP

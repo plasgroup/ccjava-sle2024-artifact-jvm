@@ -37,6 +37,7 @@ void NVMAllocator::init() {
   }
 #else
   NVMAllocator::nvm_head = (void*)AllocateHeap(size, mtNone, NativeCallStack::empty_stack(), AllocFailStrategy::RETURN_NULL);
+  NVMAllocator::segregated_top = NVMAllocator::nvm_head;
   bool success = NVMAllocator::nvm_head != NULL;  //TODO: nvm_topに対応させる
   if (!success) {
     report_vm_error(__FILE__, __LINE__, "Failed to allocate the dram.");

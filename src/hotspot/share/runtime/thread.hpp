@@ -57,6 +57,7 @@
 #ifdef OUR_PERSIST
 #include "nvm/nvmWorkListStack.hpp"
 #include "nvm/nvmBarrierSync.hpp"
+#include "nvm/nonVolatileThreadLocalAllocBuffer.hpp"
 #endif // OUR_PERSIST
 
 
@@ -426,6 +427,7 @@ class Thread: public ThreadShadow {
 
  private:
   ThreadLocalAllocBuffer _tlab;                 // Thread-local eden
+  NonVolatileThreadLocalAllocBuffer _nvtlab;    // Thread-local non-volatile memory
   jlong _allocated_bytes;                       // Cumulative number of bytes allocated on
                                                 // the Java heap
   ThreadHeapSampler _heap_sampler;              // For use when sampling the memory.
@@ -628,6 +630,12 @@ class Thread: public ThreadShadow {
     if (UseTLAB) {
       tlab().initialize();
     }
+  }
+
+  // TODO: ifdef #USE_NVTLABで囲む
+  NonVolatileThreadLocalAllocBuffer& nvtlab()    { return _nvtlab; }
+  void initialize_nvtlab() {
+    nvtlab().initialize();
   }
 
   jlong allocated_bytes()               { return _allocated_bytes; }
@@ -850,6 +858,8 @@ protected:
   static ByteSize tlab_end_offset()              { return byte_offset_of(Thread, _tlab) + ThreadLocalAllocBuffer::end_offset(); }
   static ByteSize tlab_top_offset()              { return byte_offset_of(Thread, _tlab) + ThreadLocalAllocBuffer::top_offset(); }
   static ByteSize tlab_pf_top_offset()           { return byte_offset_of(Thread, _tlab) + ThreadLocalAllocBuffer::pf_top_offset(); }
+
+  static ByteSize nvtlab_start_offset()            { return byte_offset_of(Thread, _nvtlab) + NonVolatileThreadLocalAllocBuffer::start_offset(); }
 
   static ByteSize allocated_bytes_offset()       { return byte_offset_of(Thread, _allocated_bytes); }
 

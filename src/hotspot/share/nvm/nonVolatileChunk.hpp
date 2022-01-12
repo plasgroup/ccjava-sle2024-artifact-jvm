@@ -75,13 +75,10 @@ public:
   void* get_start() { return start; }
 
   bool get_abit(size_t idx);
-  bool get_mbit(size_t idx);
   void reverse_abit(size_t idx);
-  void reverse_mbit(size_t idx);
+
   void a_0_to_1(size_t idx);
   void a_1_to_0(size_t idx);
-  void m_0_to_1(size_t idx);
-  void m_1_to_0(size_t idx);
 
   virtual void* allocation() = 0;
   void* idx_2_address(size_t idx);
@@ -92,9 +89,16 @@ public:
   static void initialize_standby_for_gc();
   static void print_standby_for_gc();
 
-
+#ifdef NVMGC
   static void mark_object(void* ptr, size_t obj_word_size);
   static void sweep_objects();
+
+  bool get_mbit(size_t idx);
+  void reverse_mbit(size_t idx);
+
+  void m_0_to_1(size_t idx);
+  void m_1_to_0(size_t idx);
+#endif // NVMGC
 };
 
 class NonVolatileChunkSmall: public NonVolatileChunkSegregate {
@@ -151,14 +155,10 @@ public:
   static void* large_head;
 
   static void* allocation(size_t word_size);
-  static void mark_object(void* ptr, size_t obj_word_size);
-  static void sweep_objects();
-  bool is_next(NonVolatileChunkLarge* nvcl);
   void merge(NonVolatileChunkLarge* nvcl);
   static void print_free_list();
 
   bool get_alloc() { return alloc; }
-  bool get_mark() { return mark; }
   size_t get_word_size() { return word_size; }
   void set_word_size(size_t _word_size) { word_size = _word_size; }
   NonVolatileChunkLarge* get_next_chunk() { return next_chunk; }
@@ -166,8 +166,15 @@ public:
   void* get_dummy() { return (void*) dummy; }
   void a_0_to_1();
   void a_1_to_0();
+
+#ifdef NVMGC
+  bool is_next(NonVolatileChunkLarge* nvcl);
+  bool get_mark() { return mark; }
+  static void mark_object(void* ptr, size_t obj_word_size);
+  static void sweep_objects();
   void m_0_to_1();
   void m_1_to_0();
+#endif // NVMGC
 
 };
 

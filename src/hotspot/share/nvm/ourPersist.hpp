@@ -45,6 +45,7 @@ class OurPersist : AllStatic {
   static bool is_volatile_and_non_mirror(oop obj, ptrdiff_t offset, DecoratorSet ds);
 
   static void ensure_recoverable(oop obj);
+  static bool is_same(oop dram_object);
 };
 
 #endif // NVM_OURPERSIST_HPP

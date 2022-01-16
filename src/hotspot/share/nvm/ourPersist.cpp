@@ -203,6 +203,81 @@ bool OurPersist::cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, BasicType
   return v1.long_val == v2.long_val;
 }
 
+bool OurPersist::is_same(oop dram_object) {
+  oop nvm_object = static_cast<oop>(dram_object->nvm_header().fwd());
+  if (nvm_object == NULL) {
+    printf("doesn't have nvm copy.\n");
+    return true;
+  }
+  Klass* klass = dram_object->klass();
+  bool has_same_field;
+
+  if (klass->is_instance_klass()) {
+    printf("InstanceKlass\n");
+    InstanceKlass* ik = (InstanceKlass*) klass;
+    int cnt = ik->java_fields_count();
+    for (int i = 0; i < cnt; i++) {
+      AccessFlags field_flags = accessFlags_from(ik->field_access_flags(i));
+      Symbol* field_sig = ik->field_signature(i);
+      BasicType field_type = Signature::basic_type(field_sig);
+      ptrdiff_t field_offset = ik->field_offset(i);
+
+      if (field_flags.is_static()) {
+        continue;
+      }
+      
+      has_same_field = OurPersist::cmp_dram_and_nvm(dram_object, nvm_object, field_offset, field_type, false);
+      if (has_same_field) {
+        printf("ik: has same field.\n");
+                // printf("field name: %s\n", field_sig->as_klass_external_name());
+        continue;
+      } else {
+        printf("ik: doesn't have same field.\n");
+        printf("ik: name: %s\n", ik->internal_name());
+      }
+    }
+    return true;
+  } else if (klass->is_objArray_klass()) {
+    printf("ObjArrayKlass\n");
+    ObjArrayKlass* oak = (ObjArrayKlass*) klass;
+    objArrayOop oao = (objArrayOop) dram_object;
+    BasicType array_type = ((ArrayKlass*)oak)->element_type();
+    int array_length = oao->length();
+
+    for (int i = 0; i < array_length; i++) {
+      ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
+      has_same_field = OurPersist::cmp_dram_and_nvm(dram_object, nvm_object, field_offset, T_OBJECT, false);
+      if (has_same_field) {
+        printf("oak: has same field.\n");
+      } else {
+        printf("oak: doesn't have same field.\n");
+        printf("oak: name: %s\n", oak->external_name());
+      }
+    }
+  } else if (klass->is_typeArray_klass()) {
+    printf("TypeArrayKlass\n");
+    TypeArrayKlass* tak = (TypeArrayKlass*) klass;
+    typeArrayOop tao = (typeArrayOop) dram_object;
+    BasicType array_type = ((ArrayKlass*)tak)->element_type();
+    int array_length = tao->length();
+
+    for (int i = 0; i < array_length; i++) {
+      ptrdiff_t field_offset = arrayOopDesc::base_offset_in_bytes(array_type) + type2aelembytes(array_type) * i;
+      has_same_field = OurPersist::cmp_dram_and_nvm(dram_object, nvm_object, field_offset, array_type, true);
+      if (has_same_field) {
+        printf("tak: has same field.\n");
+      } else {
+        printf("tak: doesn't have same field.\n");
+        printf("tak: name: %s\n", tak->internal_name());
+      }
+    }
+  } else {
+    report_vm_error(__FILE__, __LINE__, "Illegal field type.");
+  }
+
+  return true;
+}
+
 Thread* OurPersist::responsible_thread(void* nvm_obj) {
   assert(nvmHeader::is_fwd(nvm_obj), "nvm_obj: %p", nvm_obj);
 

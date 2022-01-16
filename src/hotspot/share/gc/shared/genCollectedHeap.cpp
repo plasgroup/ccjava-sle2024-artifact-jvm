@@ -128,13 +128,20 @@ jint GenCollectedHeap::initialize() {
   _rem_set->initialize();
 
 #ifdef OUR_PERSIST
+#ifdef AUTO_PERSIST
+  ShouldNotReachHere();
+#endif // AUTO_PERSIST
   if (OurPersist::enable()) {
     NVMCardTableBarrierSet *bs = new NVMCardTableBarrierSet(_rem_set);
     bs->initialize();
     BarrierSet::set_barrier_set(bs);
   } else {
 #endif // OUR_PERSIST
+#ifdef AUTO_PERSIST
+    AutoPersistBarrierSet *bs = new AutoPersistBarrierSet(_rem_set);
+#else  // AUTO_PERSIST
     CardTableBarrierSet *bs = new CardTableBarrierSet(_rem_set);
+#endif // AUTO_PERSIST
     bs->initialize();
     BarrierSet::set_barrier_set(bs);
 #ifdef OUR_PERSIST
@@ -599,7 +606,7 @@ void GenCollectedHeap::do_collection(bool           full,
 
     gc_prologue(complete);
     increment_total_collections(complete);
-
+    // printf("young collection\n");
     collect_generation(_young_gen,
                        full,
                        size,
@@ -659,7 +666,7 @@ void GenCollectedHeap::do_collection(bool           full,
     if (!complete) {
       increment_total_full_collections();
     }
-
+    // printf("old collection\n");
     collect_generation(_old_gen,
                        full,
                        size,

@@ -134,6 +134,26 @@ template <class T> inline void MarkSweep::follow_root(T* p) {
     oop obj = CompressedOops::decode_not_null(heap_oop);
     if (!obj->mark().is_marked()) {
       mark_object(obj);
+#ifdef OUR_PERSIST
+      void* nvm_ptr = obj->nvm_header().fwd();
+      if (nvm_ptr != NULL) {
+        size_t obj_word_size = obj->size();
+#ifdef USE_NVTLAB
+#ifdef NVMGC
+        if (obj_word_size < NonVolatileChunkLarge::MINIMUM_WORD_SIZE_OF_NVCLARGE_ALLOCATION) {
+          NonVolatileChunkSegregate::mark_object(obj->nvm_header().fwd(), obj_word_size);
+        } else {
+          NonVolatileChunkLarge::mark_object(obj->nvm_header().fwd(), obj_word_size);
+        }
+#endif // NVMGC
+#endif // USE_NVTLAB
+      }
+#ifdef ASSERT
+#ifdef CMP_OBJ
+      NVMDebug::cmp_dram_and_nvm_obj_during_gc(obj);
+#endif // CMP_OBJ
+#endif // ASSERT
+#endif // OUR_PERSIST
       follow_object(obj);
     }
   }

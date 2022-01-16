@@ -35,6 +35,7 @@
 #include "oops/oop.inline.hpp"
 #include "utilities/align.hpp"
 #include "utilities/stack.inline.hpp"
+#include "nvm/nonVolatileChunk.hpp"
 
 inline void MarkSweep::mark_object(oop obj) {
   // some marks may contain information we need to preserve so we store them away
@@ -55,6 +56,19 @@ template <class T> inline void MarkSweep::mark_and_push(T* p) {
       mark_object(obj);
       _marking_stack.push(obj);
 #ifdef OUR_PERSIST
+      void* nvm_ptr = obj->nvm_header().fwd();
+      if (nvm_ptr != NULL) {
+        size_t obj_word_size = obj->size();
+#ifdef USE_NVTLAB
+#ifdef NVMGC
+        if (obj_word_size < NonVolatileChunkLarge::MINIMUM_WORD_SIZE_OF_NVCLARGE_ALLOCATION) {
+          NonVolatileChunkSegregate::mark_object(obj->nvm_header().fwd(), obj_word_size);
+        } else {
+          NonVolatileChunkLarge::mark_object(obj->nvm_header().fwd(), obj_word_size);
+        }
+#endif // NVMGC
+#endif // USE_NVTLAB
+      }
 #ifdef ASSERT
 #ifdef CMP_OBJ
       NVMDebug::cmp_dram_and_nvm_obj_during_gc(obj);

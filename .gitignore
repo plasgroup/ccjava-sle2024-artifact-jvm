@@ -16,3 +16,9 @@ NashornProfile.txt
 **/JTreport/**
 **/JTwork/**
 /src/utils/LogCompilation/target/
+
+*.sh
+*.log
+scratch/*.out.*
+scratch/jar/*.jar
+scratch/xalan/*

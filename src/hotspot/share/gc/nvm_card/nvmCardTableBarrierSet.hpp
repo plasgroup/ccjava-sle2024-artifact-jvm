@@ -49,7 +49,7 @@ public:
       // Store in DRAM.
       Raw::oop_store_in_heap_at(base, offset, value);
 
-      _mm_mfence();
+      OrderAccess::fence();
       void* before_fwd = base->nvm_header().fwd();
 
       if (before_fwd != NULL) {
@@ -115,7 +115,7 @@ public:
       // Store in DRAM.
       Parent::store_in_heap_at(base, offset, value);
 
-      _mm_mfence();
+      OrderAccess::fence();
       void* nvm_fwd = base->nvm_header().fwd();
       if (nvm_fwd == NULL) {
         // Store only in DRAM.
@@ -217,7 +217,7 @@ public:
                                   dst_obj, dst_offset_in_bytes, dst_raw,
                                   length);
 
-        _mm_mfence();
+        OrderAccess::fence();
         void* dst_nvm_obj = dst_obj->nvm_header().fwd();
         if (dst_nvm_obj != NULL) {
           // Store in NVM.
@@ -299,7 +299,7 @@ public:
       // Store in DRAM.
       Parent::oop_store_in_heap_at(base, offset, value);
 
-      _mm_mfence();
+      OrderAccess::fence();
       void* before_fwd = base->nvm_header().fwd();
       if (before_fwd != NULL) {
         assert(nvmHeader::is_fwd(before_fwd), "");
@@ -431,7 +431,7 @@ public:
       bool success;
       void* before_fwd;
 
-      _mm_mfence();
+      OrderAccess::fence();
       before_fwd = dst_obj->nvm_header().fwd();
       success = before_fwd == NULL;
 

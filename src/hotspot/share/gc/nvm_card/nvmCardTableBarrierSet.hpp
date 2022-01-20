@@ -44,7 +44,8 @@ public:
         return;
       }
 
-      assert(OurPersist::is_volatile_and_non_mirror(base, offset, decorators), "");
+      // TODO: implements volatile and static
+      // assert(OurPersist::is_volatile_and_non_mirror(base, offset, decorators), "");
 
       // Store in DRAM.
       Raw::oop_store_in_heap_at(base, offset, value);

@@ -1,4 +1,6 @@
-// #ifdef OUR_PERSIST
+#ifdef OUR_PERSIST
+#ifdef USE_NVTLAB
+
 // #include "gc/shared/gcUtil.hpp"
 #include "runtime/perfData.hpp"
 // #include "runtime/vm_version.hpp"
@@ -59,4 +61,5 @@ public:
 
 #endif // NVM_NVTLAB_HPP
 
-// #endif // OUR_PERSIST
+#endif // USE_NVTLAB
+#endif // OUR_PERSIST

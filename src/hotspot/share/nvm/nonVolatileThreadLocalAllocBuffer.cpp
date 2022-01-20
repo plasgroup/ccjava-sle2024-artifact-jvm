@@ -1,4 +1,5 @@
 #ifdef OUR_PERSIST
+#ifdef USE_NVTLAB
 
 #include "precompiled.hpp"
 #include "nvm/ourPersist.hpp"
@@ -146,4 +147,5 @@ size_t NonVolatileThreadLocalAllocBuffer::idx_to_minimum_word_size(size_t idx) {
   return 0;
 }
 
+#endif // USE_NVTLAB
 #endif // OUR_PERSIST

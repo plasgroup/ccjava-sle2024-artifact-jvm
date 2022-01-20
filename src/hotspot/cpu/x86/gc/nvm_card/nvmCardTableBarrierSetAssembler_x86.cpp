@@ -9,6 +9,12 @@
 
 #define __ ((InterpreterMacroAssembler*)masm)->
 
+volatile int test_20220112 = 0;
+void test(int a) {
+  Atomic::inc(&test_20220112);
+  if (test_20220112 % 10000 == 0) printf("test: %d\n", test_20220112);
+}
+
 void NVMCardTableBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                                Address dst, Register val, Register tmp1, Register tmp2) {
 #ifdef OURPERSIST_STORE_RUNTIME_ONLY
@@ -91,6 +97,12 @@ void NVMCardTableBarrierSetAssembler::interpreter_store_at(MacroAssembler* masm,
   Raw::store_at(masm, decorators, type, nvm_field, val, noreg, noreg);
   // Write back.
   NVMCardTableBarrierSetAssembler::writeback(masm, nvm_field, tmp2);
+
+  // DEBUG:
+  __ pusha();
+  __ mov64(c_rarg0, 1);
+  __ call_VM_leaf(CAST_FROM_FN_PTR(address, test));
+  __ popa();
 
   __ bind(done);
 }
@@ -186,6 +198,12 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
   Raw::store_at(masm, decorators, type, nvm_field, tmp2, noreg, noreg);
   // Write back.
   NVMCardTableBarrierSetAssembler::writeback(masm, nvm_field, tmp2);
+
+  // DEBUG:
+  __ pusha();
+  __ mov64(c_rarg0, 2);
+  __ call_VM_leaf(CAST_FROM_FN_PTR(address, test));
+  __ popa();
 
   __ bind(done);
 }
@@ -460,6 +478,12 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_store_at(MacroAssembl
   // Write back.
   NVMCardTableBarrierSetAssembler::writeback(masm, nvm_field, tmp2);
 
+  // DEBUG:
+  __ pusha();
+  __ mov64(c_rarg0, 3);
+  __ call_VM_leaf(CAST_FROM_FN_PTR(address, test));
+  __ popa();
+
   __ bind(dram_only);
   // Store in DRAM.
   Parent::store_at(masm, decorators, type, dst, val, noreg, noreg);
@@ -558,6 +582,12 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
   Raw::store_at(masm, decorators, type, nvm_field, tmp2, noreg, noreg);
   // Write back.
   NVMCardTableBarrierSetAssembler::writeback(masm, nvm_field, tmp2);
+
+  // DEBUG:
+  __ pusha();
+  __ mov64(c_rarg0, 4);
+  __ call_VM_leaf(CAST_FROM_FN_PTR(address, test));
+  __ popa();
 
   __ bind(dram_only);
   // Store in DRAM.

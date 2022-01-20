@@ -44,8 +44,35 @@ public:
         return;
       }
 
-      // TODO: implements volatile and static
-      // assert(OurPersist::is_volatile_and_non_mirror(base, offset, decorators), "");
+#ifndef OURPERSIST_IGNORE_VOLATILE
+      // Volatile
+      if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
+        nvmHeader::lock(base);
+
+        void* before_fwd = base->nvm_header().fwd();
+        if (before_fwd != NULL) {
+          assert(nvmHeader::is_fwd(before_fwd), "");
+
+          if (value != NULL) {
+            OurPersist::ensure_recoverable(value);
+          }
+
+          // Store in NVM.
+          oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
+          if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
+            // Skip
+            nvm_val = NULL;
+          }
+          Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
+          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+        }
+        // Store in DRAM.
+        Raw::oop_store_in_heap_at(base, offset, value);
+
+        nvmHeader::unlock(base);
+        return;
+      }
+#endif // !OURPERSIST_IGNORE_VOLATILE
 
       // Store in DRAM.
       Raw::oop_store_in_heap_at(base, offset, value);

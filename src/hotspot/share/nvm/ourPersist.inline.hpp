@@ -48,15 +48,15 @@ inline bool OurPersist::is_target_slow(Klass* klass) {
 inline bool OurPersist::is_target_fast(Klass* klass) {
   int klass_id = klass->id();
 
-  if (klass_id == InstanceMirrorKlassID) {
-    return false;
-  }
+  // if (klass_id == InstanceMirrorKlassID) {
+  //   return false;
+  // }
   // if (klass_id == InstanceRefKlassID) {
   //   return false;
   // }
-  if (klass_id == InstanceClassLoaderKlassID) {
-    return false;
-  }
+  // if (klass_id == InstanceClassLoaderKlassID) {
+  //   return false;
+  // }
 
   return true;
 }

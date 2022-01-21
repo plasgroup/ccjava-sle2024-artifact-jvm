@@ -696,12 +696,11 @@ void NVMCardTableBarrierSetAssembler::is_target(MacroAssembler* masm, Register d
   // __ cmp32(tmp, 2);
   // __ jcc(Assembler::belowEqual, is_not_target);
 
-  // DEBUG:
-  // __ cmp32(tmp, InstanceMirrorKlassID);
-  // __ jcc(Assembler::equal, is_not_target);
+  __ cmp32(tmp, InstanceMirrorKlassID);
+  __ jcc(Assembler::equal, is_not_target);
 
-  // __ cmp32(tmp, InstanceClassLoaderKlassID);
-  // __ jcc(Assembler::equal, is_not_target);
+  __ cmp32(tmp, InstanceClassLoaderKlassID);
+  __ jcc(Assembler::equal, is_not_target);
 
   // is target
   __ bind(is_target);

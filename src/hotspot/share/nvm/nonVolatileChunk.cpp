@@ -1,4 +1,6 @@
-// #ifdef OUR_PERSIST
+#ifdef OUR_PERSIST
+#ifdef USE_NVTLAB
+
 #include "precompiled.hpp"
 #include "nvm/ourPersist.hpp"
 #include "nvm/nonVolatileChunk.hpp"
@@ -409,4 +411,5 @@ void NonVolatileChunkLarge::m_1_to_0() {
 }
 #endif  // NVMGC
 
-// #endif OUR_PERSIST
+#endif // USE_NVTLAB
+#endif // OUR_PERSIST

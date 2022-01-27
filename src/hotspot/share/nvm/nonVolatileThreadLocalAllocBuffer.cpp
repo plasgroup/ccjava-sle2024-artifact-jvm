@@ -39,7 +39,7 @@ void* NonVolatileThreadLocalAllocBuffer::allocate(size_t _word_size) {
   // find used nvc (need global lock)
   pthread_mutex_lock(&NonVolatileChunkSegregate::gc_mtx);
   NonVolatileChunkSegregate* used_nvc = NonVolatileChunkSegregate::get_standby_for_gc_head(idx);  // TODO: 効率わるい
-  while (used_nvc->get_next_chunk() != NULL) {
+  while (used_nvc != NULL) {
     if (used_nvc->get_is_using() != true && used_nvc->get_is_full() != true) {
       nvc[idx] = used_nvc;
       used_nvc->set_is_using(true);

@@ -15,11 +15,11 @@ bool NonVolatileChunkLarge::has_available_chunk = false;
 
 void NonVolatileChunkSegregate::initialize_standby_for_gc() {
   size_t i;
-  for (i=0; i < NonVolatileThreadLocalAllocBuffer::num_of_nvc_small; i++) {
-    standby_for_gc[i] = new NonVolatileChunkSmall(NULL, NULL, 1);
+    for (i=0; i < NonVolatileThreadLocalAllocBuffer::num_of_nvc_small; i++) {
+    standby_for_gc[i] = NULL;
   }
   for (; i < NonVolatileThreadLocalAllocBuffer::segregated_num; i++) {
-    standby_for_gc[i] = new NonVolatileChunkMedium(NULL, NULL, 1, 1);
+    standby_for_gc[i] = NULL;
   }
 }
 
@@ -37,7 +37,7 @@ void NonVolatileChunkSegregate::set_nvc_address() {
 void NonVolatileChunkSegregate::print_standby_for_gc() {
   for (size_t i = 0; i < NonVolatileThreadLocalAllocBuffer::segregated_num; i++) {
     NonVolatileChunkSegregate* cur_nvc = standby_for_gc[i];
-    while (cur_nvc->next_chunk != NULL) {
+    while (cur_nvc != NULL) {
       printf("NVC_ADDRESS: %p to %p, size_class: %lu\n", cur_nvc->start, cur_nvc->end, cur_nvc->size_class);
       fflush(stdout);
       cur_nvc = cur_nvc->next_chunk;
@@ -328,7 +328,7 @@ void NonVolatileChunkSegregate::mark_object(void* ptr, size_t obj_word_size) {
 void NonVolatileChunkSegregate::sweep_objects() {
   for (size_t i = 0; i < NonVolatileThreadLocalAllocBuffer::segregated_num; i ++) {
     NonVolatileChunkSegregate* nvc = standby_for_gc[i];
-    while (nvc->next_chunk != NULL) {
+    while (nvc != NULL) {
       for (size_t idx = 0; idx < nvc->get_max_idx(); idx++) {
         if (nvc->get_abit(idx) != true) {
           continue;

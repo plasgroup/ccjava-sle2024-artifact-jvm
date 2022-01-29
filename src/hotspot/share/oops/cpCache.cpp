@@ -134,12 +134,18 @@ void ConstantPoolCacheEntry::set_field(Bytecodes::Code get_code,
                                        TosState field_type,
                                        bool is_final,
                                        bool is_volatile,
+#ifdef OUR_PERSIST
+                                       bool is_durableroot,
+#endif // OUR_PERSIST
                                        Klass* root_klass) {
   set_f1(field_holder);
   set_f2(field_offset);
   assert((field_index & field_index_mask) == field_index,
          "field index does not fit in low flag bits");
   set_field_flags(field_type,
+#ifdef OUR_PERSIST
+                  ((is_durableroot ? 1 : 0) << is_durableroot_shift) |
+#endif // OUR_PERSIST
                   ((is_volatile ? 1 : 0) << is_volatile_shift) |
                   ((is_final    ? 1 : 0) << is_final_shift),
                   field_index);

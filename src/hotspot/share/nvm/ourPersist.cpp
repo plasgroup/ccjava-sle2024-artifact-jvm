@@ -203,81 +203,6 @@ bool OurPersist::cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, BasicType
   return v1.long_val == v2.long_val;
 }
 
-bool OurPersist::is_same(oop dram_object) {
-  oop nvm_object = static_cast<oop>(dram_object->nvm_header().fwd());
-  if (nvm_object == NULL) {
-    printf("doesn't have nvm copy.\n");
-    return true;
-  }
-  Klass* klass = dram_object->klass();
-  bool has_same_field;
-
-  if (klass->is_instance_klass()) {
-    printf("InstanceKlass\n");
-    InstanceKlass* ik = (InstanceKlass*) klass;
-    int cnt = ik->java_fields_count();
-    for (int i = 0; i < cnt; i++) {
-      AccessFlags field_flags = accessFlags_from(ik->field_access_flags(i));
-      Symbol* field_sig = ik->field_signature(i);
-      BasicType field_type = Signature::basic_type(field_sig);
-      ptrdiff_t field_offset = ik->field_offset(i);
-
-      if (field_flags.is_static()) {
-        continue;
-      }
-      
-      has_same_field = OurPersist::cmp_dram_and_nvm(dram_object, nvm_object, field_offset, field_type, false);
-      if (has_same_field) {
-        printf("ik: has same field.\n");
-                // printf("field name: %s\n", field_sig->as_klass_external_name());
-        continue;
-      } else {
-        printf("ik: doesn't have same field.\n");
-        printf("ik: name: %s\n", ik->internal_name());
-      }
-    }
-    return true;
-  } else if (klass->is_objArray_klass()) {
-    printf("ObjArrayKlass\n");
-    ObjArrayKlass* oak = (ObjArrayKlass*) klass;
-    objArrayOop oao = (objArrayOop) dram_object;
-    BasicType array_type = ((ArrayKlass*)oak)->element_type();
-    int array_length = oao->length();
-
-    for (int i = 0; i < array_length; i++) {
-      ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
-      has_same_field = OurPersist::cmp_dram_and_nvm(dram_object, nvm_object, field_offset, T_OBJECT, false);
-      if (has_same_field) {
-        printf("oak: has same field.\n");
-      } else {
-        printf("oak: doesn't have same field.\n");
-        printf("oak: name: %s\n", oak->external_name());
-      }
-    }
-  } else if (klass->is_typeArray_klass()) {
-    printf("TypeArrayKlass\n");
-    TypeArrayKlass* tak = (TypeArrayKlass*) klass;
-    typeArrayOop tao = (typeArrayOop) dram_object;
-    BasicType array_type = ((ArrayKlass*)tak)->element_type();
-    int array_length = tao->length();
-
-    for (int i = 0; i < array_length; i++) {
-      ptrdiff_t field_offset = arrayOopDesc::base_offset_in_bytes(array_type) + type2aelembytes(array_type) * i;
-      has_same_field = OurPersist::cmp_dram_and_nvm(dram_object, nvm_object, field_offset, array_type, true);
-      if (has_same_field) {
-        printf("tak: has same field.\n");
-      } else {
-        printf("tak: doesn't have same field.\n");
-        printf("tak: name: %s\n", tak->internal_name());
-      }
-    }
-  } else {
-    report_vm_error(__FILE__, __LINE__, "Illegal field type.");
-  }
-
-  return true;
-}
-
 Thread* OurPersist::responsible_thread(void* nvm_obj) {
   assert(nvmHeader::is_fwd(nvm_obj), "nvm_obj: %p", nvm_obj);
 
@@ -290,13 +215,6 @@ void OurPersist::set_responsible_thread(void* nvm_obj, Thread* cur_thread) {
 
   oop(nvm_obj)->set_mark(markWord::zero());
 
-  if (cur_thread->dependent_obj_list_head() == NULL) {
-    cur_thread->set_dependent_obj_list_head(nvm_obj);
-  } else {
-    oop(cur_thread->dependent_obj_list_tail())->set_mark(markWord::from_pointer(nvm_obj));
-  }
-
-  cur_thread->set_dependent_obj_list_tail(nvm_obj);
   nvmHeader::set_fwd(oop(nvm_obj), (void*)cur_thread);
 }
 
@@ -330,110 +248,7 @@ bool OurPersist::is_set_durableroot_annotation(oop klass_obj, ptrdiff_t offset) 
 
   // Unimplements
   Unimplemented();
-
-  // get field index
-  Klass* k = java_lang_Class::as_Klass(klass_obj);
-  assert(k != NULL, "");
-  if (!k->is_instance_klass()) return false;
-  assert(k->is_instance_klass(), "");
-  InstanceKlass* ik = (InstanceKlass*)k;
-  Array<AnnotationArray*>* fa = ik->fields_annotations();
-  int index = -1;
-  if (fa != NULL) {
-    int cnt = ik->java_fields_count();
-    for (int i = 0; i < cnt; i++) {
-      if (ik->field_offset(i) == offset) {
-        index = i;
-        break;
-      }
-    }
-  }
-  if (index == -1) {
-    k = klass_obj->klass();
-    ik = (InstanceKlass*)k;
-    fa = ik->fields_annotations();
-    if (fa != NULL) {
-      int cnt = ik->java_fields_count();
-      for (int i = 0; i < cnt; i++) {
-        if (ik->field_offset(i) == offset) {
-          index = i;
-          break;
-        }
-      }
-    }
-  }
-  assert(fa == NULL || index != -1, "");
-
-  // check annotation
-  bool has_durableroot_annotation = false;
-  if (fa != NULL) {
-    AnnotationArray* anno = fa->at(index);
-    if (anno != NULL) {
-      int anno_len = anno->length();
-      u2 num_annotations = anno->at(0) << 8 | anno->at(1);
-      int i = 2;
-      while (i < anno_len) {
-        u2 type_index = anno->at(i) << 8 | anno->at(i+1);
-        i += 2;
-        assert(ik->constants()->tag_at(type_index).is_symbol(), "");
-        Symbol* anno_sig = ik->constants()->symbol_at(type_index);
-        if (anno_sig->equals("Ldurableroot;")) {
-          has_durableroot_annotation = true;
-          break;
-        }
-        // annotation
-        u2 num_element_value_pairs = anno->at(i) << 8 | anno->at(i+1);
-        i += 2;
-        for (u2 j = 0; j < num_element_value_pairs; j++) {
-          // element_value_pairs
-          u2 element_name_index = anno->at(i) << 8 | anno->at(i+1);
-          // element_value
-          u1 element_value_tag = anno->at(i+2);
-          i += 2 + 1;
-          switch (element_value_tag) {
-            case 'B': // byte
-            case 'C': // char
-            case 'D': // double
-            case 'F': // float
-            case 'I': // int
-            case 'J': // long
-            case 'S': // short
-            case 'Z': // boolean
-            case 's': // String
-              // const_value_index
-              // u2 const_value_index;
-              i += 2;
-              break;
-            case 'e': // Enum type
-              // enum_const_value
-              // u2 type_name_index;
-              // u2 const_name_index;
-              i += 4;
-              break;
-            case 'c': // Class
-              // class_info_index
-              // u2 class_info_index;
-              i += 2;
-              break;
-            case '@': // Annotation type
-              // annotation_value
-              // annotation annotation_value;
-              assert(false, "TODO: Unimplemented.");
-              break;
-            case '[': // Array type
-              // array_value
-              // u2 num_values;
-              // element_value values[num_values];
-              assert(false, "TODO: Unimplemented.");
-              break;
-            default:
-              assert(false, "illegal tag.");
-          }
-        }
-      }
-    }
-  }
-  return has_durableroot_annotation;
+  return false;
 }
 
 void OurPersist::ensure_recoverable(oop obj) {
@@ -453,19 +268,14 @@ void OurPersist::ensure_recoverable(oop obj) {
   NVMBarrierSync* barrier_sync = cur_thread->nvm_barrier_sync();
   barrier_sync->init();
 
-  void* nvm_obj = OurPersist::allocate_nvm(obj->size(), cur_thread);
-RETRY:
-  bool success = nvmHeader::cas_fwd(obj, nvm_obj);
+  bool success = OurPersist::shade(obj, cur_thread);
+  void* nvm_obj = obj->nvm_header().fwd();
   if (!success) {
-    // TODO: release nvm
-
     Thread* dependant_thread = responsible_thread(nvm_obj);
     if (dependant_thread != NULL && dependant_thread != cur_thread) {
       barrier_sync->add(dependant_thread->nvm_barrier_sync(), obj);
     }
     barrier_sync->sync();
-
-    OurPersist::clear_responsible_thread(cur_thread);
     return;
   }
 
@@ -476,7 +286,17 @@ RETRY:
   worklist->add(obj);
 
   while (worklist->empty() == false) {
-    OurPersist::copy_object(worklist->remove());
+    oop cur_obj = worklist->remove();
+    void* cur_nvm_obj = cur_obj->nvm_header().fwd();
+
+    if (cur_thread->dependent_obj_list_head() == NULL) {
+      cur_thread->set_dependent_obj_list_head(cur_nvm_obj);
+    } else {
+      oop(cur_thread->dependent_obj_list_tail())->set_mark(markWord::from_pointer(cur_nvm_obj));
+    }
+    cur_thread->set_dependent_obj_list_tail(cur_nvm_obj);
+
+    OurPersist::copy_object(cur_obj);
   }
 
   // sfence
@@ -485,6 +305,24 @@ RETRY:
   barrier_sync->sync();
 
   OurPersist::clear_responsible_thread(cur_thread);
+}
+
+bool OurPersist::shade(oop obj, Thread* cur_thread) {
+  void* nvm_obj = OurPersist::allocate_nvm(obj->size(), cur_thread);
+  bool success = nvmHeader::cas_fwd(obj, nvm_obj);
+  if (!success) {
+    // TODO: nvm release
+  }
+  return success;
+}
+
+void OurPersist::copy_object_copy_step(oop obj) {
+  // TODO:
+}
+
+bool OurPersist::copy_object_verify_step(oop obj) {
+  // TODO:
+  return true;
 }
 
 void OurPersist::copy_object(oop obj) {
@@ -533,28 +371,18 @@ RETRY:
               if (v->nvm_header().recoverable()) {
                 nvm_v = v->nvm_header().fwd();
               } else {
-                nvm_v = OurPersist::allocate_nvm(v->size(), cur_thread);
-                while (true) {
-                  bool success = nvmHeader::cas_fwd(v, nvm_v);
-                  if (success) {
-                    assert(nvm_v == v->nvm_header().fwd(),
-                           "nvm_v: %p, fwd: %p", nvm_v, v->nvm_header().fwd());
-                    assert(responsible_thread(v->nvm_header().fwd()) == Thread::current(),
-                           "fwd: %p", v->nvm_header().fwd());
-                    worklist->add(v);
-                    break;
-                  } else {
-                    // TODO: release nvm
+                bool success = OurPersist::shade(v, cur_thread);
+                nvm_v = v->nvm_header().fwd();
+                assert(nvmHeader::is_fwd(nvm_v), "nvm_v: %p", nvm_v);
+                if (success) {
+                  assert(responsible_thread(v->nvm_header().fwd()) == Thread::current(),
+                         "fwd: %p", v->nvm_header().fwd());
 
-                    nvm_v = v->nvm_header().fwd();
-                    assert(nvmHeader::is_fwd(nvm_v), "nvm_v: %p", nvm_v);
-
-                    Thread* dependant_thread = OurPersist::responsible_thread(nvm_v);
-                    if (dependant_thread != NULL && dependant_thread != cur_thread) {
-                      barrier_sync->add(dependant_thread->nvm_barrier_sync(), v);
-                    }
-
-                    break;
+                  worklist->add(v);
+                } else {
+                  Thread* dependant_thread = OurPersist::responsible_thread(nvm_v);
+                  if (dependant_thread != NULL && dependant_thread != cur_thread) {
+                    barrier_sync->add(dependant_thread->nvm_barrier_sync(), v);
                   }
                 }
               }
@@ -587,29 +415,18 @@ RETRY:
           if (v->nvm_header().recoverable()) {
             nvm_v = v->nvm_header().fwd();
           } else {
-            nvm_v = OurPersist::allocate_nvm(v->size(), cur_thread);
+            bool success = OurPersist::shade(v, cur_thread);
+            nvm_v = v->nvm_header().fwd();
+            assert(nvmHeader::is_fwd(nvm_v), "nvm_v: %p", nvm_v);
+            if (success) {
+              assert(responsible_thread(v->nvm_header().fwd()) == Thread::current(),
+                     "fwd: %p", v->nvm_header().fwd());
 
-            while (true) {
-              bool success = nvmHeader::cas_fwd(v, nvm_v);
-              if (success) {
-                assert(nvm_v == v->nvm_header().fwd(),
-                       "nvm_v: %p, fwd: %p", nvm_v, v->nvm_header().fwd());
-                assert(responsible_thread(v->nvm_header().fwd()) == Thread::current(),
-                       "fwd: %p", v->nvm_header().fwd());
-                worklist->add(v);
-                break;
-              } else {
-                // TODO: release nvm
-
-                nvm_v = v->nvm_header().fwd();
-                assert(nvmHeader::is_fwd(nvm_v), "nvm_v: %p", nvm_v);
-
-                Thread* dependant_thread = responsible_thread(nvm_v);
-                if (dependant_thread != NULL && dependant_thread != cur_thread) {
-                  barrier_sync->add(dependant_thread->nvm_barrier_sync(), v);
-                }
-
-                break;
+              worklist->add(v);
+            } else {
+              Thread* dependant_thread = responsible_thread(nvm_v);
+              if (dependant_thread != NULL && dependant_thread != cur_thread) {
+                barrier_sync->add(dependant_thread->nvm_barrier_sync(), v);
               }
             }
           }

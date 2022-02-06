@@ -28,10 +28,12 @@ class OurPersist : AllStatic {
 
   static void* allocate_nvm(int size, Thread* thr = NULL);
 
+  static bool shade(oop obj, Thread* cur_thread);
   static void copy_object(oop obj);
-  //static void shade();
+  static void copy_object_copy_step(oop obj);
+  static bool copy_object_verify_step(oop obj);
 
-  #ifdef ASSERT
+#ifdef ASSERT
   inline static bool is_target_slow(Klass* klass);
 #endif // ASSERT
   inline static bool is_target_fast(Klass* klass);

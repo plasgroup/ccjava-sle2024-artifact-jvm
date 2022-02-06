@@ -116,6 +116,12 @@ inline void* OurPersist::allocate_nvm(int size, Thread* thr) {
   }
   assert(thr != NULL, "");
 
+#ifdef ASSERT
+#ifdef NVM_COUNTER
+  thr->nvm_counter()->inc_alloc_nvm();
+#endif // NVM_COUNTER
+#endif // ASSERT
+
   OurPersist::set_responsible_thread(mem, thr);
   return mem;
 }

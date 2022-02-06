@@ -57,6 +57,12 @@ void OurPersist::ensure_recoverable(oop obj) {
   worklist->add(obj);
 
   while (worklist->empty() == false) {
+#ifdef ASSERT
+#ifdef NVM_COUNTER
+    cur_thread->nvm_counter()->inc_persistent_obj();
+#endif // NVM_COUNTER
+#endif // ASSERT
+
     oop cur_obj = worklist->remove();
     void* cur_nvm_obj = cur_obj->nvm_header().fwd();
 

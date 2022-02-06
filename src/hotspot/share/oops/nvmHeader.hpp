@@ -82,7 +82,7 @@ class nvmHeader {
     if (nvm_obj == NULL) {
       return false;
     }
-    return OurPersist::responsible_thread(nvm_obj) == NULL;
+    return OurPersist::responsible_thread_noinline(nvm_obj) == NULL;
   }
 
   // Checker
@@ -98,9 +98,9 @@ public:
   inline static void set_header(HeapWord* mem, nvmHeader h);
   inline static void set_header(oop obj, nvmHeader h);
 
+  inline static bool cas_fwd(oop obj, void* after_fwd);
   // NOTE: for OurPersist::set_responsible_thread and OurPersist::clear_responsible_thread
   inline static void set_fwd(oop obj, void* ptr);
-  inline static bool cas_fwd(oop obj, void* after_fwd);
   // NOTE: unused
   inline static bool cas_fwd_and_lock_when_swapped(oop obj, void* after_fwd);
 

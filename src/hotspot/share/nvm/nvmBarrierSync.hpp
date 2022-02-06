@@ -51,7 +51,7 @@ class NVMBarrierSync : public CHeapObj<mtNone> {
 
  public:
   inline void init();
-  inline void add(NVMBarrierSync* node, oop obj);
+  inline void add(oop obj, void* nvm_obj, Thread* cur_thread);
   inline void sync();
 
 };

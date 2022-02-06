@@ -7,6 +7,9 @@
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/arguments.hpp"
 
+class NVMWorkListStack;
+class NVMBarrierSync;
+
 class OurPersist : AllStatic {
  private:
   // used to global-lock-barrier-sync
@@ -22,6 +25,7 @@ class OurPersist : AllStatic {
  private:
   static void set_responsible_thread(void* nvm_ptr, Thread* cur_thread);
   static void clear_responsible_thread(Thread* cur_thread);
+  static void add_dependent_obj_list(void* nvm_obj, Thread* cur_thread);
 
   static void copy_dram_to_nvm(oop from, oop to, ptrdiff_t offset, BasicType type, bool is_array = false);
   static bool cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, BasicType type, bool is_array = false);
@@ -30,8 +34,10 @@ class OurPersist : AllStatic {
 
   static bool shade(oop obj, Thread* cur_thread);
   static void copy_object(oop obj);
-  static void copy_object_copy_step(oop obj);
-  static bool copy_object_verify_step(oop obj);
+  static void copy_object_copy_step(oop obj, void* nvm_obj, Klass* klass,
+                                    NVMWorkListStack* worklist, NVMBarrierSync* barrier_sync,
+                                    Thread* cur_thread);
+  static bool copy_object_verify_step(oop obj, void* nvm_obj, Klass* klass);
 
 #ifdef ASSERT
   inline static bool is_target_slow(Klass* klass);

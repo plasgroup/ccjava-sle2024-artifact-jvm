@@ -185,6 +185,9 @@ class ConstantPoolCacheEntry {
     has_local_signature_shift  = 25,  // (S) does the call site have a per-site signature (sig-poly methods)?
     has_appendix_shift         = 24,  // (A) does the call site have an appendix argument?
     is_forced_virtual_shift    = 23,  // (I) is the interface reference forced to virtual mode?
+#ifdef OUR_PERSIST
+    is_durableroot_shift       = 23,  // is the durableroot field?
+#endif // OUR_PERSIST
     is_final_shift             = 22,  // (f) is the field or method final?
     is_volatile_shift          = 21,  // (v) is the field volatile?
     is_vfinal_shift            = 20,  // (vf) did the call resolve to a final method?
@@ -224,6 +227,9 @@ class ConstantPoolCacheEntry {
     TosState        field_type,                  // the (machine) field type
     bool            is_final,                    // the field is final
     bool            is_volatile,                 // the field is volatile
+#ifdef OUR_PERSIST
+    bool            is_durableroot,
+#endif // OUR_PERSIST
     Klass*          root_klass                   // needed by the GC to dirty the klass
   );
 

@@ -239,6 +239,18 @@
 #define NOT_ZGC_RETURN_(code) { return code; }
 #endif // INCLUDE_ZGC
 
+#ifdef OUR_PERSIST
+#define OUR_PERSIST_ONLY(x) x
+#else
+#define OUR_PERSIST_ONLY(x)
+#endif // OUR_PERSIST
+
+#ifdef AUTO_PERSIST
+#define AUTO_PERSIST_ONLY(x) x
+#else
+#define AUTO_PERSIST_ONLY(x)
+#endif // AUTO_PERSIST
+
 #ifndef INCLUDE_NMT
 #define INCLUDE_NMT 1
 #endif // INCLUDE_NMT

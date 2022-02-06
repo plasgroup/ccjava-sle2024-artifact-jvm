@@ -698,6 +698,9 @@
   template(toFileURL_signature,                    "(Ljava/lang/String;)Ljava/net/URL;")                          \
   template(url_void_signature,                     "(Ljava/net/URL;)V")                                           \
                                                                                                                   \
+  /* Our Persist */                                                                                               \
+  OUR_PERSIST_ONLY(template(ourpersist_durableroot_annotaion_signature,  "Lourpersist/durableroot;"))             \
+                                                                                                                  \
   /*end*/
 
 // enum for figuring positions and size of Symbol::_vm_symbols[]

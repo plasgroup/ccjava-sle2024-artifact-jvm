@@ -708,6 +708,9 @@ void InterpreterRuntime::resolve_get_put(JavaThread* thread, Bytecodes::Code byt
     state,
     info.access_flags().is_final(),
     info.access_flags().is_volatile(),
+#ifdef OUR_PERSIST
+    info.access_flags().is_durableroot(),
+#endif // OUR_PERSIST
     pool->pool_holder()
   );
 }

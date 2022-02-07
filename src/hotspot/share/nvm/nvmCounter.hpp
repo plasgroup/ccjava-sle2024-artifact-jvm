@@ -37,6 +37,7 @@ class NVMCounter: public CHeapObj<mtNone> {
 
   // for debug
   bool _enable;
+  static bool _enable_g;
   static unsigned long _thr_create;
   static unsigned long _thr_delete;
 
@@ -50,7 +51,9 @@ class NVMCounter: public CHeapObj<mtNone> {
   }
 
   ~NVMCounter() {
-    exit();
+    if (_enable_g) {
+      exit();
+    }
   }
 
  private:

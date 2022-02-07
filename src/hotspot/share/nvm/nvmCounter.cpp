@@ -14,6 +14,7 @@ unsigned long NVMCounter::_persistent_obj_g = 0;
 // for debug
 unsigned long NVMCounter::_thr_create = 0;
 unsigned long NVMCounter::_thr_delete = 0;
+bool NVMCounter::_enable_g = true;
 
 // others
 pthread_mutex_t NVMCounter::_mtx = PTHREAD_MUTEX_INITIALIZER;
@@ -47,6 +48,7 @@ void NVMCounter::exit() {
 
 void NVMCounter::print() {
   assert(_thr_create == _thr_delete, "");
+  _enable_g = false;
 
   #define NVMCOUNTER_PREFIX "[NVMCounter] "
   tty->print_cr(NVMCOUNTER_PREFIX "_thr_create:       %lu", _thr_create);

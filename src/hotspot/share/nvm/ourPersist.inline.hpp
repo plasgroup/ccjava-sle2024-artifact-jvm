@@ -108,6 +108,8 @@ inline void OurPersist::add_dependent_obj_list(void* nvm_obj, Thread* cur_thread
 }
 
 inline void* OurPersist::allocate_nvm(int size, Thread* thr) {
+  NVM_COUNTER_ONLY(thr->nvm_counter()->inc_alloc_nvm();)
+
   void* mem = NVMAllocator::allocate(size);
   assert(mem != NULL, "");
 

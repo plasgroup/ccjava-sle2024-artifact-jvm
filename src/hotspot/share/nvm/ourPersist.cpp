@@ -57,6 +57,8 @@ void OurPersist::ensure_recoverable(oop obj) {
   worklist->add(obj);
 
   while (worklist->empty() == false) {
+    NVM_COUNTER_ONLY(cur_thread->nvm_counter()->inc_persistent_obj();)
+
     oop cur_obj = worklist->remove();
     void* cur_nvm_obj = cur_obj->nvm_header().fwd();
 
@@ -266,6 +268,9 @@ void OurPersist::copy_object(oop obj) {
     if (success) {
       break;
     }
+
+    // retry
+    NVM_COUNTER_ONLY(cur_thread->nvm_counter()->inc_copy_obj_retry();)
   }
 
   nvmHeader::unlock(obj);

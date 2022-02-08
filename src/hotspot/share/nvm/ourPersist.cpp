@@ -270,7 +270,7 @@ void OurPersist::copy_object(oop obj) {
     }
 
     // retry
-    NVM_COUNTER_ONLY(NVMCounter::inc_copy_obj_retry();)
+    NVM_COUNTER_ONLY(cur_thread->nvm_counter()->inc_copy_obj_retry();)
   }
 
   nvmHeader::unlock(obj);

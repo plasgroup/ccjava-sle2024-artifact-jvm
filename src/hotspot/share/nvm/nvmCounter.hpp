@@ -28,7 +28,7 @@ class NVMCounter: public CHeapObj<mtNone> {
   // local counters
   unsigned long _alloc_nvm;
   unsigned long _persistent_obj;
-  unsigned long _conpy_obj_retry;
+  unsigned long _copy_obj_retry;
 
   // global counters
   static unsigned long _alloc_nvm_g;

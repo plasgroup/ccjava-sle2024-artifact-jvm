@@ -8,6 +8,7 @@
 // global counters
 unsigned long NVMCounter::_alloc_nvm_g = 0;
 unsigned long NVMCounter::_persistent_obj_g = 0;
+unsigned long NVMCounter::_conpy_obj_retry_g = 0;
 
 // for debug
 unsigned long NVMCounter::_thr_create = 0;
@@ -26,6 +27,7 @@ void NVMCounter::entry() {
   _enable = true;
   _alloc_nvm = 0;
   _persistent_obj = 0;
+  _conpy_obj_retry = 0;
   Atomic::inc(&_thr_create);
 }
 
@@ -41,6 +43,9 @@ void NVMCounter::exit() {
 
   _persistent_obj_g += _persistent_obj;
   _persistent_obj = 0;
+
+  _conpy_obj_retry_g += _conpy_obj_retry;
+  _conpy_obj_retry = 0;
   pthread_mutex_unlock(&_mtx);
 }
 
@@ -53,6 +58,7 @@ void NVMCounter::print() {
   tty->print_cr(NVMCOUNTER_PREFIX "_thr_delete:       %lu", _thr_delete);
   tty->print_cr(NVMCOUNTER_PREFIX "_alloc_nvm_g:      %lu", _alloc_nvm_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_persistent_obj_g: %lu", _persistent_obj_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "_copy_obj_retry_g: %lu", _copy_obj_retry_g);
 }
 
 #endif // NVM_COUNTER

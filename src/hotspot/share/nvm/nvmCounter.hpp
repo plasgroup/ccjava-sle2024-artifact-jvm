@@ -28,10 +28,12 @@ class NVMCounter: public CHeapObj<mtNone> {
   // local counters
   unsigned long _alloc_nvm;
   unsigned long _persistent_obj;
+  unsigned long _conpy_obj_retry;
 
   // global counters
   static unsigned long _alloc_nvm_g;
   static unsigned long _persistent_obj_g;
+  unsigned long _conpy_obj_retry_g;
 
   // for debug
   bool _enable;
@@ -63,6 +65,7 @@ class NVMCounter: public CHeapObj<mtNone> {
  public:
   inline void inc_alloc_nvm() { if (countable()) _alloc_nvm++; }
   inline void inc_persistent_obj() { if (countable()) _persistent_obj++; }
+  inline void inc_copy_obj_retry() { if (countable()) _copy_obj_retry++; }
   void entry();
   void exit();
   static void print();

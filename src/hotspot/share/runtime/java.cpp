@@ -525,8 +525,6 @@ void before_exit(JavaThread* thread) {
   #undef BEFORE_EXIT_DONE
 }
 
-#ifdef OUR_PERSIST
-#ifdef ASSERT
 #ifdef NVM_COUNTER
 class NVMCounterThreadClosure: public ThreadClosure {
   void do_thread(Thread* thread) {
@@ -534,12 +532,8 @@ class NVMCounterThreadClosure: public ThreadClosure {
   }
 };
 #endif // NVM_COUNTER
-#endif // ASSERT
-#endif // NVM_COUNTER
 
 void vm_exit(int code) {
-#ifdef OUR_PERSIST
-#ifdef ASSERT
 #ifdef NVM_COUNTER
   {
     MutexLocker ml(Threads_lock);
@@ -547,8 +541,6 @@ void vm_exit(int code) {
     Threads::threads_do(&tc);
   }
   NVMCounter::print();
-#endif // NVM_COUNTER
-#endif // ASSERT
 #endif // NVM_COUNTER
 
   Thread* thread =

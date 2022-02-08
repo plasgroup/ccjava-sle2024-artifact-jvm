@@ -60,11 +60,9 @@
 #ifdef USE_NVTLAB
 #include "nvm/nonVolatileThreadLocalAllocBuffer.hpp"
 #endif // USE_NVTLAB
-#ifdef ASSERT
 #ifdef NVM_COUNTER
 #include "nvm/nvmCounter.hpp"
 #endif // NVM_COUNTER
-#endif // ASSERT
 #endif // OUR_PERSIST
 
 
@@ -177,7 +175,6 @@ class Thread: public ThreadShadow {
   void set_dependent_obj_list_head(void* val) { _dependent_obj_list_head = val; }
   void set_dependent_obj_list_tail(void* val) { _dependent_obj_list_tail = val; }
 
-#ifdef ASSERT
 #ifdef NVM_COUNTER
  private:
   NVMCounter* _nvm_counter;
@@ -186,7 +183,6 @@ class Thread: public ThreadShadow {
   NVMCounter* nvm_counter() { return _nvm_counter; }
   void set_nvm_counter(NVMCounter* val) { _nvm_counter = val; }
 #endif // NVM_COUNTER
-#endif // ASSERT
 #endif // OUR_PERSIST
 
   friend class VMStructs;

@@ -1,5 +1,3 @@
-#ifdef OUR_PERSIST
-#ifdef ASSERT
 #ifdef NVM_COUNTER
 
 #include "nvm/nvmCounter.hpp"
@@ -57,6 +55,4 @@ void NVMCounter::print() {
   tty->print_cr(NVMCOUNTER_PREFIX "_persistent_obj_g: %lu", _persistent_obj_g);
 }
 
-#endif // NVM_COUNTER
-#endif // ASSERT
 #endif // NVM_COUNTER

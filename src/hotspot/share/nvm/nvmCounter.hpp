@@ -1,5 +1,3 @@
-#ifdef OUR_PERSIST
-#ifdef ASSERT
 #ifdef NVM_COUNTER
 
 #ifndef NVM_NVMCOUNTER_HPP
@@ -15,7 +13,7 @@
 // VM 終了時に残っているスレッドのカウンタを強制マージして，カウント値を出力する
 // ===== 注意点 =====
 // 下記で説明する "カウントアップ関数" 以外の関数を勝手に呼び出してはいけない
-// 関連する全ての処理は，OUR_PERSIST，ASSERT，NVM_COUNTER マクロで囲む
+// 関連する全ての処理は，NVM_COUNTER マクロで囲む
 // ===== 使い方 =====
 // 1. local counters でカウンター（メンバ変数）を定義（例: _alloc_nvm 変数）
 // 2. global counters で末尾に _g を付けてカウンター（static変数）を定義（例: _alloc_nvm_g 変数）
@@ -72,6 +70,4 @@ class NVMCounter: public CHeapObj<mtNone> {
 };
 
 #endif // NVM_NVMCOUNTER_HPP
-#endif // NVM_COUNTER
-#endif // ASSERT
 #endif // NVM_COUNTER

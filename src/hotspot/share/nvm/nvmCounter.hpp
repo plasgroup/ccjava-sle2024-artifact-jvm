@@ -33,7 +33,7 @@ class NVMCounter: public CHeapObj<mtNone> {
   // global counters
   static unsigned long _alloc_nvm_g;
   static unsigned long _persistent_obj_g;
-  unsigned long _copy_obj_retry_g;
+  static unsigned long _copy_obj_retry_g;
 
   // for debug
   bool _enable;

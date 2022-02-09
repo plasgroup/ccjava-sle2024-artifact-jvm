@@ -30,22 +30,23 @@ void* NonVolatileThreadLocalAllocBuffer::allocate(size_t _word_size) {
 
 
 
-  // refill
+  // this nvc doesn't have empty slots.
   nvc[idx]->set_is_using(false);
-  nvc[idx]->set_is_full(true);
+  // nvc[idx]->set_is_full(true);
 
+// If NVMGC is enabled, this thread try to find half-used NVC from ready_for_use[].
 #ifdef NVMGC
 
   // find used nvc (need global lock)
   pthread_mutex_lock(&NonVolatileChunkSegregate::gc_mtx);
-  NonVolatileChunkSegregate* used_nvc = NonVolatileChunkSegregate::get_standby_for_gc_head(idx);  // TODO: 効率わるい
-  while (used_nvc != NULL) {
-    if (used_nvc->get_is_using() != true && used_nvc->get_is_full() != true) {
-      nvc[idx] = used_nvc;
-      used_nvc->set_is_using(true);
-      break;
-    }
-    used_nvc = used_nvc->get_next_chunk();
+
+  NonVolatileChunkSegregate* used_nvc = NonVolatileChunkSegregate::get_ready_for_use_head(idx);
+  if (used_nvc != NULL) {
+    NonVolatileChunkSegregate::set_ready_for_use_head(used_nvc->get_next_chunk(), idx);  // removing the nvc from ready_for_use
+    used_nvc->set_next_chunk(NULL);
+    used_nvc->set_is_using(true);
+    nvc[idx] = used_nvc;
+    NonVolatileChunkSegregate::add_standby_for_gc_without_lock(used_nvc, idx);
   }
   pthread_mutex_unlock(&NonVolatileChunkSegregate::gc_mtx);
   

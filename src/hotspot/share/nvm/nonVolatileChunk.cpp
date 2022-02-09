@@ -10,8 +10,10 @@
 
 pthread_mutex_t NonVolatileChunkSegregate::gc_mtx = PTHREAD_MUTEX_INITIALIZER;
 NonVolatileChunkSegregate* NonVolatileChunkSegregate::standby_for_gc[40];
+NonVolatileChunkSegregate* NonVolatileChunkSegregate::ready_for_use[40];
 void* NonVolatileChunkSegregate::nvc_address[3750000] = {NULL};
 bool NonVolatileChunkLarge::has_available_chunk = false;
+const float NonVolatileChunkSegregate::ready_for_use_threshold = 0.1;
 
 void NonVolatileChunkSegregate::initialize_standby_for_gc() {
   size_t i;
@@ -72,6 +74,14 @@ void NonVolatileChunkSegregate::add_standby_for_gc(NonVolatileChunkSegregate* nv
   standby_for_gc[idx] = nvc;
   pthread_mutex_unlock(&gc_mtx);
   // print_standby_for_gc();
+  return;
+}
+
+void NonVolatileChunkSegregate::add_standby_for_gc_without_lock(NonVolatileChunkSegregate* nvc, size_t idx) {
+  assert(idx < NonVolatileThreadLocalAllocBuffer::segregated_num, "");
+  NonVolatileChunkSegregate* nvc_list_head = standby_for_gc[idx];
+  nvc->next_chunk = nvc_list_head;
+  standby_for_gc[idx] = nvc;
   return;
 }
 
@@ -326,9 +336,11 @@ void NonVolatileChunkSegregate::mark_object(void* ptr, size_t obj_word_size) {
 }
 
 void NonVolatileChunkSegregate::sweep_objects() {
+  size_t count = 0;
   for (size_t i = 0; i < NonVolatileThreadLocalAllocBuffer::segregated_num; i ++) {
     NonVolatileChunkSegregate* nvc = standby_for_gc[i];
     while (nvc != NULL) {
+      count = 0;
       for (size_t idx = 0; idx < nvc->get_max_idx(); idx++) {
         if (nvc->get_abit(idx) != true) {
           continue;
@@ -336,16 +348,87 @@ void NonVolatileChunkSegregate::sweep_objects() {
         if (nvc->get_mbit(idx) != true) {
           nvc->a_1_to_0(idx);
           // memset(nvc->idx_2_address(idx), 'u', HeapWordSize * nvc->get_size_class());
-          nvc->set_is_full(false);
         } else {
+          count += 1;
           nvc->m_1_to_0(idx);
         }
       }
+      nvc->set_num_of_empty_slots(count);
       nvc->set_allication_top(0);
       nvc = nvc->next_chunk;
     }
-
   }
+
+
+  for (size_t i = 0; i < NonVolatileThreadLocalAllocBuffer::segregated_num; i ++) {
+    NonVolatileChunkSegregate* nvc = ready_for_use[i];
+    while (nvc != NULL) {
+      count = 0;
+      for (size_t idx = 0; idx < nvc->get_max_idx(); idx++) {
+        if (nvc->get_abit(idx) != true) {
+          continue;
+        }
+        if (nvc->get_mbit(idx) != true) {
+          nvc->a_1_to_0(idx);
+        } else {
+          count += 1;
+          nvc->m_1_to_0(idx);
+        }
+      }
+      nvc->set_num_of_empty_slots(count);
+      nvc->set_allication_top(0);
+      nvc = nvc->next_chunk;
+    }
+  }
+}
+
+void NonVolatileChunkSegregate::update_ready_for_use() {
+  // find nvc which has lots of empty slots and move it to "ready_for_use" only when it isn't used by other threads.
+  for (size_t i = 0; i < NonVolatileThreadLocalAllocBuffer::segregated_num; i ++) {
+    NonVolatileChunkSegregate* nvc = standby_for_gc[i];
+    while (nvc != NULL) {
+      if (nvc->get_is_using() == false && nvc->get_next_chunk() != NULL) {
+        NonVolatileChunkSegregate* next_chunk = nvc->get_next_chunk();  // not NULL
+        NonVolatileChunkSegregate* next_next_chunk = next_chunk->get_next_chunk(); // may be NULL
+        float next_nvc_free_slots_percent = (float)next_chunk->get_num_of_empty_slots() / (float)next_chunk->get_max_idx() * 100;
+        if (next_nvc_free_slots_percent > NonVolatileChunkSegregate::ready_for_use_threshold) {
+          NonVolatileChunkSegregate::move_from_standby_to_ready(next_chunk, i);
+          nvc->set_next_chunk(next_next_chunk);
+        }
+      }
+      nvc = nvc->get_next_chunk();
+    }
+  }
+}
+
+void NonVolatileChunkSegregate::move_from_standby_to_ready(NonVolatileChunkSegregate* nvc, size_t list_idx) {
+  size_t num_of_empty_slots;
+  NonVolatileChunkSegregate* list_nvc = NonVolatileChunkSegregate::ready_for_use[list_idx];
+  NonVolatileChunkSegregate* next_list_nvc = NULL;
+  if (list_nvc == NULL) {
+    NonVolatileChunkSegregate::ready_for_use[list_idx] = nvc;
+    nvc->set_next_chunk(NULL);
+    return;
+  }
+  num_of_empty_slots = nvc->get_num_of_empty_slots();
+  if (num_of_empty_slots >= list_nvc->get_num_of_empty_slots()) {
+    nvc->set_next_chunk(list_nvc);
+    NonVolatileChunkSegregate::ready_for_use[list_idx] = nvc;
+    return;
+  }
+  while (list_nvc->get_next_chunk() != NULL) {
+    if (num_of_empty_slots >= list_nvc->get_num_of_empty_slots()) {
+      next_list_nvc = list_nvc->get_next_chunk();
+      nvc->set_next_chunk(next_list_nvc);
+      list_nvc->set_next_chunk(nvc);
+      return;
+    }
+    list_nvc = list_nvc->get_next_chunk();
+  }
+  // list_nvcのnextがnull．
+  list_nvc->set_next_chunk(nvc);
+  nvc->set_next_chunk(NULL);
+  return;
 }
 
 

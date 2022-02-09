@@ -147,6 +147,7 @@ void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_so
 #ifdef NVMGC
   NonVolatileChunkSegregate::sweep_objects();
   NonVolatileChunkLarge::sweep_objects();
+  NonVolatileChunkSegregate::update_ready_for_use();
 #endif // NVMGC
 #endif // USE_NVTLAB
 #endif // OUR_PERSIST

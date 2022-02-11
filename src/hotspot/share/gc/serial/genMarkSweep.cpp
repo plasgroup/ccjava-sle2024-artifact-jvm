@@ -61,6 +61,10 @@
 #include "jvmci/jvmci.hpp"
 #endif
 
+unsigned int GenMarkSweep::GC_TIMES = 0;
+unsigned long GenMarkSweep::SUM_OF_GC_NSEC = 0;
+
+
 void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_softrefs) {
   assert(SafepointSynchronize::is_at_safepoint(), "must be at a safepoint");
 
@@ -88,6 +92,13 @@ void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_so
   gch->save_used_regions();
 
   allocate_stacks();
+
+  struct timespec start_time, end_time;
+  unsigned int sec;
+  long long nsec;
+
+  clock_gettime(CLOCK_REALTIME, &start_time);
+
 
   mark_sweep_phase1(clear_all_softrefs);
 
@@ -151,6 +162,18 @@ void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_so
 #endif // NVMGC
 #endif // USE_NVTLAB
 #endif // OUR_PERSIST
+
+
+  clock_gettime(CLOCK_REALTIME, &end_time);
+
+  sec = end_time.tv_sec - start_time.tv_sec;
+  nsec =((long long) (end_time.tv_nsec - start_time.tv_nsec)) + ((long long) sec)*1000000000;
+
+  GenMarkSweep::SUM_OF_GC_NSEC += (unsigned long)nsec;
+  GC_TIMES += 1;
+  printf("%lld\n", nsec);
+  // printf("%03u nsec: %10d, average: %10lu\n",GenMarkSweep::GC_TIMES, nsec, GenMarkSweep::SUM_OF_GC_NSEC/GC_TIMES);
+  fflush(stdout);
 }
 
 void GenMarkSweep::allocate_stacks() {

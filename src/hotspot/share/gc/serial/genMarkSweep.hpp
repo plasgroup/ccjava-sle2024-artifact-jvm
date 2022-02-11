@@ -32,6 +32,10 @@ class GenMarkSweep : public MarkSweep {
  public:
   static void invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_softrefs);
 
+  static unsigned int GC_TIMES;
+  static unsigned long SUM_OF_GC_NSEC;
+
+
  private:
 
   // Mark live objects

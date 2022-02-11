@@ -449,43 +449,74 @@ bool NonVolatileChunkLarge::is_next(NonVolatileChunkLarge* nvcl) {  // TODO: ren
   return nvcl == next_nvcl_address;
 }
 
+
 void NonVolatileChunkLarge::sweep_objects() {
   NonVolatileChunkLarge* nvcl = (NonVolatileChunkLarge*) NVMAllocator::large_head;
-  NonVolatileChunkLarge* last_free_nvcl = (NonVolatileChunkLarge*) NULL;
+  size_t nvcl_byte_size;  // sizeof(Header) + (nvcl->get_word_size() * HeapWordSize)
+  NonVolatileChunkLarge* last_free = (NonVolatileChunkLarge*) NVMAllocator::large_head;
+  NonVolatileChunkLarge* free_head = NULL; // nvclから見て左側の，一番近い空
 
-  while ((void*)nvcl < NVMAllocator::nvm_tail) {
-    if (nvcl->get_alloc()) {
-      // using nvcl. keep or sweep.
-      if (nvcl->get_mark()) {
-        // keep
-        nvcl->m_1_to_0();
-      } else {
-        // sweep
-        nvcl->a_1_to_0();
-        // printf("large: sweep\n");
-        if (last_free_nvcl != NULL) {
-          if (last_free_nvcl->is_next(nvcl)) {
-            // next to last free chunk. merge.
-            last_free_nvcl->merge(nvcl);
-            nvcl = last_free_nvcl;
-          } else {
-            // not next to each other. just update last_free_chunk.
-            last_free_nvcl->set_next_chunk(nvcl);
-          }
-        }
-        last_free_nvcl = nvcl;
-      }
-    } else {
-      // not used. connect free list
-      if (last_free_nvcl != NULL) last_free_nvcl->set_next_chunk(nvcl);
-      last_free_nvcl = nvcl;
-    }
-
-
-      size_t nvcl_byte_size = sizeof(NonVolatileChunkLarge) + ((nvcl->get_word_size()) * HeapWordSize);
+  while((void*) nvcl < NVMAllocator::nvm_tail) {
+    nvcl_byte_size = sizeof(NonVolatileChunkLarge) + (nvcl->get_word_size() * HeapWordSize);
+    if (nvcl->get_mark()) {
+      // living and marked object.
       nvcl = (NonVolatileChunkLarge*) (((char*)nvcl) + nvcl_byte_size);
+      free_head = nvcl;
+    } else {
+      // not marked. garbage
+      if (free_head == nvcl) {
+        // 一つ前のオブジェクトは生きている
+        last_free->set_next_chunk(free_head);
+        last_free = free_head;
+      } else {
+        // 一つ前も空
+        free_head->set_word_size(free_head->get_word_size() + nvcl_byte_size);
+      }
+    }
+    nvcl = (NonVolatileChunkLarge*) (((char*)nvcl) + nvcl_byte_size);
   }
 }
+
+// void NonVolatileChunkLarge::sweep_objects() {
+//   NonVolatileChunkLarge* nvcl = (NonVolatileChunkLarge*) NVMAllocator::large_head;
+//   NonVolatileChunkLarge* last_free_nvcl = (NonVolatileChunkLarge*) NULL;
+
+//   while ((void*)nvcl < NVMAllocator::nvm_tail) {
+//     if (nvcl->get_alloc()) {
+//       // using nvcl. keep or sweep.
+//       if (nvcl->get_mark()) {
+//         // keep
+//         nvcl->m_1_to_0();
+//       } else {
+//         // sweep
+//         nvcl->a_1_to_0();
+//         // printf("large: sweep\n");
+//         if (last_free_nvcl != NULL) {
+//           if (last_free_nvcl->is_next(nvcl)) {
+//             // next to last free chunk. merge.
+//             last_free_nvcl->merge(nvcl);
+//             nvcl = last_free_nvcl;
+//           } else {
+//             // not next to each other. just update last_free_chunk.
+//             last_free_nvcl->set_next_chunk(nvcl);
+//           }
+//         }
+//         last_free_nvcl = nvcl;
+//       }
+//     } else {
+//       // not used. connect free list
+//       if (last_free_nvcl != NULL) last_free_nvcl->set_next_chunk(nvcl);
+//       last_free_nvcl = nvcl;
+//     }
+
+
+//       size_t nvcl_byte_size = sizeof(NonVolatileChunkLarge) + ((nvcl->get_word_size()) * HeapWordSize);
+//       nvcl = (NonVolatileChunkLarge*) (((char*)nvcl) + nvcl_byte_size);
+//   }
+// }
+
+
+
 
 void NonVolatileChunkLarge::m_0_to_1() {
     assert(mark == false, "");

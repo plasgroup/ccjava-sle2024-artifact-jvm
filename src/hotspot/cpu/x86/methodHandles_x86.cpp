@@ -171,16 +171,21 @@ void MethodHandles::jump_to_lambda_form(MacroAssembler* _masm,
 
   // Load the invoker, as MH -> MH.form -> LF.vmentry
   __ verify_oop(recv);
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = DECORATORS_NONE;
+#endif // OUR_PERSIST
   __ load_heap_oop(method_temp, Address(recv, NONZERO(java_lang_invoke_MethodHandle::form_offset())),
-                   temp2, noreg, OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE);
+                   temp2, noreg, ds);
   __ verify_oop(method_temp);
   __ load_heap_oop(method_temp, Address(method_temp, NONZERO(java_lang_invoke_LambdaForm::vmentry_offset())),
-                   temp2, noreg, OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE);
+                   temp2, noreg, ds);
   __ verify_oop(method_temp);
   __ load_heap_oop(method_temp, Address(method_temp, NONZERO(java_lang_invoke_MemberName::method_offset())),
-                   temp2, noreg, OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE);
+                   temp2, noreg, ds);
   __ verify_oop(method_temp);
-  __ access_load_at(T_ADDRESS, IN_HEAP | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE, method_temp,
+  __ access_load_at(T_ADDRESS, IN_HEAP | ds, method_temp,
                     Address(method_temp, NONZERO(java_lang_invoke_ResolvedMethodName::vmtarget_offset())),
                     noreg, noreg);
 
@@ -336,6 +341,12 @@ void MethodHandles::generate_method_handle_dispatch(MacroAssembler* _masm,
   assert_different_registers(temp1, temp2, temp3, receiver_reg);
   assert_different_registers(temp1, temp2, temp3, member_reg);
 
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = DECORATORS_NONE;
+#endif // OUR_PERSIST
+
   if (iid == vmIntrinsics::_invokeBasic || iid == vmIntrinsics::_linkToNative) {
     if (iid == vmIntrinsics::_linkToNative) {
       assert(for_compiler_entry, "only compiler entry is supported");
@@ -379,7 +390,7 @@ void MethodHandles::generate_method_handle_dispatch(MacroAssembler* _masm,
       if (VerifyMethodHandles && iid != vmIntrinsics::_linkToInterface) {
         Label L_ok;
         Register temp2_defc = temp2;
-        __ load_heap_oop(temp2_defc, member_clazz, temp3, noreg, OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE);
+        __ load_heap_oop(temp2_defc, member_clazz, temp3, noreg, ds);
         load_klass_from_Class(_masm, temp2_defc);
         __ verify_klass_ptr(temp2_defc);
         __ check_klass_subtype(temp1_recv_klass, temp2_defc, temp3, L_ok);
@@ -406,18 +417,16 @@ void MethodHandles::generate_method_handle_dispatch(MacroAssembler* _masm,
       if (VerifyMethodHandles) {
         verify_ref_kind(_masm, JVM_REF_invokeSpecial, member_reg, temp3);
       }
-      __ load_heap_oop(rbx_method, member_vmtarget, noreg, noreg, OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE);
-      __ access_load_at(T_ADDRESS, IN_HEAP | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE,
-                        rbx_method, vmtarget_method, noreg, noreg);
+      __ load_heap_oop(rbx_method, member_vmtarget, noreg, noreg, ds);
+      __ access_load_at(T_ADDRESS, IN_HEAP | ds, rbx_method, vmtarget_method, noreg, noreg);
       break;
 
     case vmIntrinsics::_linkToStatic:
       if (VerifyMethodHandles) {
         verify_ref_kind(_masm, JVM_REF_invokeStatic, member_reg, temp3);
       }
-      __ load_heap_oop(rbx_method, member_vmtarget, noreg, noreg, OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE);
-      __ access_load_at(T_ADDRESS, IN_HEAP | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE,
-                        rbx_method, vmtarget_method, noreg, noreg);
+      __ load_heap_oop(rbx_method, member_vmtarget, noreg, noreg, ds);
+      __ access_load_at(T_ADDRESS, IN_HEAP | ds, rbx_method, vmtarget_method, noreg, noreg);
       break;
 
     case vmIntrinsics::_linkToVirtual:
@@ -431,8 +440,7 @@ void MethodHandles::generate_method_handle_dispatch(MacroAssembler* _masm,
 
       // pick out the vtable index from the MemberName, and then we can discard it:
       Register temp2_index = temp2;
-      __ access_load_at(T_ADDRESS, IN_HEAP | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE,
-                        temp2_index, member_vmindex, noreg, noreg);
+      __ access_load_at(T_ADDRESS, IN_HEAP | ds, temp2_index, member_vmindex, noreg, noreg);
 
       if (VerifyMethodHandles) {
         Label L_index_ok;
@@ -459,12 +467,12 @@ void MethodHandles::generate_method_handle_dispatch(MacroAssembler* _masm,
       }
 
       Register temp3_intf = temp3;
-      __ load_heap_oop(temp3_intf, member_clazz, noreg, noreg, OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE);
+      __ load_heap_oop(temp3_intf, member_clazz, noreg, noreg, ds);
       load_klass_from_Class(_masm, temp3_intf);
       __ verify_klass_ptr(temp3_intf);
 
       Register rbx_index = rbx_method;
-      __ access_load_at(T_ADDRESS, IN_HEAP | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE,
+      __ access_load_at(T_ADDRESS, IN_HEAP | ds,
                         rbx_index, member_vmindex, noreg, noreg);
       if (VerifyMethodHandles) {
         Label L;

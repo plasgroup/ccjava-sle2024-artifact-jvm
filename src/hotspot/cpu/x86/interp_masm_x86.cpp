@@ -514,10 +514,15 @@ void InterpreterMacroAssembler::load_resolved_reference_at_index(Register result
   movptr(result, Address(result, ConstantPool::cache_offset_in_bytes()));
   movptr(result, Address(result, ConstantPoolCache::resolved_references_offset_in_bytes()));
   resolve_oop_handle(result, tmp);
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = OURPERSIST_IS_NOT_VOLATILE | OURPERSIST_IS_NOT_STATIC;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = DECORATORS_NONE;
+#endif // OUR_PERSIST
   load_heap_oop(result, Address(result, index,
                                 UseCompressedOops ? Address::times_4 : Address::times_ptr,
-                                arrayOopDesc::base_offset_in_bytes(T_OBJECT)), tmp, noreg,
-                                OURPERSIST_IS_NOT_VOLATILE | OURPERSIST_IS_NOT_STATIC);
+                                arrayOopDesc::base_offset_in_bytes(T_OBJECT)), tmp, noreg, ds);
 }
 
 // load cpool->resolved_klass_at(index)

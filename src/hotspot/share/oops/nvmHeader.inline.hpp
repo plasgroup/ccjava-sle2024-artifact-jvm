@@ -98,11 +98,25 @@ nvmHeader nvmHeader::lock_unlock_base(oop obj, uintptr_t mask, bool is_lock) {
 }
 
 nvmHeader nvmHeader::lock(oop obj) {
-  return lock_unlock_base(obj, lock_mask_in_place, true);
+  nvmHeader result = lock_unlock_base(obj, lock_mask_in_place, true);
+
+#ifdef ASSERT
+  Thread* locked_thread = obj->nvm_header_locked_thread();
+  assert(locked_thread == NULL, "locked_thread: %p", locked_thread);
+  obj->set_nvm_header_locked_thread(Thread::current());
+#endif // ASSERT
+
+  return result;
 }
 
 void nvmHeader::unlock(oop obj) {
   assert((obj->nvm_header().value() & lock_mask_in_place) != 0, "unlocked.");
+
+#ifdef ASSERT
+  Thread* locked_thread = obj->nvm_header_locked_thread();
+  assert(locked_thread == Thread::current(), "locked_thread: %p", locked_thread);
+  obj->set_nvm_header_locked_thread(NULL);
+#endif // ASSERT
 
   uintptr_t header_val = obj->nvm_header().value() & (~lock_mask_in_place);
   nvmHeader::set_header(obj, nvmHeader(header_val));

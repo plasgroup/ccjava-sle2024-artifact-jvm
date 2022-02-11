@@ -3184,6 +3184,7 @@ void TemplateTable::putfield_or_static_helper(int byte_no, bool is_static, Rewri
 
   ds |= IN_HEAP;
   ds |= is_static ? OURPERSIST_IS_STATIC : OURPERSIST_IS_NOT_STATIC;
+  ds |= OURPERSIST_NOT_DURABLE_ANNOTATION; // default
 
   // field addresses
   const Address field(obj, off, Address::times_1, 0*wordSize);
@@ -3194,6 +3195,10 @@ void TemplateTable::putfield_or_static_helper(int byte_no, bool is_static, Rewri
   Label Done;
 
   const Register bc    = LP64_ONLY(c_rarg3) NOT_LP64(rcx);
+
+  if (is_static) {
+    __ movl(rdx, flags);
+  }
 
   __ shrl(flags, ConstantPoolCacheEntry::tos_state_shift);
 
@@ -3235,12 +3240,32 @@ void TemplateTable::putfield_or_static_helper(int byte_no, bool is_static, Rewri
   {
     __ pop(atos);
     if (!is_static) pop_and_check_object(obj);
-    // Store into the field
-    do_oop_store(_masm, field, rax, ds);
-    if (!is_static && rc == may_rewrite) {
-      patch_bytecode(Bytecodes::_fast_aputfield, bc, rbx, true, byte_no);
+
+    if (is_static) {
+      Label durableroot;
+      __ shrl(rdx, ConstantPoolCacheEntry::is_durableroot_shift);
+      __ andl(rdx, 0x1);
+      __ testl(rdx, rdx);
+      __ jcc(Assembler::notZero, durableroot);
+      // This field is not durableroot
+      // Store into the field
+      do_oop_store(_masm, field, rax, ds);
+      __ jmp(Done);
+      __ bind(durableroot);
+      // This field is durableroot
+      // Store into the field
+      DecoratorSet ds_droot = (ds & ~OURPERSIST_NOT_DURABLE_ANNOTATION) |
+                               OURPERSIST_DURABLE_ANNOTATION;
+      do_oop_store(_masm, field, rax, ds_droot);
+      __ jmp(Done);
+    } else {
+      // Store into the field
+      do_oop_store(_masm, field, rax, ds);
+      if (!is_static && rc == may_rewrite) {
+        patch_bytecode(Bytecodes::_fast_aputfield, bc, rbx, true, byte_no);
+      }
+      __ jmp(Done);
     }
-    __ jmp(Done);
   }
 
   __ bind(notObj);
@@ -4166,7 +4191,10 @@ void TemplateTable::_new() {
 #ifdef OUR_PERSIST
     __ xorl(rsi, rsi);
     __ movptr(Address(rax, oopDesc::nvm_header_offset_in_bytes()), rsi);
-#endif
+#ifdef ASSERT
+    __ movptr(Address(rax, oopDesc::nvm_header_locked_offset_in_bytes()), rsi);
+#endif // ASSERT
+#endif // OUR_PERSIST
     if (UseBiasedLocking) {
       __ pop(rcx);   // get saved klass back in the register.
       __ movptr(rbx, Address(rcx, Klass::prototype_header_offset()));

@@ -76,6 +76,8 @@
  */
 module java.base {
 
+    exports ourpersist;
+
     exports java.io;
     exports java.lang;
     exports java.lang.annotation;

@@ -53,6 +53,20 @@ nvmHeader oopDesc::nvm_header() const {
 nvmHeader* oopDesc::nvm_header_addr() const {
   return (nvmHeader*)&_nvm_header;
 }
+
+#ifdef ASSERT
+Thread* oopDesc::nvm_header_locked_thread() const {
+  return _nvm_header_locked_thread;
+}
+
+void oopDesc::set_nvm_header_locked_thread(Thread* thread) {
+  _nvm_header_locked_thread = thread;
+}
+
+void oopDesc::set_nvm_header_locked_thread(HeapWord* mem, Thread* thread) {
+  *(Thread**)(((char*)mem) + nvm_header_locked_offset_in_bytes()) = thread;
+}
+#endif // ASSERT
 #endif // OUR_PERSIST
 
 markWord oopDesc::mark() const {

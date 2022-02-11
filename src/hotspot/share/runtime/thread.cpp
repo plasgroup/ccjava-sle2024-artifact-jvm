@@ -237,6 +237,8 @@ Thread::Thread() {
   set_nvm_barrier_sync(new NVMBarrierSync());
   set_dependent_obj_list_head(NULL);
   set_dependent_obj_list_tail(NULL);
+
+  NVM_COUNTER_ONLY(_nvm_counter = new NVMCounter();)
 #endif // OUR_PERSIST
 
   DEBUG_ONLY(_run_state = PRE_CALL_RUN;)
@@ -430,6 +432,8 @@ Thread::~Thread() {
 #ifdef OUR_PERSIST
   delete nvm_work_list();
   delete nvm_barrier_sync();
+
+  NVM_COUNTER_ONLY(delete nvm_counter();)
 #endif // OUR_PERSIST
 
   // Attached threads will remain in PRE_CALL_RUN, as will threads that don't actually
@@ -1363,6 +1367,11 @@ void WatcherThread::run() {
   // Signal that it is terminated
   {
     MutexLocker mu(Terminator_lock, Mutex::_no_safepoint_check_flag);
+#ifdef NVM_COUNTER
+    if (_watcher_thread != NULL) {
+      _watcher_thread->nvm_counter()->exit();
+    }
+#endif // NVM_COUNTER
     _watcher_thread = NULL;
     Terminator_lock->notify_all();
   }

@@ -57,6 +57,9 @@ class oopDesc {
 
 #ifdef OUR_PERSIST
   volatile nvmHeader _nvm_header;
+#ifdef ASSERT
+  Thread* _nvm_header_locked_thread;
+#endif // ASSERT
 #endif // OUR_PERSIST
 
   volatile markWord _mark;
@@ -69,6 +72,11 @@ class oopDesc {
 #ifdef OUR_PERSIST
   inline nvmHeader  nvm_header()      const;
   inline nvmHeader* nvm_header_addr() const;
+#ifdef ASSERT
+  inline Thread*     nvm_header_locked_thread() const;
+  inline void        set_nvm_header_locked_thread(Thread* thread);
+  static inline void set_nvm_header_locked_thread(HeapWord* mem, Thread* thread);
+#endif // ASSERT
 #endif // OUR_PERSIST
 
   inline markWord  mark()          const;
@@ -315,7 +323,12 @@ class oopDesc {
 
   // for code generation
 #ifdef OUR_PERSIST
-  static int nvm_header_offset_in_bytes(){ return offset_of(oopDesc, _nvm_header); }
+  static int nvm_header_offset_in_bytes() { return offset_of(oopDesc, _nvm_header); }
+#ifdef ASSERT
+  static int nvm_header_locked_offset_in_bytes() {
+    return offset_of(oopDesc, _nvm_header_locked_thread);
+  }
+#endif // ASSERT
 #endif // OUR_PERSIST
   static int mark_offset_in_bytes()      { return offset_of(oopDesc, _mark); }
   static int klass_offset_in_bytes()     { return offset_of(oopDesc, _metadata._klass); }

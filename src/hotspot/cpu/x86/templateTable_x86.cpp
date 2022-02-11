@@ -4191,7 +4191,10 @@ void TemplateTable::_new() {
 #ifdef OUR_PERSIST
     __ xorl(rsi, rsi);
     __ movptr(Address(rax, oopDesc::nvm_header_offset_in_bytes()), rsi);
-#endif
+#ifdef ASSERT
+    __ movptr(Address(rax, oopDesc::nvm_header_locked_offset_in_bytes()), rsi);
+#endif // ASSERT
+#endif // OUR_PERSIST
     if (UseBiasedLocking) {
       __ pop(rcx);   // get saved klass back in the register.
       __ movptr(rbx, Address(rcx, Klass::prototype_header_offset()));

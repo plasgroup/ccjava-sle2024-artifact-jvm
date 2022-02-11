@@ -587,6 +587,8 @@ void NVMCardTableBarrierSetAssembler::writeback(MacroAssembler* masm, Address fi
 void NVMCardTableBarrierSetAssembler::lock_nvmheader(MacroAssembler* masm, Register base, Register _tmp1, Register _tmp2) {
   assert(NVMCardTableBarrierSetAssembler::assert_sign_extended(nvmHeader::lock_mask_in_place), "");
   assert(NVMCardTableBarrierSetAssembler::assert_sign_extended(~nvmHeader::lock_mask_in_place), "");
+  assert_different_registers(base, rax);
+  assert_different_registers(base, _tmp1, _tmp2);
 
   Register tmp = noreg;
   Register tmp_for_stack = noreg;
@@ -594,7 +596,6 @@ void NVMCardTableBarrierSetAssembler::lock_nvmheader(MacroAssembler* masm, Regis
   const Address nvm_header(base, oopDesc::nvm_header_offset_in_bytes());
 
   // set temporary register
-  assert(_tmp1 != _tmp2, "");
   if (_tmp1 == rax) {
     tmp = _tmp2;
   } else if (_tmp2 == rax) {
@@ -622,6 +623,22 @@ void NVMCardTableBarrierSetAssembler::lock_nvmheader(MacroAssembler* masm, Regis
   __ cmpxchgptr(tmp, nvm_header);
   __ jcc(Assembler::notEqual, retry);
 
+#ifdef ASSERT
+  const Address nvm_header_locked_thread(base, oopDesc::nvm_header_locked_offset_in_bytes());
+
+  // check
+  Label locked_thread_is_not_set;
+  __ xorl(tmp, tmp);
+  __ cmpptr(tmp, nvm_header_locked_thread);
+  __ jcc(Assembler::equal, locked_thread_is_not_set);
+  __ movptr(rax, nvm_header_locked_thread);
+  __ stop("locked thread is already set. rax = nvm_header_locked_thread");
+  __ bind(locked_thread_is_not_set);
+
+  // set current thread
+  __ movptr(nvm_header_locked_thread, r15_thread);
+#endif // ASSERT
+
   // pop if necessary
   if (tmp_for_stack != noreg) {
     __ mov(rax, tmp_for_stack);
@@ -631,17 +648,32 @@ void NVMCardTableBarrierSetAssembler::lock_nvmheader(MacroAssembler* masm, Regis
 void NVMCardTableBarrierSetAssembler::unlock_nvmheader(MacroAssembler* masm, Register base, Register tmp) {
   assert(NVMCardTableBarrierSetAssembler::assert_sign_extended(nvmHeader::lock_mask_in_place), "");
   assert(NVMCardTableBarrierSetAssembler::assert_sign_extended(~nvmHeader::lock_mask_in_place), "");
+  assert_different_registers(base, tmp);
 
-  // unlock
   const Address nvm_header(base, oopDesc::nvm_header_offset_in_bytes());
-  __ movptr(tmp, nvm_header);
+
 #ifdef ASSERT
   Label locked;
+  __ movptr(tmp, nvm_header);
   __ testptr(tmp, (int32_t)nvmHeader::lock_mask_in_place);
   __ jcc(Assembler::notZero, locked);
   __ stop("unlocked.");
   __ bind(locked);
+
+  const Address nvm_header_locked_thraed(base, oopDesc::nvm_header_locked_offset_in_bytes());
+  Label locked_by_current_thread;
+  __ cmpptr(r15_thread, nvm_header_locked_thraed);
+  __ jcc(Assembler::equal, locked_by_current_thread);
+  __ stop("locked by other thread.");
+  __ bind(locked_by_current_thread);
+
+  // clear nvm_header_locked_thraed
+  __ xorl(tmp, tmp);
+  __ movptr(nvm_header_locked_thraed, tmp);
 #endif // ASSERT
+
+  // unlock
+  __ movptr(tmp, nvm_header);
   __ andptr(tmp, (int32_t)~nvmHeader::lock_mask_in_place);
   __ movptr(nvm_header, tmp);
 }

@@ -3413,15 +3413,25 @@ void MacroAssembler::resolve_jobject(Register value,
   jcc(Assembler::zero, done);                // Use NULL as-is.
   testptr(value, JNIHandles::weak_tag_mask); // Test for jweak tag.
   jcc(Assembler::zero, not_weak);
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds_1 = IN_NATIVE | ON_PHANTOM_OOP_REF | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds_1 = IN_NATIVE | ON_PHANTOM_OOP_REF;
+#endif // OUR_PERSIST
   // Resolve jweak.
-  access_load_at(T_OBJECT, IN_NATIVE | ON_PHANTOM_OOP_REF | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE,
-                 value, Address(value, -JNIHandles::weak_tag_value), tmp, thread);
+  access_load_at(T_OBJECT, ds_1, value, Address(value, -JNIHandles::weak_tag_value), tmp, thread);
   verify_oop(value);
   jmp(done);
   bind(not_weak);
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds_2 = IN_NATIVE | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds_2 = IN_NATIVE;
+#endif // OUR_PERSIST
   // Resolve (untagged) jobject.
-  access_load_at(T_OBJECT, IN_NATIVE | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE,
-                 value, Address(value, 0), tmp, thread);
+  access_load_at(T_OBJECT, ds_2, value, Address(value, 0), tmp, thread);
   verify_oop(value);
   bind(done);
 }
@@ -4403,8 +4413,12 @@ void MacroAssembler::resolve_oop_handle(Register result, Register tmp) {
   // Only 64 bit platforms support GCs that require a tmp register
   // Only IN_HEAP loads require a thread_tmp register
   // OopHandle::resolve is an indirection like jobject.
-  access_load_at(T_OBJECT, IN_NATIVE | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE,
-                 result, Address(result, 0), tmp, /*tmp_thread*/noreg);
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IN_NATIVE | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IN_NATIVE;
+#endif // OUR_PERSIST
+  access_load_at(T_OBJECT, ds, result, Address(result, 0), tmp, /*tmp_thread*/noreg);
 }
 
 // ((WeakHandle)result).resolve();

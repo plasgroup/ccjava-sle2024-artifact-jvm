@@ -343,12 +343,16 @@ void NonVolatileChunkSegregate::sweep_objects() {
       count = 0;
       for (size_t idx = 0; idx < nvc->get_max_idx(); idx++) {
         if (nvc->get_abit(idx) != true) {
+          // empty slot
+          count += 1;
           continue;
         }
         if (nvc->get_mbit(idx) != true) {
+          // marked non-empty slot
           nvc->a_1_to_0(idx);
           // memset(nvc->idx_2_address(idx), 'u', HeapWordSize * nvc->get_size_class());
         } else {
+          // unmarked non-empty slot -> sweep
           count += 1;
           nvc->m_1_to_0(idx);
         }

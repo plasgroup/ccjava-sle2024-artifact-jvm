@@ -237,6 +237,10 @@ Thread::Thread() {
   set_nvm_barrier_sync(new NVMBarrierSync());
   set_dependent_obj_list_head(NULL);
   set_dependent_obj_list_tail(NULL);
+#ifdef USE_NVTLAB_BUMP
+  set_nvtlab_bump_head(NULL);
+  set_nvtlab_bump_size(0);
+#endif // USE_NVTLAB_BUMP
 
   NVM_COUNTER_ONLY(_nvm_counter = new NVMCounter();)
 #endif // OUR_PERSIST

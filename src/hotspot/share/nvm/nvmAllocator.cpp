@@ -94,7 +94,8 @@ void* NVMAllocator::allocate(size_t _size)
   void* bump_head = cur_thread->nvtlab_bump_head();
   int bump_size = cur_thread->nvtlab_bump_size();
 
-  const int chunk_size = 200 * 1024; // 200kb
+  // FIXME:
+  const int chunk_size = 40 * 1024; // 40kb
 
   if (size > chunk_size) {
     // large object

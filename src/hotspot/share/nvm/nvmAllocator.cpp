@@ -89,17 +89,21 @@ void* NVMAllocator::allocate(size_t _size)
     report_vm_error(__FILE__, __LINE__, "NVMAlocator::allocate cannot allocate nvm.");
   }
 
-#elif USE_NVTLAB_BUMP
+#elif defined USE_NVTLAB_BUMP
   Thread* cur_thread = Thread::current();
   void* bump_head = cur_thread->nvtlab_bump_head();
   int bump_size = cur_thread->nvtlab_bump_size();
 
-  // FIXME:
-  const int chunk_size = 40 * 1024; // 40kb
+#ifndef NVTLAB_BUMP_CHUNK_SIZE_KB
+  report_vm_error(__FILE__, __LINE__, "NVTLAB_BUMP_CHUNK_SIZE_KB is not defined.");
+#endif // NVTLAB_BUMP_CHUNK_SIZE_KB
+  const int chunk_size = NVTLAB_BUMP_CHUNK_SIZE_KB * 1024; // 40kb
 
   if (size > chunk_size) {
     // large object
+#ifdef ASSERT
     tty->print_cr("allocate size: %d", size);
+#endif // ASSERT
     // ShouldNotReachHere();
     // report_vm_error(__FILE__, __LINE__, "ShouldNotReachHere");
     pthread_mutex_lock(&NVMAllocator::allocate_mtx);

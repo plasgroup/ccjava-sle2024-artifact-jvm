@@ -259,7 +259,10 @@ void OurPersist::copy_object(oop obj) {
     // copy step
     OurPersist::copy_object_copy_step(obj, nvm_obj, klass, worklist, barrier_sync, cur_thread);
 
-    // write back
+    // mfence
+    OrderAccess::fence();
+
+    // write back & sfence
     NVM_FLUSH_LOOP(nvm_obj, obj->size() * HeapWordSize);
 
     // verify step

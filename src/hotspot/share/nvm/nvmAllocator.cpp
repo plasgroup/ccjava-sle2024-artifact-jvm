@@ -97,15 +97,17 @@ void* NVMAllocator::allocate(size_t _size)
 #ifndef NVTLAB_BUMP_CHUNK_SIZE_KB
   report_vm_error(__FILE__, __LINE__, "NVTLAB_BUMP_CHUNK_SIZE_KB is not defined.");
 #endif // NVTLAB_BUMP_CHUNK_SIZE_KB
-  const int chunk_size = NVTLAB_BUMP_CHUNK_SIZE_KB * 1024; // 40kb
+  const int chunk_size = NVTLAB_BUMP_CHUNK_SIZE_KB * 1024;
+
+#ifdef AVOID_SAME_CACHELINE_ALLOCATION
+  size = (size + 63) & ~63;
+#endif // AVOID_SAME_CACHELINE_ALLOCATION
 
   if (size > chunk_size) {
     // large object
 #ifdef ASSERT
     tty->print_cr("allocate size: %d", size);
 #endif // ASSERT
-    // ShouldNotReachHere();
-    // report_vm_error(__FILE__, __LINE__, "ShouldNotReachHere");
     pthread_mutex_lock(&NVMAllocator::allocate_mtx);
     if (NVMAllocator::nvm_head == NULL) NVMAllocator::init();
 

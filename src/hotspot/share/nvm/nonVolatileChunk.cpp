@@ -453,29 +453,40 @@ bool NonVolatileChunkLarge::is_next(NonVolatileChunkLarge* nvcl) {  // TODO: ren
 void NonVolatileChunkLarge::sweep_objects() {
   NonVolatileChunkLarge* nvcl = (NonVolatileChunkLarge*) NVMAllocator::large_head;
   size_t nvcl_byte_size;  // sizeof(Header) + (nvcl->get_word_size() * HeapWordSize)
-  NonVolatileChunkLarge* last_free = (NonVolatileChunkLarge*) NVMAllocator::large_head;
-  NonVolatileChunkLarge* free_head = NULL; // nvclから見て左側の，一番近い空
+  // NonVolatileChunkLarge* last_free = (NonVolatileChunkLarge*) NVMAllocator::large_head;
+  NonVolatileChunkLarge* last_free = NULL;
+  NonVolatileChunkLarge* free_head = (NonVolatileChunkLarge*) NVMAllocator::large_head; // nvclから見て左側の，一番近い空
 
   while((void*) nvcl < NVMAllocator::nvm_tail) {
     nvcl_byte_size = sizeof(NonVolatileChunkLarge) + (nvcl->get_word_size() * HeapWordSize);
     if (nvcl->get_mark()) {
       // living and marked object.
+      // printf("marked object\n");
+      nvcl->m_1_to_0();
       nvcl = (NonVolatileChunkLarge*) (((char*)nvcl) + nvcl_byte_size);
       free_head = nvcl;
     } else {
       // not marked. garbage
+      // printf("unmarked object\n");
+      nvcl->a_1_to_0_anyway();
       if (free_head == nvcl) {
         // 一つ前のオブジェクトは生きている
-        last_free->set_next_chunk(free_head);
+        if (last_free != NULL) {
+          last_free->set_next_chunk(free_head);
+        }
         last_free = free_head;
       } else {
         // 一つ前も空
-        free_head->set_word_size(free_head->get_word_size() + nvcl_byte_size);
+        free_head->set_word_size(free_head->get_word_size() + (nvcl_byte_size / HeapWordSize));
+        // free_head->set_word_size(free_head->get_word_size() + nvcl->get_word_size());
       }
+          nvcl = (NonVolatileChunkLarge*) (((char*)nvcl) + nvcl_byte_size);
     }
-    nvcl = (NonVolatileChunkLarge*) (((char*)nvcl) + nvcl_byte_size);
+
   }
 }
+
+
 
 // void NonVolatileChunkLarge::sweep_objects() {
 //   NonVolatileChunkLarge* nvcl = (NonVolatileChunkLarge*) NVMAllocator::large_head;
@@ -514,6 +525,38 @@ void NonVolatileChunkLarge::sweep_objects() {
 //       nvcl = (NonVolatileChunkLarge*) (((char*)nvcl) + nvcl_byte_size);
 //   }
 // }
+
+
+void NonVolatileChunkLarge::follow_empty_large_header() {
+  printf("follow empty large header start\n");
+  NonVolatileChunkLarge*  nvcl = (NonVolatileChunkLarge*) NVMAllocator::large_head;
+  while((void*)nvcl < NVMAllocator::nvm_tail) {
+    printf("%p %lubytes , next: %p\n", (void*)nvcl, nvcl->get_word_size(), nvcl->get_next_chunk());
+    if (nvcl->get_next_chunk() == NULL) {
+      printf("follow finished\n");
+      return;
+    }
+    nvcl = nvcl->get_next_chunk();
+  }
+  printf("follow empty large header finished\n");
+  fflush(stdout);
+}
+
+void NonVolatileChunkLarge::follow_all_large_header() {
+  // printf("follow all large header start\n");
+  NonVolatileChunkLarge*  nvcl = (NonVolatileChunkLarge*) NVMAllocator::large_head;
+  while((void*)nvcl < NVMAllocator::nvm_tail) {
+    // printf("%p %lu(%lu)bytes, allocation: %d, mark: %d, next: %p\n", (void*)nvcl, nvcl->get_word_size()*HeapWordSize, nvcl->get_word_size()*HeapWordSize+sizeof(NonVolatileChunkLarge), nvcl->get_alloc(), nvcl->get_mark(), nvcl->get_next_chunk());
+    // if (nvcl->get_next_chunk() == NULL) {
+    //   printf("follow all large header finished\n");
+    //   return;
+    // }
+    nvcl = (NonVolatileChunkLarge*) (((char*)nvcl) + sizeof(NonVolatileChunkLarge) + (nvcl->get_word_size() * HeapWordSize));
+  }
+  // printf("follow all large header inished\n");
+  // fflush(stdout);
+}
+
 
 
 

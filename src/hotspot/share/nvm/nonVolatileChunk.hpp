@@ -191,6 +191,7 @@ public:
   void* get_dummy() { return (void*) dummy; }
   void a_0_to_1();
   void a_1_to_0();
+  void a_1_to_0_anyway() { alloc = false; }
 
 #ifdef NVMGC
   bool is_next(NonVolatileChunkLarge* nvcl);
@@ -199,6 +200,8 @@ public:
   static void sweep_objects();
   void m_0_to_1();
   void m_1_to_0();
+  static void follow_empty_large_header();
+  static void follow_all_large_header();
 #endif // NVMGC
 
 };

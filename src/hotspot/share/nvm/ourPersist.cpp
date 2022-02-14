@@ -46,8 +46,7 @@ void OurPersist::ensure_recoverable(oop obj) {
   void* nvm_obj = obj->nvm_header().fwd();
   if (!success) {
     barrier_sync->add(obj, nvm_obj, cur_thread);
-    barrier_sync->sync_phase1();
-    barrier_sync->sync_phase2();
+    barrier_sync->sync();
     return;
   }
 
@@ -70,9 +69,8 @@ void OurPersist::ensure_recoverable(oop obj) {
   // sfence
   NVM_FENCH
 
-  barrier_sync->sync_phase1();
+  barrier_sync->sync();
   OurPersist::clear_responsible_thread(cur_thread);
-  barrier_sync->sync_phase2();
 }
 
 void OurPersist::copy_object_copy_step(oop obj, void* nvm_obj, Klass* klass,

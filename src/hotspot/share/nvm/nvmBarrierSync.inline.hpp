@@ -171,7 +171,7 @@ inline void NVMBarrierSync::add(oop obj, void* nvm_obj, Thread* cur_thread) {
   NVMBarrierSync::unlock();
 }
 
-inline void NVMBarrierSync::sync_phase1() {
+inline void NVMBarrierSync::sync() {
   unsigned long sync_count = 0;
   NVMBarrierSync* leader  = NULL;
 
@@ -192,14 +192,13 @@ inline void NVMBarrierSync::sync_phase1() {
   }
 
   // synchornization complete
-}
 
-inline void NVMBarrierSync::sync_phase2() {
   // wait for children threads
   while (this->ref_count_nolock() != 0) {
     // busy wait
   }
 
+  // exit from the thread tree
   NVMBarrierSync::lock();
   assert(this->ref_count() == 0, "");
   NVMBarrierSync* parent = this->parent();

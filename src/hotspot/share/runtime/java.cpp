@@ -528,7 +528,7 @@ void before_exit(JavaThread* thread) {
 #ifdef NVM_COUNTER
 class NVMCounterThreadClosure: public ThreadClosure {
   void do_thread(Thread* thread) {
-    thread->nvm_counter()->exit();
+    thread->nvm_counter()->exit(DEBUG_ONLY(thread));
   }
 };
 #endif // NVM_COUNTER

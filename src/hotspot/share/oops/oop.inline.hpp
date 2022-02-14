@@ -69,6 +69,18 @@ void oopDesc::set_nvm_header_locked_thread(HeapWord* mem, Thread* thread) {
 #endif // ASSERT
 #endif // OUR_PERSIST
 
+#ifdef AUTO_PERSIST
+  uintptr_t oopDesc::autopersist_nvm_header() const {
+    int offset = autopersist_nvm_header_offset_in_bytes();
+    return RawAccess<MO_RELAXED>::load_at(as_oop(), offset);
+  }
+
+  void oopDesc::set_autopersist_nvm_header(HeapWord* mem, uintptr_t header) {
+    int offset = autopersist_nvm_header_offset_in_bytes();
+    *(uintptr_t*)(((char*)mem) + offset) = header;
+  }
+#endif // AUTO_PERSIST
+
 markWord oopDesc::mark() const {
   uintptr_t v = HeapAccess<MO_RELAXED>::load_at(as_oop(), mark_offset_in_bytes());
   return markWord(v);

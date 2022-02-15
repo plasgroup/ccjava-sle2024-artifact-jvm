@@ -14,7 +14,7 @@ class NVMAllocator : AllStatic {
   friend class NonVolatileChunkLarge;
 public:
   static const size_t NVM_CHUNK_BYTE_SIZE = 4096;
-  static const size_t SEGREGATED_REGION_SIZE_GB = 15;
+  static const size_t SEGREGATED_REGION_SIZE_GB = 1;
  private:
   static void* nvm_head;
   static void* segregated_top;

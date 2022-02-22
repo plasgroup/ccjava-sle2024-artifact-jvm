@@ -93,11 +93,7 @@ void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_so
 
   allocate_stacks();
 
-  struct timespec start_time, end_time;
-  unsigned int sec;
-  long long nsec;
 
-  clock_gettime(CLOCK_REALTIME, &start_time);
 
 
   mark_sweep_phase1(clear_all_softrefs);
@@ -157,9 +153,37 @@ void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_so
 #ifdef USE_NVTLAB
 #ifdef NVMGC
   // NonVolatileChunkLarge::follow_all_large_header();
+
+
+  struct timespec start_time, end_time;
+  unsigned int sec;
+  long long nsec;
+
+  // measure "segregated" sweep time
+  clock_gettime(CLOCK_REALTIME, &start_time);
   NonVolatileChunkSegregate::sweep_objects();
+  clock_gettime(CLOCK_REALTIME, &end_time);
+
+  sec = end_time.tv_sec - start_time.tv_sec;
+  nsec =((long long) (end_time.tv_nsec - start_time.tv_nsec)) + ((long long) sec)*1000000000;
+  GenMarkSweep::SUM_OF_GC_NSEC += (unsigned long)nsec;
+  GC_TIMES += 1;
+  fprintf(stderr, "segregated: %lld\n", nsec);
+  fflush(stdout);
+
+  // measure "large" sweep time
+  clock_gettime(CLOCK_REALTIME, &start_time);
   NonVolatileChunkLarge::sweep_objects();
   NonVolatileChunkSegregate::update_ready_for_use();
+  clock_gettime(CLOCK_REALTIME, &end_time);
+
+  sec = end_time.tv_sec - start_time.tv_sec;
+  nsec =((long long) (end_time.tv_nsec - start_time.tv_nsec)) + ((long long) sec)*1000000000;
+  GenMarkSweep::SUM_OF_GC_NSEC += (unsigned long)nsec;
+  GC_TIMES += 1;
+  fprintf(stderr, "large: %lld\n", nsec);
+  fflush(stdout);
+
   // NonVolatileChunkLarge::follow_all_large_header();
 #endif // NVMGC
 #endif // USE_NVTLAB

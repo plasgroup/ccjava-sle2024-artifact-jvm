@@ -237,13 +237,10 @@ Thread::Thread() {
   set_nvm_barrier_sync(new NVMBarrierSync());
   set_dependent_obj_list_head(NULL);
   set_dependent_obj_list_tail(NULL);
-<<<<<<< HEAD
-=======
 #ifdef USE_NVTLAB_BUMP
   set_nvtlab_bump_head(NULL);
   set_nvtlab_bump_size(0);
 #endif // USE_NVTLAB_BUMP
->>>>>>> kmatsumoto-test-allocator
 #endif // OUR_PERSIST
 
   NVM_COUNTER_ONLY(_nvm_counter = new NVMCounter(this);)

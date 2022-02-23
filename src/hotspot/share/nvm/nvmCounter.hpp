@@ -40,20 +40,23 @@ class NVMCounter: public CHeapObj<mtNone> {
   static bool _enable_g;
   static unsigned long _thr_create;
   static unsigned long _thr_delete;
+#ifdef ASSERT
+  static Thread* _thr;
+  static const unsigned long _thr_list_size = 512;
+  static Thread* _thr_list[_thr_list_size];
+#endif // ASSERT
 
   // others
   static pthread_mutex_t _mtx;
   static bool _countable;
 
  public:
-  NVMCounter() {
-    entry();
+  NVMCounter(DEBUG_ONLY(Thread* cur_thread)) {
+    entry(DEBUG_ONLY(cur_thread));
   }
 
   ~NVMCounter() {
-    if (_enable_g) {
-      exit();
-    }
+    assert(!_enable, "");
   }
 
  private:
@@ -66,8 +69,8 @@ class NVMCounter: public CHeapObj<mtNone> {
   inline void inc_alloc_nvm() { if (countable()) _alloc_nvm++; }
   inline void inc_persistent_obj() { if (countable()) _persistent_obj++; }
   inline void inc_copy_obj_retry() { if (countable()) _copy_obj_retry++; }
-  void entry();
-  void exit();
+  void entry(DEBUG_ONLY(Thread* cur_thread));
+  void exit(DEBUG_ONLY(Thread* cur_thread));
   static void print();
 
 };

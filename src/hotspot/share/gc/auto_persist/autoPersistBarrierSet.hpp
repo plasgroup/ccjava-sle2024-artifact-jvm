@@ -26,6 +26,7 @@ class AutoPersistBarrierSet: public CardTableBarrierSet {
     // primitive
     template <typename T>
     static T load_in_heap_at(oop base, ptrdiff_t offset) {
+      base->autopersist_nvm_header();
       T result = Parent::template load_in_heap_at<T>(base, offset);
       return result;
     }
@@ -33,12 +34,14 @@ class AutoPersistBarrierSet: public CardTableBarrierSet {
     template <typename T>
     static void store_in_heap_at(oop base, ptrdiff_t offset, T value) {
       OrderAccess::fence();
+      base->autopersist_nvm_header();
       Parent::store_in_heap_at(base, offset, value);
     }
 
     template <typename T>
     static T atomic_xchg_in_heap_at(oop base, ptrdiff_t offset, T new_value) {
       OrderAccess::fence();
+      base->autopersist_nvm_header();
       T result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
       return result;
     }
@@ -46,6 +49,7 @@ class AutoPersistBarrierSet: public CardTableBarrierSet {
     template <typename T>
     static T atomic_cmpxchg_in_heap_at(oop base, ptrdiff_t offset, T compare_value, T new_value) {
       OrderAccess::fence();
+      base->autopersist_nvm_header();
       T result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
       return result;
     }
@@ -55,6 +59,8 @@ class AutoPersistBarrierSet: public CardTableBarrierSet {
                                   arrayOop dst_obj, size_t dst_offset_in_bytes, T* dst_raw,
                                   size_t length) {
       OrderAccess::fence();
+      if (src_obj != NULL) src_obj->autopersist_nvm_header();
+      if (dst_obj != NULL) dst_obj->autopersist_nvm_header();
       // Store in DRAM.
       Parent::arraycopy_in_heap(src_obj, src_offset_in_bytes, src_raw,
                                 dst_obj, dst_offset_in_bytes, dst_raw,
@@ -63,23 +69,27 @@ class AutoPersistBarrierSet: public CardTableBarrierSet {
 
     // oop
     static oop oop_load_in_heap_at(oop base, ptrdiff_t offset) {
+      base->autopersist_nvm_header();
       oop result = Parent::oop_load_in_heap_at(base, offset);
       return result;
     }
 
     static void oop_store_in_heap_at(oop base, ptrdiff_t offset, oop value) {
       OrderAccess::fence();
+      base->autopersist_nvm_header();
       Parent::oop_store_in_heap_at(base, offset, value);
     }
 
     static oop oop_atomic_xchg_in_heap_at(oop base, ptrdiff_t offset, oop new_value) {
       OrderAccess::fence();
+      base->autopersist_nvm_header();
       oop result = Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
       return result;
     }
 
     static oop oop_atomic_cmpxchg_in_heap_at(oop base, ptrdiff_t offset, oop compare_value, oop new_value) {
       OrderAccess::fence();
+      base->autopersist_nvm_header();
       oop result = Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
       return result;
     }
@@ -89,6 +99,8 @@ class AutoPersistBarrierSet: public CardTableBarrierSet {
                                       arrayOop dst_obj, size_t dst_offset_in_bytes, T* dst_raw,
                                       size_t length) {
       OrderAccess::fence();
+      if (src_obj != NULL) src_obj->autopersist_nvm_header();
+      if (dst_obj != NULL) dst_obj->autopersist_nvm_header();
       bool result = Parent::oop_arraycopy_in_heap(src_obj, src_offset_in_bytes, src_raw,
                                                   dst_obj, dst_offset_in_bytes, dst_raw,
                                                   length);
@@ -98,6 +110,8 @@ class AutoPersistBarrierSet: public CardTableBarrierSet {
     // clone
     static void clone_in_heap(oop src, oop dst, size_t size) {
       OrderAccess::fence();
+      if (src != NULL) src->autopersist_nvm_header();
+      if (dst != NULL) dst->autopersist_nvm_header();
       Parent::clone_in_heap(src, dst, size);
     }
   };

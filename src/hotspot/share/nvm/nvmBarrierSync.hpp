@@ -59,9 +59,7 @@ class NVMBarrierSync : public CHeapObj<mtNone> {
  public:
   inline void init();
   inline void add(oop obj, void* nvm_obj, Thread* cur_thread);
-  // NOTE: Make the object recoverable between sync_phase1 and sync_phase2
-  inline void sync_phase1(); // synchornization complete
-  inline void sync_phase2(); // exit from the thread tree
+  inline void sync();
 
 };
 

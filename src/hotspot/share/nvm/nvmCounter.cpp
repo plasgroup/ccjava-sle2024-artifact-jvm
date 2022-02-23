@@ -40,6 +40,7 @@ void NVMCounter::entry(DEBUG_ONLY(Thread* cur_thread)) {
 
   _thr = cur_thread;
   _thr_list[_thr_create] = cur_thread;
+  assert(cur_thread == _thr, "");
 #endif // ASSERT
 
   _thr_create++;
@@ -55,6 +56,7 @@ void NVMCounter::exit(DEBUG_ONLY(Thread* cur_thread)) {
 
 #ifdef ASSERT
   assert(cur_thread != NULL, "cur_thread is NULL.");
+  assert(cur_thread == _thr, "");
   bool found = false;
   for (unsigned long i = 0; i < _thr_create; i++) {
     if (_thr_list[i] != cur_thread) continue;

@@ -159,12 +159,22 @@ class Thread: public ThreadShadow {
   NVMBarrierSync*   _nvm_barrier_sync;
   void* _dependent_obj_list_head;
   void* _dependent_obj_list_tail;
+#ifdef USE_NVTLAB_BUMP
+  void* _nvtlab_bump_head;
+  int   _nvtlab_bump_size;
+#endif // USE_NVTLAB_BUMP
 
  public:
   NVMWorkListStack* nvm_work_list()  { return _nvm_work_list; }
   NVMBarrierSync* nvm_barrier_sync() { return _nvm_barrier_sync; }
   void* dependent_obj_list_head() { return _dependent_obj_list_head; }
   void* dependent_obj_list_tail() { return _dependent_obj_list_tail; }
+#ifdef USE_NVTLAB_BUMP
+  void* nvtlab_bump_head() { return _nvtlab_bump_head; }
+  int   nvtlab_bump_size() { return _nvtlab_bump_size; }
+  void  set_nvtlab_bump_head(void* val) { _nvtlab_bump_head = val; }
+  void  set_nvtlab_bump_size(int size) { _nvtlab_bump_size = size; }
+#endif // USE_NVTLAB_BUMP
 
  private:
   void set_nvm_work_list(NVMWorkListStack* val)  { _nvm_work_list = val; }

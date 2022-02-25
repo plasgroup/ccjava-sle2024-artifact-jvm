@@ -6,13 +6,10 @@
 #include "memory/allocation.hpp"
 #include "runtime/atomic.hpp"
 #include "utilities/ostream.hpp"
-
-#ifdef NVM_COUNTER_CHECK_DACAPO_RUN
 #include "interpreter/interp_masm.hpp"
 class Klass;
 class Method;
 class MacroAssembler;
-#endif // NVM_COUNTER_CHECK_DACAPO_RUN
 
 // ===== 方針等 =====
 // 色々な回数を計測するクラス

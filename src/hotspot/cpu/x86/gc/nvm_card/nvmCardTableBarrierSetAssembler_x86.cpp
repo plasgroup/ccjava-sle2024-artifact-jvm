@@ -67,12 +67,14 @@ void NVMCardTableBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet
     NVMCardTableBarrierSetAssembler::runtime_load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
   }
 #else  // OURPERSIST_LOAD_RUNTIME_ONLY
+  // FIXME:
   // Counter
-  NVM_COUNTER_ONLY((NVMCounter::inc_access_asm(masm, false /* load */,
-                                               ((decorators & OURPERSIST_IS_VOLATILE) != 0),
-                                               is_reference_type(type),
-                                               ((decorators & OURPERSIST_IS_STATIC) != 0),
-                                               false /* interpreter */));)
+  // NVM_COUNTER_ONLY((NVMCounter::inc_access_asm(masm, false /* load */,
+  //                                              ((decorators & OURPERSIST_IS_VOLATILE) != 0),
+  //                                              is_reference_type(type),
+  //                                              ((decorators & OURPERSIST_IS_STATIC) != 0),
+  //                                              false /* interpreter */));)
+
   // Original
   Parent::load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
 #endif // OURPERSIST_LOAD_RUNTIME_ONLY

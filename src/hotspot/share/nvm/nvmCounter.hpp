@@ -95,7 +95,7 @@ class NVMCounter: public CHeapObj<mtNone> {
                          bool is_static, bool is_runtime) {
     inc_access(access_bool2flags(is_store, is_volatile, is_oop, is_static, is_runtime));
   }
-  void inc_access(bool is_store, oop obj, ptrdiff_t offset);
+  void inc_access(bool is_store, oop obj, ptrdiff_t offset, bool is_volatile, bool is_oop);
   inline void inc_fields()          { add_count(&_fields, 1); }
   inline void inc_volatile_fields() { add_count(&_volatile_fields, 1); }
 

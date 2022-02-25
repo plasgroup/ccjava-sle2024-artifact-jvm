@@ -101,48 +101,37 @@ void NVMCounter::exit(DEBUG_ONLY(Thread* cur_thread)) {
   pthread_mutex_unlock(&_mtx);
 }
 
-void NVMCounter::inc_access(bool is_store, oop obj, ptrdiff_t offset) {
+void NVMCounter::inc_access(bool is_store, oop obj, ptrdiff_t offset, bool is_volatile, bool is_oop) {
   if (!is_store) {
     // TODO:
     return;
-    if (!countable()) {
-      return;
-    }
-    Klass* k = obj->klass();
-    if (k->is_instance_klass()) {
-      return;
-    }
-    if (k->is_typeArray_klass()) {
-      return;
-    }
-    if (k->is_objArray_klass()) {
-      return;
-    }
-    report_vm_error(__FILE__, __LINE__, "should not reach here.");
-    return;
-    //tty->print_cr("should not reach here.");
-    if (!SystemDictionary::Class_klass_loaded()) {
-      //tty->print_cr("counter return. countable: %d", _countable);
-      return;
-    }
   }
+
+  // if (!SystemDictionary::Class_klass_loaded()) {
+  //   return;
+  // }
+
+  // if (!countable()) {
+  //   return;
+  // }
 
   Klass* k = obj->klass();
-  bool is_static   = k != NULL &&
-                     k->id() == KlassID::InstanceMirrorKlassID &&
+  if (k == NULL) {
+    tty->print_cr("klass is NULL.");
+    return;
+  }
+  bool is_static   = k->id() == KlassID::InstanceMirrorKlassID &&
                      offset < InstanceMirrorKlass::offset_of_static_fields();
-  bool is_volatile = false;
-  bool is_oop      = false;
   bool is_runtime  = true;
 
-  if (k->is_instance_klass()) {
-    fieldDescriptor fd;
-    ((InstanceKlass*)k)->find_field_from_offset(offset, is_static, &fd);
-    is_volatile = fd.is_volatile();
-    is_oop = is_reference_type(fd.field_type());
-  } else {
-    is_oop = k->is_objArray_klass();
-  }
+  //if (k->is_instance_klass()) {
+  //  fieldDescriptor fd;
+  //  ((InstanceKlass*)k)->find_field_from_offset(offset, is_static, &fd);
+  //  is_volatile = fd.is_volatile();
+  //  is_oop = is_reference_type(fd.field_type());
+  //} else {
+  //  is_oop = k->is_objArray_klass();
+  //}
 
   inc_access(is_store, is_volatile, is_oop, is_static, is_runtime);
 }

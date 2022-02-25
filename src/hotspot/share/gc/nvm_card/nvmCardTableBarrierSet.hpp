@@ -37,9 +37,6 @@ public:
       bool is_set_durableroot_annotation =
         NVMCardTableBarrierSet::static_object_etc(base, offset, value);
 
-      // Counter
-      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset);)
-
       // Skip
       if (!OurPersist::is_target(base->klass())) {
         // Store in DRAM.
@@ -50,6 +47,10 @@ public:
 #ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
+        // Counter
+        NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset,
+                                                                      true /* volatile */, true /* oop */);)
+
         nvmHeader::lock(base);
 
         void* before_fwd = base->nvm_header().fwd();
@@ -78,6 +79,10 @@ public:
         return;
       }
 #endif // !OURPERSIST_IGNORE_VOLATILE
+
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset,
+                                                                    false /* non-volatile */, true /* oop */);)
 
       // Store in DRAM.
       Raw::oop_store_in_heap_at(base, offset, value);
@@ -108,7 +113,8 @@ public:
     template <typename T>
     static T load_in_heap_at(oop base, ptrdiff_t offset) {
       // Counter
-      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(false /* load */, base, offset);)
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(false /* load */, base, offset,
+                                                                    false /* unknown */, false /* primitive */);)
 
       T result = Parent::template load_in_heap_at<T>(base, offset);
       return result;
@@ -121,13 +127,6 @@ public:
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
-      // Counter
-#ifdef NVM_COUNTER
-      if (offset != oopDesc::mark_offset_in_bytes()) {
-        Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset);
-      }
-#endif // NVM_COUNTER
-
       // Skip
       if (offset == oopDesc::mark_offset_in_bytes() || !OurPersist::is_target(base->klass())) {
         // Store in DRAM.
@@ -139,6 +138,10 @@ public:
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         assert(offset != oopDesc::mark_offset_in_bytes(), "");
+
+        // Counter
+        NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset,
+                                                                      true /* volatile */, false /* primitive */);)
 
         nvmHeader::lock(base);
 
@@ -159,6 +162,10 @@ public:
 #endif // !OURPERSIST_IGNORE_VOLATILE
 
       // Non volatile
+
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset,
+                                                                    false /* non-volatile */, false /* primitive */);)
       // Store in DRAM.
       Parent::store_in_heap_at(base, offset, value);
 
@@ -195,6 +202,10 @@ public:
         return Parent::atomic_xchg_in_heap_at(base, offset, new_value);
       }
 
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset,
+                                                                    false /* unknown */, false /* primitive */);)
+
       nvmHeader::lock(base);
       T result = Parent::template load_in_heap_at<T>(base, offset);
 
@@ -230,6 +241,10 @@ public:
         // Store in DRAM.
         return Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
       }
+
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset,
+                                                                    false /* unknown */, false /* primitive */);)
 
       nvmHeader::lock(base);
       T result = load_in_heap_at<T>(base, offset);
@@ -296,7 +311,8 @@ public:
     // oop
     static oop oop_load_in_heap_at(oop base, ptrdiff_t offset) {
       // Counter
-      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(false /* load */, base, offset);)
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(false /* load */, base, offset,
+                                                                    false/* unknown */, true /* oop */);)
 
       oop result = Parent::oop_load_in_heap_at(base, offset);
       return result;
@@ -312,9 +328,6 @@ public:
         return;
       }
 
-      // Counter
-      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset);)
-
       // Check annotation
       bool is_set_durableroot_annotation =
         NVMCardTableBarrierSet::static_object_etc(base, offset, value);
@@ -329,6 +342,10 @@ public:
 #ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
+
+        // Counter
+        NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset,
+                                                                      true /* volatile */, true /* oop */);)
         nvmHeader::lock(base);
 
         void* before_fwd = base->nvm_header().fwd();
@@ -359,6 +376,11 @@ public:
 #endif // !OURPERSIST_IGNORE_VOLATILE
 
       // Non volatile
+
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset,
+                                                                    false /* non-volatile */, true /* oop */);)
+
       // Store in DRAM.
       Parent::oop_store_in_heap_at(base, offset, value);
 
@@ -402,6 +424,10 @@ public:
         // Store in DRAM.
         return Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
       }
+
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset,
+                                                                    false /* unknown */, true /* oop */);)
 
       nvmHeader::lock(base);
       oop result = Parent::oop_load_in_heap_at(base, offset);
@@ -453,6 +479,10 @@ public:
         // Store in DRAM.
         return Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
       }
+
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset,
+                                                                    false /* unknown */, true /* oop */);)
 
       nvmHeader::lock(base);
       oop result = oop_load_in_heap_at(base, offset);

@@ -66,8 +66,10 @@ public:
             // Skip
             nvm_val = NULL;
           }
+#ifndef NOT_WUPD
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // NOT_WUPD
         }
         // Store in DRAM.
         Raw::oop_store_in_heap_at(base, offset, value);
@@ -95,8 +97,10 @@ public:
           // Skip
           nvm_val = NULL;
         }
+#ifndef NOT_WUPD
         Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // NOT_WUPD
       }
     }
 
@@ -141,8 +145,10 @@ public:
         void* before_fwd = base->nvm_header().fwd();
         if (before_fwd != NULL) {
           // Store in NVM.
+#ifndef NOT_WUPD
           Raw::store_in_heap_at(oop(before_fwd), offset, value);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // NOT_WUPD
         }
         // Store in DRAM.
         Parent::store_in_heap_at(base, offset, value);
@@ -165,8 +171,10 @@ public:
       assert(nvmHeader::is_fwd(nvm_fwd), "");
 
       // Store in NVM.
+#ifndef NOT_WUPD
       Raw::store_in_heap_at(oop(nvm_fwd), offset, value);
       NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
+#endif // NOT_WUPD
     }
 
     template <typename T>
@@ -193,8 +201,10 @@ public:
       void* before_fwd = base->nvm_header().fwd();
       if (before_fwd != NULL) {
         // Store in NVM.
+#ifndef NOT_WUPD
         Raw::store_in_heap_at(oop(before_fwd), offset, new_value);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // NOT_WUPD
       }
       // Store and load in DRAM.
       Parent::store_in_heap_at(base, offset, new_value);
@@ -229,8 +239,10 @@ public:
         void* nvm_fwd = base->nvm_header().fwd();
         if (nvm_fwd != NULL) {
           // Store in NVM.
+#ifndef NOT_WUPD
           Raw::store_in_heap_at(oop(nvm_fwd), offset, new_value);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
+#endif // NOT_WUPD
         }
         // Store in DRAM.
         Parent::store_in_heap_at(base, offset, new_value);
@@ -262,10 +274,12 @@ public:
         void* dst_nvm_obj = dst_obj->nvm_header().fwd();
         if (dst_nvm_obj != NULL) {
           // Store in NVM.
+#ifndef NOT_WUPD
           Raw::arraycopy_in_heap(dst_obj,               dst_offset_in_bytes, (T*)NULL,
                                  arrayOop(dst_nvm_obj), dst_offset_in_bytes, (T*)NULL,
                                  length);
           NVM_WRITEBACK_LOOP(AccessInternal::field_addr(oop(dst_nvm_obj), dst_offset_in_bytes), length)
+#endif // NOT_WUPD
         }
       } else {
         // heap to native or native to native ?
@@ -331,8 +345,10 @@ public:
             // Skip
             nvm_val = NULL;
           }
+#ifndef NOT_WUPD
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // NOT_WUPD
         }
         // Store in DRAM.
         Parent::oop_store_in_heap_at(base, offset, value);
@@ -359,8 +375,10 @@ public:
           // Skip
           nvm_val = NULL;
         }
+#ifndef NOT_WUPD
         Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // NOT_WUPD
       }
     }
 
@@ -403,8 +421,10 @@ public:
           // Skip
           nvm_val = NULL;
         }
+#ifndef NOT_WUPD
         Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // NOT_WUPD
       }
       // Store in DRAM.
       Parent::oop_store_in_heap_at(base, offset, new_value);
@@ -451,8 +471,10 @@ public:
             // Skip
             nvm_val = NULL;
           }
+#ifndef NOT_WUPD
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // NOT_WUPD
         }
         // Store in DRAM.
         Parent::oop_store_in_heap_at(base, offset, new_value);
@@ -515,9 +537,13 @@ public:
             nvm_val = NULL;
           }
           assert(nvm_val == NULL || val->nvm_header().recoverable(), "");
+#ifndef NOT_WUPD
           Raw::store_in_heap_at(oop(dst_nvm_obj), dst_offset_in_bytes + offset, nvm_val);
+#endif // NOT_WUPD
         }
+#ifndef NOT_WUPD
         NVM_WRITEBACK_LOOP(AccessInternal::field_addr(oop(dst_nvm_obj), dst_offset_in_bytes), length)
+#endif // NOT_WUPD
       }
 
       return result;

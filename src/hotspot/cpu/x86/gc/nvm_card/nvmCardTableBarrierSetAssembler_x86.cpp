@@ -101,9 +101,11 @@ void NVMCardTableBarrierSetAssembler::interpreter_store_at(MacroAssembler* masm,
 
   // Store in NVM.
   const Address nvm_field(tmp1, dst.index(), dst.scale(), dst.disp());
+#ifndef NOT_WUPD
   Raw::store_at(masm, decorators, type, nvm_field, val, noreg, noreg);
   // Write back.
   NVMCardTableBarrierSetAssembler::writeback(masm, nvm_field, tmp2);
+#endif // NOT_WUPD
 
   __ bind(done);
 }
@@ -196,9 +198,11 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
     __ bind(done_set_val);
   }
   const Address nvm_field(tmp1, dst.index(), dst.scale(), dst.disp());
+#ifndef NOT_WUPD
   Raw::store_at(masm, decorators, type, nvm_field, tmp2, noreg, noreg);
   // Write back.
   NVMCardTableBarrierSetAssembler::writeback(masm, nvm_field, tmp2);
+#endif // NOT_WUPD
 
   __ bind(done);
 }
@@ -469,9 +473,11 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_store_at(MacroAssembl
 
   // Store in NVM.
   const Address nvm_field(tmp1, dst.index(), dst.scale(), dst.disp());
+#ifndef NOT_WUPD
   Raw::store_at(masm, decorators, type, nvm_field, val, noreg, noreg);
   // Write back.
   NVMCardTableBarrierSetAssembler::writeback(masm, nvm_field, tmp2);
+#endif // NOT_WUPD
 
   __ bind(dram_only);
   // Store in DRAM.
@@ -568,9 +574,11 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
     __ bind(done_set_val);
   }
   const Address nvm_field(tmp1, dst.index(), dst.scale(), dst.disp());
+#ifndef NOT_WUPD
   Raw::store_at(masm, decorators, type, nvm_field, tmp2, noreg, noreg);
   // Write back.
   NVMCardTableBarrierSetAssembler::writeback(masm, nvm_field, tmp2);
+#endif // NOT_WUPD
 
   __ bind(dram_only);
   // Store in DRAM.

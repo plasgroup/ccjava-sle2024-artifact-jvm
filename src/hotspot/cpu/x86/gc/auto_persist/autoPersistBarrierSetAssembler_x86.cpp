@@ -13,7 +13,9 @@ void AutoPersistBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSet
   __ bind(retry);
 
   // Store in DRAM.
+  __ push(dst.base());
   Parent::store_at(masm, decorators, type, dst, val, tmp1, tmp2);
+  __ pop(dst.base());
 
   // fence
   __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));

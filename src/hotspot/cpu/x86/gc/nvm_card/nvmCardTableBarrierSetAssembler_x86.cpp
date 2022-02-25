@@ -15,6 +15,13 @@ void NVMCardTableBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSe
   // Runtime
   NVMCardTableBarrierSetAssembler::runtime_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
 #else  // OURPERSIST_STORE_RUNTIME_ONLY
+  // Counter
+  NVM_COUNTER_ONLY((NVMCounter::inc_access_asm(masm, true /* store */,
+                                               ((decorators & OURPERSIST_IS_VOLATILE) != 0),
+                                               is_reference_type(type),
+                                               ((decorators & OURPERSIST_IS_STATIC) != 0),
+                                               false /* interpreter */));)
+
   // implements volatile algorithm
   assert((decorators & OURPERSIST_IS_STATIC_MASK)   != DECORATORS_NONE, "");
   assert((decorators & OURPERSIST_IS_VOLATILE_MASK) != DECORATORS_NONE, "");
@@ -60,6 +67,12 @@ void NVMCardTableBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet
     NVMCardTableBarrierSetAssembler::runtime_load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
   }
 #else  // OURPERSIST_LOAD_RUNTIME_ONLY
+  // Counter
+  NVM_COUNTER_ONLY((NVMCounter::inc_access_asm(masm, false /* load */,
+                                               ((decorators & OURPERSIST_IS_VOLATILE) != 0),
+                                               is_reference_type(type),
+                                               ((decorators & OURPERSIST_IS_STATIC) != 0),
+                                               false /* interpreter */));)
   // Original
   Parent::load_at(masm, decorators, type, dst, src, tmp1, tmp_thread);
 #endif // OURPERSIST_LOAD_RUNTIME_ONLY

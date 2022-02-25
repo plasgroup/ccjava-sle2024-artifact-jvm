@@ -3995,6 +3995,12 @@ void TemplateTable::invokevirtual_helper(Register index,
 
   __ bind(notFinal);
 
+#ifdef NVM_COUNTER
+#ifdef NVM_COUNTER_CHECK_DACAPO_RUN
+  NVMCounter::set_dacapo_countable_flag_asm(_masm, method, index, recv);
+#endif // NVM_COUNTER_CHECK_DACAPO_RUN
+#endif // NVM_COUNTER
+
   // get receiver klass
   __ null_check(recv, oopDesc::klass_offset_in_bytes());
   Register tmp_load_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);

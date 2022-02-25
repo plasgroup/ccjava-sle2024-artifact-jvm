@@ -37,6 +37,9 @@ public:
       bool is_set_durableroot_annotation =
         NVMCardTableBarrierSet::static_object_etc(base, offset, value);
 
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset);)
+
       // Skip
       if (!OurPersist::is_target(base->klass())) {
         // Store in DRAM.
@@ -100,6 +103,9 @@ public:
     // primitive
     template <typename T>
     static T load_in_heap_at(oop base, ptrdiff_t offset) {
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(false /* load */, base, offset);)
+
       T result = Parent::template load_in_heap_at<T>(base, offset);
       return result;
     }
@@ -110,6 +116,13 @@ public:
       // Parent::store_in_heap_at(base, offset, value);
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
+
+      // Counter
+#ifdef NVM_COUNTER
+      if (offset != oopDesc::mark_offset_in_bytes()) {
+        Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset);
+      }
+#endif // NVM_COUNTER
 
       // Skip
       if (offset == oopDesc::mark_offset_in_bytes() || !OurPersist::is_target(base->klass())) {
@@ -268,6 +281,9 @@ public:
 
     // oop
     static oop oop_load_in_heap_at(oop base, ptrdiff_t offset) {
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(false /* load */, base, offset);)
+
       oop result = Parent::oop_load_in_heap_at(base, offset);
       return result;
     }
@@ -281,6 +297,9 @@ public:
         Parent::oop_store_in_heap_at(base, offset, value);
         return;
       }
+
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access(true /* store */, base, offset);)
 
       // Check annotation
       bool is_set_durableroot_annotation =

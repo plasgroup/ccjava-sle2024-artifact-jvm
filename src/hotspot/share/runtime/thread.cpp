@@ -243,7 +243,7 @@ Thread::Thread() {
 #endif // USE_NVTLAB_BUMP
 #endif // OUR_PERSIST
 
-  NVM_COUNTER_ONLY(_nvm_counter = new NVMCounter(this);)
+  NVM_COUNTER_ONLY(_nvm_counter = new NVMCounter(DEBUG_ONLY(this));)
 
   DEBUG_ONLY(_run_state = PRE_CALL_RUN;)
 

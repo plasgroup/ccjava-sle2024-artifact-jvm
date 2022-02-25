@@ -1718,6 +1718,14 @@ void ClassFileParser::parse_fields(const ClassFileStream* const cfs,
         _has_contended_fields = true;
       }
     }
+
+    // Counter
+#ifdef NVM_COUNTER
+    Thread::current()->nvm_counter()->inc_fields();
+    if (access_flags.is_volatile()) {
+      Thread::current()->nvm_counter()->inc_volatile_fields();
+    }
+#endif // NVM_COUNTER
   }
 
   int index = length;

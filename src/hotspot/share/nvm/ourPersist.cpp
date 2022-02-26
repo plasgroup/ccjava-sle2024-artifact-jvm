@@ -30,9 +30,9 @@ void OurPersist::ensure_recoverable(oop obj) {
   ShouldNotReachHere();
 #endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
 
-#ifdef NOT_ENSURE_RECOVERABLE
+#ifdef NO_ENSURE_RECOVERABLE
   return;
-#endif // NOT_ENSURE_RECOVERABLE
+#endif // NO_ENSURE_RECOVERABLE
 
   if (obj->nvm_header().recoverable()) {
     return;

@@ -14,7 +14,9 @@ void NVMCardTableBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSe
 #ifdef OURPERSIST_STORE_RUNTIME_ONLY
   // Runtime
   NVMCardTableBarrierSetAssembler::runtime_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
-#else  // OURPERSIST_STORE_RUNTIME_ONLY
+  return;
+#endif // OURPERSIST_STORE_RUNTIME_ONLY
+
   // Counter
   NVM_COUNTER_ONLY((NVMCounter::inc_access_asm(masm, true /* store */,
                                                ((decorators & OURPERSIST_IS_VOLATILE) != 0),
@@ -27,8 +29,6 @@ void NVMCardTableBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSe
   assert((decorators & OURPERSIST_IS_VOLATILE_MASK) != DECORATORS_NONE, "");
 #ifndef OURPERSIST_IGNORE_VOLATILE
   if (decorators & OURPERSIST_IS_VOLATILE) {
-    // Runtime
-    // NVMCardTableBarrierSetAssembler::runtime_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
     // OurPersist assembler
     if (is_reference_type(type)) {
       NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
@@ -43,17 +43,15 @@ void NVMCardTableBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSe
       NVMCardTableBarrierSetAssembler::interpreter_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
     }
   }
-#else  // !OURPERSIST_IGNORE_VOLATILE
+  return;
+#endif // !OURPERSIST_IGNORE_VOLATILE
+
   // OurPersist assembler
   if (is_reference_type(type)) {
-    //Parent::store_at(masm, decorators, type, dst, val, tmp1, tmp2);
     NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
   } else {
-    //Parent::store_at(masm, decorators, type, dst, val, tmp1, tmp2);
     NVMCardTableBarrierSetAssembler::interpreter_store_at(masm, decorators, type, dst, val, tmp1, tmp2);
   }
-#endif // !OURPERSIST_IGNORE_VOLATILE
-#endif // OURPERSIST_STORE_RUNTIME_ONLY
 }
 
 void NVMCardTableBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,

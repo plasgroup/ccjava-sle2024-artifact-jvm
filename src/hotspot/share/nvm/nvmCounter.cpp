@@ -120,28 +120,21 @@ void NVMCounter::exit(DEBUG_ONLY(Thread* cur_thread)) {
 
 void NVMCounter::inc_access_runtime(int _is_store, oop obj, ptrdiff_t offset, int _is_volatile,
                                     int _is_oop, int _is_atomic) {
-  assert(_is_store == 0 || _is_store == 1, "");
+  assert(_is_store    ==  0 || _is_store    == 1, "");
   assert(_is_volatile == -1 || _is_volatile == 0 || _is_volatile == 1, "");
-  assert(_is_oop == 0 || _is_oop == 1, "");
-  assert(_is_atomic == 0 || _is_atomic == 1, "");
+  assert(_is_oop      ==  0 || _is_oop      == 1, "");
+  assert(_is_atomic   ==  0 || _is_atomic   == 1, "");
 
   if (_is_store == 0) {
     return; // TODO: implement
   }
-
-  // if (!SystemDictionary::Class_klass_loaded()) {
-  //   return;
-  // }
 
   if (!countable()) {
     return;
   }
 
   Klass* k = obj->klass();
-  if (k == NULL) {
-    tty->print_cr("klass is NULL.");
-    return;
-  }
+  assert(k != NULL, "klass is NULL.");
 
   bool is_store    = _is_store == 1;
   bool is_volatile = _is_volatile == 1;
@@ -152,14 +145,13 @@ void NVMCounter::inc_access_runtime(int _is_store, oop obj, ptrdiff_t offset, in
   bool is_atomic   = _is_atomic == 1;
 
   if (_is_volatile == -1) {
-    is_volatile = false;
-    //if (k->is_instance_klass()) {
-    //  fieldDescriptor fd;
-    //  ((InstanceKlass*)k)->find_field_from_offset(offset, is_static, &fd);
-    //  is_volatile = fd.is_volatile();
-    //} else {
-    //  is_volatile = false;
-    //}
+    if (k->is_instance_klass()) {
+      fieldDescriptor fd;
+      ((InstanceKlass*)k)->find_field_from_offset(offset, is_static, &fd);
+      is_volatile = fd.is_volatile();
+    } else {
+      is_volatile = false;
+    }
   }
 
   inc_access(is_store, is_volatile, is_oop, is_static, is_runtime, is_atomic);
@@ -223,7 +215,7 @@ void NVMCounter::print() {
   tty->print_cr(NVMCOUNTER_PREFIX "_persistent_obj_word_g: %lu", _persistent_obj_word_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_copy_obj_retry_g: %lu", _copy_obj_retry_g);
 
-  tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (is_store, is_volatile, is_oop, is_static, is_runtime)");
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (is_store, is_volatile, is_oop, is_static, is_runtime, is_atomic)");
   for (int i = 0; i < _access_n; i++) {
     bool is_store    = i & 0b000001; // R, W
     bool is_volatile = i & 0b000010; // v
@@ -234,8 +226,8 @@ void NVMCounter::print() {
     assert(NVMCounter::access_bool2flags(is_store, is_volatile, is_oop, is_static, is_runtime, is_atomic) == i, "");
     tty->print_cr(NVMCOUNTER_PREFIX "_access_g_%d%d%d%d%d%d_%s%s%s%s%s%s: %lu",
                   is_store, is_volatile, is_oop, is_static, is_runtime, is_atomic,
-                  is_store ? "W" : "R", is_volatile ? "v" : "", is_oop ? "o" : "p",
-                  is_static ? "s" : "", is_runtime ? "r" : "i", is_atomic ? "a" : "",
+                  is_store ? "W" : "R", is_volatile ? "v" : "_", is_oop ? "o" : "p",
+                  is_static ? "s" : "_", is_runtime ? "r" : "i", is_atomic ? "a" : "_",
                   _access_g[i]);
   }
   tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (store) %lu", get_access(1, -1, -1, -1, -1, -1));

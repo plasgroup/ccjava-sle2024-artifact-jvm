@@ -132,12 +132,19 @@ jint GenCollectedHeap::initialize() {
   ShouldNotReachHere();
 #endif // AUTO_PERSIST
   if (OurPersist::enable()) {
+#ifdef NO_BARRIER
+    CardTableBarrierSet *bs = new CardTableBarrierSet(_rem_set);
+#else  // NO_BARRIER
     NVMCardTableBarrierSet *bs = new NVMCardTableBarrierSet(_rem_set);
+#endif // NO_BARRIER
     bs->initialize();
     BarrierSet::set_barrier_set(bs);
   } else {
 #endif // OUR_PERSIST
 #ifdef AUTO_PERSIST
+#ifdef NO_BARRIER
+    ShouldNotReachHere();
+#endif // NO_BARRIER
     AutoPersistBarrierSet *bs = new AutoPersistBarrierSet(_rem_set);
 #else  // AUTO_PERSIST
     CardTableBarrierSet *bs = new CardTableBarrierSet(_rem_set);

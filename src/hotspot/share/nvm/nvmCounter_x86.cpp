@@ -12,7 +12,7 @@
 
 #ifdef NVM_COUNTER_CHECK_DACAPO_RUN
 void NVMCounter::set_dacapo_countable_flag(Klass* k, Method* m) {
-  if (NVMCounter::countable()) return;
+  //if (NVMCounter::countable()) return;
   if (m->size_of_parameters() != 3) return;
   if (k->name()->equals("org/dacapo/harness/Callback") == false) return;
 
@@ -25,7 +25,7 @@ void NVMCounter::set_dacapo_countable_flag(Klass* k, Method* m) {
   if (m->name()->equals("start")) {
     NVMCounter::set_countable(true);
     tty->print_cr("[debug] set benchmark start flag");
-  } else {
+  } else if (m->name()->equals("stop")) {
     NVMCounter::set_countable(false);
     tty->print_cr("[debug] set benchmark stop flag");
   }
@@ -67,7 +67,7 @@ void NVMCounter::set_dacapo_countable_flag_asm(MacroAssembler* masm, Register me
 #endif // NVM_COUNTER_CHECK_DACAPO_RUN
 
 void NVMCounter::inc_access_asm(MacroAssembler* masm, bool is_store, bool is_volatile, bool is_oop,
-                                bool is_static, bool is_runtime) {
+                                bool is_static, bool is_runtime, bool is_atomic) {
   // const Address counter(r15_thread, Thread::nvm_counter_offset());
   // __ movptr(tmp, counter);
   // const Address store_counter(tmp, offset_of(NVMCounter, _store));
@@ -75,7 +75,7 @@ void NVMCounter::inc_access_asm(MacroAssembler* masm, bool is_store, bool is_vol
 
   __ pusha();
   address func = CAST_FROM_FN_PTR(address, ((void(*)(Thread*, int))NVMCounter::inc_access));
-  int flags = NVMCounter::access_bool2flags(is_store, is_volatile, is_oop, is_static, is_runtime);
+  int flags = NVMCounter::access_bool2flags(is_store, is_volatile, is_oop, is_static, is_runtime, is_atomic);
   __ movl(c_rarg1, flags);
   __ call_VM_leaf(func, r15_thread, c_rarg1);
   __ popa();

@@ -11,7 +11,9 @@
 
 // global counters
 unsigned long NVMCounter::_alloc_nvm_g = 0;
+unsigned long NVMCounter::_alloc_nvm_word_g = 0;
 unsigned long NVMCounter::_persistent_obj_g = 0;
+unsigned long NVMCounter::_persistent_obj_word_g = 0;
 unsigned long NVMCounter::_copy_obj_retry_g = 0;
 unsigned long NVMCounter::_access_g[NVMCounter::_access_n] = {0};
 unsigned long NVMCounter::_fields_g = 0;
@@ -30,14 +32,16 @@ Thread* NVMCounter::_thr_list[_thr_list_size] = {NULL};
 pthread_mutex_t NVMCounter::_mtx = PTHREAD_MUTEX_INITIALIZER;
 #ifdef NVM_COUNTER_CHECK_DACAPO_RUN
 bool NVMCounter::_countable = false;
-#else
+#else  // NVM_COUNTER_CHECK_DACAPO_RUN
 bool NVMCounter::_countable = true;
-#endif // NVM_COUNTER_CHECK_DACAPO_START
+#endif // NVM_COUNTER_CHECK_DACAPO_RUN
 
 void NVMCounter::entry(DEBUG_ONLY(Thread* cur_thread)) {
   _enable = true;
   _alloc_nvm = 0;
+  _alloc_nvm_word = 0;
   _persistent_obj = 0;
+  _persistent_obj_word = 0;
   _copy_obj_retry = 0;
   for (int i = 0; i < _access_n; i++) {
     _access[i] = 0;
@@ -60,10 +64,17 @@ void NVMCounter::entry(DEBUG_ONLY(Thread* cur_thread)) {
 }
 
 void NVMCounter::exit(DEBUG_ONLY(Thread* cur_thread)) {
-  assert(_enable, "");
-  _enable = false;
-
+  // assert(_enable, "");
   pthread_mutex_lock(&_mtx);
+
+  if (!_enable) {
+    // tty->print_cr("[NVM] exit() is called twice.");
+    pthread_mutex_unlock(&_mtx);
+    return;
+  }
+  // tty->print_cr("[NVM] exit() is called.");
+
+  _enable = false;
   _thr_delete++;
 
 #ifdef ASSERT
@@ -82,8 +93,14 @@ void NVMCounter::exit(DEBUG_ONLY(Thread* cur_thread)) {
   _alloc_nvm_g += _alloc_nvm;
   _alloc_nvm = 0;
 
+  _alloc_nvm_word_g += _alloc_nvm_word;
+  _alloc_nvm_word = 0;
+
   _persistent_obj_g += _persistent_obj;
   _persistent_obj = 0;
+
+  _persistent_obj_word_g += _persistent_obj_word;
+  _persistent_obj_word = 0;
 
   _copy_obj_retry_g += _copy_obj_retry;
   _copy_obj_retry = 0;
@@ -101,65 +118,82 @@ void NVMCounter::exit(DEBUG_ONLY(Thread* cur_thread)) {
   pthread_mutex_unlock(&_mtx);
 }
 
-void NVMCounter::inc_access(bool is_store, oop obj, ptrdiff_t offset, bool is_volatile, bool is_oop) {
-  if (!is_store) {
-    // TODO:
-    return;
+void NVMCounter::inc_access_runtime(int _is_store, oop obj, ptrdiff_t offset, int _is_volatile,
+                                    int _is_oop, int _is_atomic) {
+  assert(_is_store == 0 || _is_store == 1, "");
+  assert(_is_volatile == -1 || _is_volatile == 0 || _is_volatile == 1, "");
+  assert(_is_oop == 0 || _is_oop == 1, "");
+  assert(_is_atomic == 0 || _is_atomic == 1, "");
+
+  if (_is_store == 0) {
+    return; // TODO: implement
   }
 
   // if (!SystemDictionary::Class_klass_loaded()) {
   //   return;
   // }
 
-  // if (!countable()) {
-  //   return;
-  // }
+  if (!countable()) {
+    return;
+  }
 
   Klass* k = obj->klass();
   if (k == NULL) {
     tty->print_cr("klass is NULL.");
     return;
   }
+
+  bool is_store    = _is_store == 1;
+  bool is_volatile = _is_volatile == 1;
+  bool is_oop      = _is_oop == 1;
   bool is_static   = k->id() == KlassID::InstanceMirrorKlassID &&
                      offset < InstanceMirrorKlass::offset_of_static_fields();
   bool is_runtime  = true;
+  bool is_atomic   = _is_atomic == 1;
 
-  //if (k->is_instance_klass()) {
-  //  fieldDescriptor fd;
-  //  ((InstanceKlass*)k)->find_field_from_offset(offset, is_static, &fd);
-  //  is_volatile = fd.is_volatile();
-  //  is_oop = is_reference_type(fd.field_type());
-  //} else {
-  //  is_oop = k->is_objArray_klass();
-  //}
+  if (_is_volatile == -1) {
+    is_volatile = false;
+    //if (k->is_instance_klass()) {
+    //  fieldDescriptor fd;
+    //  ((InstanceKlass*)k)->find_field_from_offset(offset, is_static, &fd);
+    //  is_volatile = fd.is_volatile();
+    //} else {
+    //  is_volatile = false;
+    //}
+  }
 
-  inc_access(is_store, is_volatile, is_oop, is_static, is_runtime);
+  inc_access(is_store, is_volatile, is_oop, is_static, is_runtime, is_atomic);
 }
 
-unsigned long NVMCounter::get_access(int is_store, int is_volatile, int is_oop, int is_static, int is_runtime) {
+unsigned long NVMCounter::get_access(int is_store, int is_volatile, int is_oop, int is_static,
+                                     int is_runtime, int is_atomic) {
   // 1: true, 0: false, -1: ignore
   if (is_store == -1) {
-    return get_access(0, is_volatile, is_oop, is_static, is_runtime) +
-           get_access(1, is_volatile, is_oop, is_static, is_runtime);
+    return get_access(0, is_volatile, is_oop, is_static, is_runtime, is_atomic) +
+           get_access(1, is_volatile, is_oop, is_static, is_runtime, is_atomic);
   }
   if (is_volatile == -1) {
-    return get_access(is_store, 0, is_oop, is_static, is_runtime) +
-           get_access(is_store, 1, is_oop, is_static, is_runtime);
+    return get_access(is_store, 0, is_oop, is_static, is_runtime, is_atomic) +
+           get_access(is_store, 1, is_oop, is_static, is_runtime, is_atomic);
   }
   if (is_oop == -1) {
-    return get_access(is_store, is_volatile, 0, is_static, is_runtime) +
-           get_access(is_store, is_volatile, 1, is_static, is_runtime);
+    return get_access(is_store, is_volatile, 0, is_static, is_runtime, is_atomic) +
+           get_access(is_store, is_volatile, 1, is_static, is_runtime, is_atomic);
   }
   if (is_static == -1) {
-    return get_access(is_store, is_volatile, is_oop, 0, is_runtime) +
-           get_access(is_store, is_volatile, is_oop, 1, is_runtime);
+    return get_access(is_store, is_volatile, is_oop, 0, is_runtime, is_atomic) +
+           get_access(is_store, is_volatile, is_oop, 1, is_runtime, is_atomic);
   }
   if (is_runtime == -1) {
-    return get_access(is_store, is_volatile, is_oop, is_static, 0) +
-           get_access(is_store, is_volatile, is_oop, is_static, 1);
+    return get_access(is_store, is_volatile, is_oop, is_static, 0, is_atomic) +
+           get_access(is_store, is_volatile, is_oop, is_static, 1, is_atomic);
+  }
+  if (is_atomic == -1) {
+    return get_access(is_store, is_volatile, is_oop, is_static, is_runtime, 0) +
+           get_access(is_store, is_volatile, is_oop, is_static, is_runtime, 1);
   }
   int flags = access_bool2flags(is_store == 1, is_volatile == 1, is_oop == 1,
-                                is_static == 1, is_runtime == 1);
+                                is_static == 1, is_runtime == 1, is_atomic == 1);
   return _access_g[flags];
 }
 
@@ -168,7 +202,9 @@ void NVMCounter::print() {
   for (unsigned long i = 0; i < _thr_create; i++) {
     if (_thr_list[i] == NULL) continue;
     assert(_thr_create != _thr_delete, "");
-    tty->print_cr("exit() has not been executed. Thread name: %s", _thr_list[i]->name());
+    // tty->print_cr("exit() has not been executed. Thread name: %s", _thr_list[i]->name());
+    assert(_thr_list[i]->nvm_counter()->_enable, "");
+    _thr_list[i]->nvm_counter()->exit(_thr_list[i]);
   }
   // FIXME:
   assert(_thr_create >= _thr_delete, "");
@@ -182,24 +218,30 @@ void NVMCounter::print() {
   tty->print_cr(NVMCOUNTER_PREFIX "_thr_create:       %lu", _thr_create);
   tty->print_cr(NVMCOUNTER_PREFIX "_thr_delete:       %lu", _thr_delete);
   tty->print_cr(NVMCOUNTER_PREFIX "_alloc_nvm_g:      %lu", _alloc_nvm_g);
-  tty->print_cr(NVMCOUNTER_PREFIX "_persistent_obj_g: %lu", _persistent_obj_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "_alloc_nvm_word_g: %lu", _alloc_nvm_word_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "_persistent_obj_g:      %lu", _persistent_obj_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "_persistent_obj_word_g: %lu", _persistent_obj_word_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_copy_obj_retry_g: %lu", _copy_obj_retry_g);
 
   tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (is_store, is_volatile, is_oop, is_static, is_runtime)");
   for (int i = 0; i < _access_n; i++) {
-    bool is_store    = i & 0b00001;
-    bool is_volatile = i & 0b00010;
-    bool is_oop      = i & 0b00100;
-    bool is_static   = i & 0b01000;
-    bool is_runtime  = i & 0b10000;
-    assert(NVMCounter::access_bool2flags(is_store, is_volatile, is_oop, is_static, is_runtime) == i, "");
-    tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (%d, %d, %d, %d, %d) %lu",
-                  is_store, is_volatile, is_oop, is_static, is_runtime, _access_g[i]);
+    bool is_store    = i & 0b000001; // R, W
+    bool is_volatile = i & 0b000010; // v
+    bool is_oop      = i & 0b000100; // o, p
+    bool is_static   = i & 0b001000; // s
+    bool is_runtime  = i & 0b010000; // r, i
+    bool is_atomic   = i & 0b100000; // a
+    assert(NVMCounter::access_bool2flags(is_store, is_volatile, is_oop, is_static, is_runtime, is_atomic) == i, "");
+    tty->print_cr(NVMCOUNTER_PREFIX "_access_g_%d%d%d%d%d%d_%s%s%s%s%s%s: %lu",
+                  is_store, is_volatile, is_oop, is_static, is_runtime, is_atomic,
+                  is_store ? "W" : "R", is_volatile ? "v" : "", is_oop ? "o" : "p",
+                  is_static ? "s" : "", is_runtime ? "r" : "i", is_atomic ? "a" : "",
+                  _access_g[i]);
   }
-  tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (store) %lu", get_access(1, -1, -1, -1, -1));
-  tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (load)  %lu", get_access(0, -1, -1, -1, -1));
-  tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (store/volatile) %lu", get_access(1, 1, -1, -1, -1));
-  tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (load/volatile)  %lu", get_access(0, 1, -1, -1, -1));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (store) %lu", get_access(1, -1, -1, -1, -1, -1));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (load)  %lu", get_access(0, -1, -1, -1, -1, -1));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (store/volatile) %lu", get_access(1, 1, -1, -1, -1, -1));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (load/volatile)  %lu", get_access(0, 1, -1, -1, -1, -1));
 
   tty->print_cr(NVMCOUNTER_PREFIX "_fields_g:          %lu", _fields_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_volatile_fields_g: %lu", _volatile_fields_g);

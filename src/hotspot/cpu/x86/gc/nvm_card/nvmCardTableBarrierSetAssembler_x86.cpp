@@ -22,7 +22,7 @@ void NVMCardTableBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSe
                                                ((decorators & OURPERSIST_IS_VOLATILE) != 0),
                                                is_reference_type(type),
                                                ((decorators & OURPERSIST_IS_STATIC) != 0),
-                                               false /* interpreter */));)
+                                               false /* interpreter */, false /* non-atomic */));)
 
   // implements volatile algorithm
   assert((decorators & OURPERSIST_IS_STATIC_MASK)   != DECORATORS_NONE, "");

@@ -57,10 +57,13 @@ class NVMCounter: public CHeapObj<mtNone> {
   static unsigned long _thr_create;
   static unsigned long _thr_delete;
 #ifdef ASSERT
-  static Thread* _thr;
+  unsigned long _thr_list_offset;
   static const unsigned long _thr_list_size = 512;
   static Thread* _thr_list[_thr_list_size];
 #endif // ASSERT
+  unsigned long _cnt_list_offset;
+  static const unsigned long _cnt_list_size = 512;
+  static NVMCounter* _cnt_list[_cnt_list_size];
 
   // others
   static pthread_mutex_t _mtx;

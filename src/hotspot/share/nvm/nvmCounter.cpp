@@ -24,9 +24,9 @@ unsigned long NVMCounter::_thr_create = 0;
 unsigned long NVMCounter::_thr_delete = 0;
 bool NVMCounter::_enable_g = true;
 #ifdef ASSERT
-Thread* NVMCounter::_thr = NULL;
 Thread* NVMCounter::_thr_list[_thr_list_size] = {NULL};
 #endif // ASSERT
+NVMCounter* NVMCounter::_cnt_list[_cnt_list_size] = {NULL};
 
 // others
 pthread_mutex_t NVMCounter::_mtx = PTHREAD_MUTEX_INITIALIZER;
@@ -54,41 +54,41 @@ void NVMCounter::entry(DEBUG_ONLY(Thread* cur_thread)) {
   assert(cur_thread != NULL, "cur_thread is NULL.");
   assert(_thr_create < _thr_list_size, "too many threads.");
 
-  _thr = cur_thread;
+  _thr_list_offset = _thr_create;
   _thr_list[_thr_create] = cur_thread;
-  assert(cur_thread == _thr, "");
 #endif // ASSERT
+
+  assert(_thr_create < _cnt_list_size, "too many counters.");
+  _cnt_list_offset = _thr_create;
+  _cnt_list[_thr_create] = this;
 
   _thr_create++;
   pthread_mutex_unlock(&_mtx);
 }
 
 void NVMCounter::exit(DEBUG_ONLY(Thread* cur_thread)) {
-  // assert(_enable, "");
   pthread_mutex_lock(&_mtx);
 
   if (!_enable) {
-    // tty->print_cr("[NVM] exit() is called twice.");
     pthread_mutex_unlock(&_mtx);
     return;
   }
-  // tty->print_cr("[NVM] exit() is called.");
 
   _enable = false;
   _thr_delete++;
 
 #ifdef ASSERT
   assert(cur_thread != NULL, "cur_thread is NULL.");
-  // FIXME:
-  // assert(cur_thread == _thr, "");
-  bool found = false;
-  for (unsigned long i = 0; i < _thr_create; i++) {
-    if (_thr_list[i] != cur_thread) continue;
-    _thr_list[i] = NULL; found = true; break;
-  }
-  // FIXME:
-  // assert(!found, "cur_thread is not found. Thread name: %s", cur_thread->name());
+  assert(_thr_list_offset < _thr_list_size, "out of range.");
+  assert(cur_thread == _thr_list[_thr_list_offset], "");
+  _thr_list[_thr_list_offset] = NULL;
+  _thr_list_offset = _thr_list_size;
 #endif // ASSERT
+
+  assert(_cnt_list_offset < _thr_create, "out of range.");
+  assert(_cnt_list[_cnt_list_offset] == this, "");
+  _cnt_list[_cnt_list_offset] = NULL;
+  _cnt_list_offset = _cnt_list_size;
 
   _alloc_nvm_g += _alloc_nvm;
   _alloc_nvm = 0;
@@ -190,17 +190,22 @@ unsigned long NVMCounter::get_access(int is_store, int is_volatile, int is_oop, 
 }
 
 void NVMCounter::print() {
+  for (unsigned long i = 0; i < _thr_create; i++) {
+    if (_cnt_list[i] == NULL) continue;
+    assert(_thr_create != _thr_delete, "");
+    assert(_cnt_list[i]->_enable, "");
+    assert(_cnt_list[i]->_thr_list_offset == i, "");
+    _cnt_list[i]->exit(DEBUG_ONLY(_thr_list[i]));
+  }
+
 #ifdef ASSERT
   for (unsigned long i = 0; i < _thr_create; i++) {
-    if (_thr_list[i] == NULL) continue;
-    assert(_thr_create != _thr_delete, "");
-    // tty->print_cr("exit() has not been executed. Thread name: %s", _thr_list[i]->name());
-    assert(_thr_list[i]->nvm_counter()->_enable, "");
-    _thr_list[i]->nvm_counter()->exit(_thr_list[i]);
+    assert(_thr_list[i] == NULL, "");
+    assert(_cnt_list[i] == NULL, "");
   }
-  // FIXME:
-  assert(_thr_create >= _thr_delete, "");
+  assert(_thr_create == _thr_delete, "");
 #endif // ASSERT
+
   _enable_g = false;
   if (_thr_create != _thr_delete) {
     report_vm_error(__FILE__, __LINE__, "exit() has not been executed in some threads.");

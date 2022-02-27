@@ -82,6 +82,7 @@ class NVMCounter: public CHeapObj<mtNone> {
   inline static bool countable() { return _countable; };
   inline static void set_countable(bool countable) {
     _countable = countable;
+    OrderAccess::fence();
   };
 
  public:

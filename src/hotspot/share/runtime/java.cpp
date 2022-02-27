@@ -534,13 +534,13 @@ class NVMCounterThreadClosure: public ThreadClosure {
 #endif // NVM_COUNTER
 
 void vm_exit(int code) {
-#ifdef NVM_COUNTER
+  #ifdef NVM_COUNTER
   {
     MutexLocker ml(Threads_lock);
     NVMCounterThreadClosure tc;
     Threads::threads_do(&tc);
+    NVMCounter::print();
   }
-  NVMCounter::print();
 #endif // NVM_COUNTER
 
   Thread* thread =

@@ -107,10 +107,10 @@ inline void OurPersist::add_dependent_obj_list(void* nvm_obj, Thread* cur_thread
   cur_thread->set_dependent_obj_list_tail(nvm_obj);
 }
 
-inline void* OurPersist::allocate_nvm(int size, Thread* thr) {
-  NVM_COUNTER_ONLY(thr->nvm_counter()->inc_alloc_nvm();)
+inline void* OurPersist::allocate_nvm(int word_size, Thread* thr) {
+  NVM_COUNTER_ONLY(thr->nvm_counter()->inc_alloc_nvm(word_size);)
 
-  void* mem = NVMAllocator::allocate(size);
+  void* mem = NVMAllocator::allocate(word_size);
   assert(mem != NULL, "");
 
   if (thr == NULL) {

@@ -249,10 +249,10 @@ void NVMCounter::print() {
   tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (normal/non-volatile/oop) %lu", get_access(1, 0, 1, -1, -1, 0));
   tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (normal/volatile/oop)     %lu", get_access(1, 1, 1, -1, -1, 0));
 
-  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/non-volatile) %lu", get_access(1, 0, 0, -1, -1, 1));
-  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/volatile)     %lu", get_access(1, 1, 0, -1, -1, 1));
-  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/non-volatile) %lu", get_access(1, 0, 1, -1, -1, 1));
-  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/volatile)     %lu", get_access(1, 1, 1, -1, -1, 1));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/non-volatile/pri) %lu", get_access(1, 0, 0, -1, -1, 1));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/volatile/pri)     %lu", get_access(1, 1, 0, -1, -1, 1));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/non-volatile/oop) %lu", get_access(1, 0, 1, -1, -1, 1));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/volatile/oop)     %lu", get_access(1, 1, 1, -1, -1, 1));
 
   tty->print_cr(NVMCOUNTER_PREFIX "_fields_g:          %lu", _fields_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_volatile_fields_g: %lu", _volatile_fields_g);

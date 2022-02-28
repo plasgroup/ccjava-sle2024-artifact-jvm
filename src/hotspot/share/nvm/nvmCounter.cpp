@@ -229,6 +229,10 @@ void NVMCounter::print() {
     bool is_runtime  = i & 0b010000; // r, i
     bool is_atomic   = i & 0b100000; // a
     assert(NVMCounter::access_bool2flags(is_store, is_volatile, is_oop, is_static, is_runtime, is_atomic) == i, "");
+
+    // FIXME: implement
+    if (!is_store) continue;
+
     tty->print_cr(NVMCOUNTER_PREFIX "_access_g_%d%d%d%d%d%d_%s%s%s%s%s%s: %lu",
                   is_store, is_volatile, is_oop, is_static, is_runtime, is_atomic,
                   is_store ? "W" : "R", is_volatile ? "v" : "_", is_oop ? "o" : "p",
@@ -239,6 +243,16 @@ void NVMCounter::print() {
   tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (load)  %lu", get_access(0, -1, -1, -1, -1, -1));
   tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (store/volatile) %lu", get_access(1, 1, -1, -1, -1, -1));
   tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (load/volatile)  %lu", get_access(0, 1, -1, -1, -1, -1));
+
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (normal/non-volatile/pri) %lu", get_access(1, 0, 0, -1, -1, 0));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (normal/volatile/pri)     %lu", get_access(1, 1, 0, -1, -1, 0));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (normal/non-volatile/oop) %lu", get_access(1, 0, 1, -1, -1, 0));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (normal/volatile/oop)     %lu", get_access(1, 1, 1, -1, -1, 0));
+
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/non-volatile) %lu", get_access(1, 0, 0, -1, -1, 1));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/volatile)     %lu", get_access(1, 1, 0, -1, -1, 1));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/non-volatile) %lu", get_access(1, 0, 1, -1, -1, 1));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/volatile)     %lu", get_access(1, 1, 1, -1, -1, 1));
 
   tty->print_cr(NVMCOUNTER_PREFIX "_fields_g:          %lu", _fields_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_volatile_fields_g: %lu", _volatile_fields_g);

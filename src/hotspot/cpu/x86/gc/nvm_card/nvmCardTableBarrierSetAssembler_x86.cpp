@@ -599,11 +599,11 @@ void NVMCardTableBarrierSetAssembler::writeback(MacroAssembler* masm, Address fi
   }
   __ clwb(field);
   NVM_COUNTER_ONLY(NVMCounter::inc_clwb_asm(masm);)
-#else
+#else  // USE_CLWB
   __ clflush(field);
-#endif
+#endif // USE_CLWB
   __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
-#endif
+#endif // ENABLE_NVM_WRITEBACK
 }
 
 void NVMCardTableBarrierSetAssembler::lock_nvmheader(MacroAssembler* masm, Register base, Register _tmp1, Register _tmp2) {

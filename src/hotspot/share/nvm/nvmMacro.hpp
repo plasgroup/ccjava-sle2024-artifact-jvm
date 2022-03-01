@@ -12,6 +12,7 @@
 #ifdef USE_CLWB
 #define NVM_FLUSH(mem) {\
   _mm_clwb(mem);\
+  NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_clwb());\
 }
 #else  // USE_CLWB
 #define NVM_FLUSH(mem) {\

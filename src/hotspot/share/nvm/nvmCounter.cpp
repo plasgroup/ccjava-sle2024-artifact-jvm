@@ -18,6 +18,7 @@ unsigned long NVMCounter::_copy_obj_retry_g = 0;
 unsigned long NVMCounter::_access_g[NVMCounter::_access_n] = {0};
 unsigned long NVMCounter::_fields_g = 0;
 unsigned long NVMCounter::_volatile_fields_g = 0;
+unsigned long NVMCounter::_clwb_g = 0;
 
 // for debug
 unsigned long NVMCounter::_thr_create = 0;
@@ -48,6 +49,7 @@ void NVMCounter::entry(DEBUG_ONLY(Thread* cur_thread)) {
   }
   _fields = 0;
   _volatile_fields = 0;
+  _clwb = 0;
 
   pthread_mutex_lock(&_mtx);
 #ifdef ASSERT
@@ -115,6 +117,9 @@ void NVMCounter::exit(DEBUG_ONLY(Thread* cur_thread)) {
 
   _volatile_fields_g += _volatile_fields;
   _volatile_fields = 0;
+
+  _clwb_g += _clwb;
+  _clwb = 0;
   pthread_mutex_unlock(&_mtx);
 }
 
@@ -256,6 +261,7 @@ void NVMCounter::print() {
 
   tty->print_cr(NVMCOUNTER_PREFIX "_fields_g:          %lu", _fields_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_volatile_fields_g: %lu", _volatile_fields_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "_clwb_g:            %lu", _clwb_g);
 }
 
 #endif // NVM_COUNTER

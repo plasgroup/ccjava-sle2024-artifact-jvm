@@ -598,6 +598,7 @@ void NVMCardTableBarrierSetAssembler::writeback(MacroAssembler* masm, Address fi
     field = Address(tmp, 0);
   }
   __ clwb(field);
+  NVM_COUNTER_ONLY(NVMCounter::inc_clwb_asm(masm);)
 #else
   __ clflush(field);
 #endif

@@ -40,6 +40,7 @@ class NVMCounter: public CHeapObj<mtNone> {
   unsigned long _access[_access_n];
   unsigned long _fields;
   unsigned long _volatile_fields;
+  unsigned long _clwb;
 
   // global counters
   static unsigned long _alloc_nvm_g;
@@ -50,6 +51,7 @@ class NVMCounter: public CHeapObj<mtNone> {
   static unsigned long _access_g[_access_n];
   static unsigned long _fields_g;
   static unsigned long _volatile_fields_g;
+  static unsigned long _clwb_g;
 
   // for debug
   bool _enable;
@@ -113,6 +115,7 @@ class NVMCounter: public CHeapObj<mtNone> {
                           int is_oop, int is_atomic);
   inline void inc_fields()          { add_count(&_fields, 1); }
   inline void inc_volatile_fields() { add_count(&_volatile_fields, 1); }
+  inline void inc_clwb()            { add_count(&_clwb, 1); }
 
   static unsigned long get_access(int is_store, int is_volatile, int is_oop, int is_static,
                                   int is_runtime, int is_atomic);
@@ -132,6 +135,8 @@ class NVMCounter: public CHeapObj<mtNone> {
   static void inc_access(Thread* thr, int flags);
   static void inc_access_asm(MacroAssembler* masm, bool is_store, bool is_volatile, bool is_oop,
                              bool is_static, bool is_runtime, bool is_atomic);
+  static void inc_clwb(Thread* thr);
+  static void inc_clwb_asm(MacroAssembler* masm);
 
   void entry(DEBUG_ONLY(Thread* cur_thread));
   void exit(DEBUG_ONLY(Thread* cur_thread));

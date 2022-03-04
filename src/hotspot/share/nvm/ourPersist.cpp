@@ -60,6 +60,8 @@ void OurPersist::ensure_recoverable(oop obj) {
          "fwd: %p", obj->nvm_header().fwd());
   worklist->add(obj);
 
+  NVM_COUNTER_ONLY(cur_thread->nvm_counter()->inc_call_ensure_recoverable();)
+
   while (worklist->empty() == false) {
     oop cur_obj = worklist->remove();
     void* cur_nvm_obj = cur_obj->nvm_header().fwd();

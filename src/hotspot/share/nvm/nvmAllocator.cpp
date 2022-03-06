@@ -89,6 +89,60 @@ void* NVMAllocator::allocate(size_t _size)
     report_vm_error(__FILE__, __LINE__, "NVMAlocator::allocate cannot allocate nvm.");
   }
 
+#elif defined USE_NVTLAB_BUMP
+  Thread* cur_thread = Thread::current();
+  void* bump_head = cur_thread->nvtlab_bump_head();
+  int bump_size = cur_thread->nvtlab_bump_size();
+
+#ifndef NVTLAB_BUMP_CHUNK_SIZE_KB
+  report_vm_error(__FILE__, __LINE__, "NVTLAB_BUMP_CHUNK_SIZE_KB is not defined.");
+#endif // NVTLAB_BUMP_CHUNK_SIZE_KB
+  const int chunk_size = NVTLAB_BUMP_CHUNK_SIZE_KB * 1024;
+
+#ifdef AVOID_SAME_CACHELINE_ALLOCATION
+  size = (size + 63) & ~63;
+#endif // AVOID_SAME_CACHELINE_ALLOCATION
+
+  if (size >= NonVolatileChunkLarge::MINIMUM_WORD_SIZE_OF_NVCLARGE_ALLOCATION) {
+    // large object
+#ifdef ASSERT
+    tty->print_cr("allocate size: %d", size);
+#endif // ASSERT
+    pthread_mutex_lock(&NVMAllocator::allocate_mtx);
+    if (NVMAllocator::nvm_head == NULL) NVMAllocator::init();
+
+    ptr = NVMAllocator::nvm_head;
+    void* nvm_next = (void*)(((char*)NVMAllocator::nvm_head) + size);
+    NVMAllocator::nvm_head = nvm_next;
+
+    // check
+    if (NVMAllocator::nvm_tail <= nvm_next) {
+      report_vm_error(__FILE__, __LINE__, "Out of memory in NVM.");
+    }
+    pthread_mutex_unlock(&NVMAllocator::allocate_mtx);
+  } else {
+    // small object
+    if (size > bump_size || bump_head == NULL) {
+      // allocate chunk
+      pthread_mutex_lock(&NVMAllocator::allocate_mtx);
+      if (NVMAllocator::nvm_head == NULL) NVMAllocator::init();
+
+      bump_head = NVMAllocator::nvm_head;
+      bump_size = chunk_size;
+      void* nvm_next = (void*)(((char*)NVMAllocator::nvm_head) + chunk_size);
+      NVMAllocator::nvm_head = nvm_next;
+
+      // check
+      if (NVMAllocator::nvm_tail <= nvm_next) {
+        report_vm_error(__FILE__, __LINE__, "Out of memory in NVM.");
+      }
+      pthread_mutex_unlock(&NVMAllocator::allocate_mtx);
+    }
+    // allocate object
+    ptr = bump_head;
+    cur_thread->set_nvtlab_bump_head((void*)(((char*)bump_head) + size));
+    cur_thread->set_nvtlab_bump_size(bump_size - size);
+  }
 #else
   // 大域的な領域からメモリを確保する
   // allocate

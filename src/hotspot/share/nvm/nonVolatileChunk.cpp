@@ -10,10 +10,16 @@
 
 pthread_mutex_t NonVolatileChunkSegregate::gc_mtx = PTHREAD_MUTEX_INITIALIZER;
 NonVolatileChunkSegregate* NonVolatileChunkSegregate::standby_for_gc[40];
-NonVolatileChunkSegregate* NonVolatileChunkSegregate::ready_for_use[40];
+
 void* NonVolatileChunkSegregate::nvc_address[3750000] = {NULL};
 bool NonVolatileChunkLarge::has_available_chunk = false;
+
+#ifdef USE_NVTLAB
+#ifdef NVMGC
+NonVolatileChunkSegregate* NonVolatileChunkSegregate::ready_for_use[40];
 const float NonVolatileChunkSegregate::ready_for_use_threshold = 0.1;
+#endif // NVMGC
+#endif // USE_NVTLAB
 
 void NonVolatileChunkSegregate::initialize_standby_for_gc() {
   size_t i;

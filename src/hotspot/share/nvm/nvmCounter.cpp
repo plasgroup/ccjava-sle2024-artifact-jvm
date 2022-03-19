@@ -18,6 +18,8 @@ unsigned long NVMCounter::_copy_obj_retry_g = 0;
 unsigned long NVMCounter::_access_g[NVMCounter::_access_n] = {0};
 unsigned long NVMCounter::_fields_g = 0;
 unsigned long NVMCounter::_volatile_fields_g = 0;
+unsigned long NVMCounter::_clwb_g = 0;
+unsigned long NVMCounter::_call_ensure_recoverable_g = 0;
 
 // for debug
 unsigned long NVMCounter::_thr_create = 0;
@@ -48,6 +50,8 @@ void NVMCounter::entry(DEBUG_ONLY(Thread* cur_thread)) {
   }
   _fields = 0;
   _volatile_fields = 0;
+  _clwb = 0;
+  _call_ensure_recoverable = 0;
 
   pthread_mutex_lock(&_mtx);
 #ifdef ASSERT
@@ -115,6 +119,12 @@ void NVMCounter::exit(DEBUG_ONLY(Thread* cur_thread)) {
 
   _volatile_fields_g += _volatile_fields;
   _volatile_fields = 0;
+
+  _clwb_g += _clwb;
+  _clwb = 0;
+
+  _call_ensure_recoverable_g += _call_ensure_recoverable;
+  _call_ensure_recoverable = 0;
   pthread_mutex_unlock(&_mtx);
 }
 
@@ -229,6 +239,10 @@ void NVMCounter::print() {
     bool is_runtime  = i & 0b010000; // r, i
     bool is_atomic   = i & 0b100000; // a
     assert(NVMCounter::access_bool2flags(is_store, is_volatile, is_oop, is_static, is_runtime, is_atomic) == i, "");
+
+    // FIXME: implement
+    if (!is_store) continue;
+
     tty->print_cr(NVMCOUNTER_PREFIX "_access_g_%d%d%d%d%d%d_%s%s%s%s%s%s: %lu",
                   is_store, is_volatile, is_oop, is_static, is_runtime, is_atomic,
                   is_store ? "W" : "R", is_volatile ? "v" : "_", is_oop ? "o" : "p",
@@ -240,8 +254,20 @@ void NVMCounter::print() {
   tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (store/volatile) %lu", get_access(1, 1, -1, -1, -1, -1));
   tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (load/volatile)  %lu", get_access(0, 1, -1, -1, -1, -1));
 
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (normal/non-volatile/pri) %lu", get_access(1, 0, 0, -1, -1, 0));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (normal/volatile/pri)     %lu", get_access(1, 1, 0, -1, -1, 0));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (normal/non-volatile/oop) %lu", get_access(1, 0, 1, -1, -1, 0));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (normal/volatile/oop)     %lu", get_access(1, 1, 1, -1, -1, 0));
+
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/non-volatile/pri) %lu", get_access(1, 0, 0, -1, -1, 1));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/volatile/pri)     %lu", get_access(1, 1, 0, -1, -1, 1));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/non-volatile/oop) %lu", get_access(1, 0, 1, -1, -1, 1));
+  tty->print_cr(NVMCOUNTER_PREFIX "_access_g_ismm: (atomic/volatile/oop)     %lu", get_access(1, 1, 1, -1, -1, 1));
+
   tty->print_cr(NVMCOUNTER_PREFIX "_fields_g:          %lu", _fields_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_volatile_fields_g: %lu", _volatile_fields_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "_clwb_g:            %lu", _clwb_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "_call_ensure_recoverable_g: %lu", _call_ensure_recoverable_g);
 }
 
 #endif // NVM_COUNTER

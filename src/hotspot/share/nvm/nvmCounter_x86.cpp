@@ -85,4 +85,15 @@ void NVMCounter::inc_access(Thread* thr, int flags) {
   thr->nvm_counter()->inc_access(flags);
 }
 
+void NVMCounter::inc_clwb_asm(MacroAssembler* masm) {
+  __ pusha();
+  address func = CAST_FROM_FN_PTR(address, ((void(*)(Thread*))NVMCounter::inc_clwb));
+  __ call_VM_leaf(func, r15_thread);
+  __ popa();
+}
+
+void NVMCounter::inc_clwb(Thread* thr) {
+  thr->nvm_counter()->inc_clwb();
+}
+
 #endif // NVM_COUNTER

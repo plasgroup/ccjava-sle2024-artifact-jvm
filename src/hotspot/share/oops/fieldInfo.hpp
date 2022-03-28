@@ -165,6 +165,16 @@ class FieldInfo {
     else   _shorts[access_flags_offset] &= ~JVM_ACC_FIELD_STABLE;
   }
 
+#ifdef OUR_PERSIST
+  bool is_durableroot() const {
+    return (access_flags() & JVM_ACC_OURPERSIST_DURABLEROOT) != 0;
+  }
+  void set_durableroot(bool z) {
+    if (z) _shorts[access_flags_offset] |=  JVM_ACC_OURPERSIST_DURABLEROOT;
+    else   _shorts[access_flags_offset] &= ~JVM_ACC_OURPERSIST_DURABLEROOT;
+  }
+#endif // OUR_PERSIST
+
   Symbol* lookup_symbol(int symbol_index) const {
     assert(is_internal(), "only internal fields");
     return Symbol::vm_symbol_at(static_cast<vmSymbolID>(symbol_index));

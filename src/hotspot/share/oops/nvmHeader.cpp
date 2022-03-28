@@ -8,12 +8,8 @@ bool nvmHeader::is_null(void* _fwd) {
   return _fwd == NULL;
 }
 
-bool nvmHeader::is_busy(void* _fwd) {
-  return _fwd == OURPERSIST_FWD_BUSY;
-}
-
 bool nvmHeader::is_fwd(void* _fwd) {
-  if (is_null(_fwd) || is_busy(_fwd)) {
+  if (is_null(_fwd)) {
     return false;
   }
   if (from_pointer(_fwd).flags() != uintptr_t(0)) {

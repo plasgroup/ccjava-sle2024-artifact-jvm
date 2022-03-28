@@ -769,7 +769,13 @@ void TemplateTable::iaload() {
   // rax: index
   // rdx: array
   index_check(rdx, rax); // kills rbx
-  __ access_load_at(T_INT, IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE, rax,
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY;
+#endif // OUR_PERSIST
+  __ access_load_at(T_INT, ds, rax,
                     Address(rdx, rax, Address::times_4,
                             arrayOopDesc::base_offset_in_bytes(T_INT)),
                     noreg, noreg);
@@ -782,7 +788,13 @@ void TemplateTable::laload() {
   index_check(rdx, rax); // kills rbx
   NOT_LP64(__ mov(rbx, rax));
   // rbx,: index
-  __ access_load_at(T_LONG, IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE, noreg /* ltos */,
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY;
+#endif // OUR_PERSIST
+  __ access_load_at(T_LONG, ds, noreg /* ltos */,
                     Address(rdx, rbx, Address::times_8,
                             arrayOopDesc::base_offset_in_bytes(T_LONG)),
                     noreg, noreg);
@@ -795,7 +807,13 @@ void TemplateTable::faload() {
   // rax: index
   // rdx: array
   index_check(rdx, rax); // kills rbx
-  __ access_load_at(T_FLOAT, IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE, noreg /* ftos */,
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY;
+#endif // OUR_PERSIST
+  __ access_load_at(T_FLOAT, ds, noreg /* ftos */,
                     Address(rdx, rax,
                             Address::times_4,
                             arrayOopDesc::base_offset_in_bytes(T_FLOAT)),
@@ -807,7 +825,13 @@ void TemplateTable::daload() {
   // rax: index
   // rdx: array
   index_check(rdx, rax); // kills rbx
-  __ access_load_at(T_DOUBLE, IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE, noreg /* dtos */,
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY;
+#endif // OUR_PERSIST
+  __ access_load_at(T_DOUBLE, ds, noreg /* dtos */,
                     Address(rdx, rax,
                             Address::times_8,
                             arrayOopDesc::base_offset_in_bytes(T_DOUBLE)),
@@ -819,12 +843,17 @@ void TemplateTable::aaload() {
   // rax: index
   // rdx: array
   index_check(rdx, rax); // kills rbx
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IS_ARRAY;
+#endif // OUR_PERSIST
   do_oop_load(_masm,
               Address(rdx, rax,
                       UseCompressedOops ? Address::times_4 : Address::times_ptr,
                       arrayOopDesc::base_offset_in_bytes(T_OBJECT)),
-              rax,
-              IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE);
+              rax, ds);
 }
 
 void TemplateTable::baload() {
@@ -832,7 +861,13 @@ void TemplateTable::baload() {
   // rax: index
   // rdx: array
   index_check(rdx, rax); // kills rbx
-  __ access_load_at(T_BYTE, IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE, rax,
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY;
+#endif // OUR_PERSIST
+  __ access_load_at(T_BYTE, ds, rax,
                     Address(rdx, rax, Address::times_1, arrayOopDesc::base_offset_in_bytes(T_BYTE)),
                     noreg, noreg);
 }
@@ -842,7 +877,13 @@ void TemplateTable::caload() {
   // rax: index
   // rdx: array
   index_check(rdx, rax); // kills rbx
-  __ access_load_at(T_CHAR, IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE, rax,
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY;
+#endif // OUR_PERSIST
+  __ access_load_at(T_CHAR, ds, rax,
                     Address(rdx, rax, Address::times_2, arrayOopDesc::base_offset_in_bytes(T_CHAR)),
                     noreg, noreg);
 }
@@ -857,7 +898,13 @@ void TemplateTable::fast_icaload() {
   // rax: index
   // rdx: array
   index_check(rdx, rax); // kills rbx
-  __ access_load_at(T_CHAR, IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE, rax,
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY;
+#endif // OUR_PERSIST
+  __ access_load_at(T_CHAR, ds, rax,
                     Address(rdx, rax, Address::times_2, arrayOopDesc::base_offset_in_bytes(T_CHAR)),
                     noreg, noreg);
 }
@@ -868,7 +915,13 @@ void TemplateTable::saload() {
   // rax: index
   // rdx: array
   index_check(rdx, rax); // kills rbx
-  __ access_load_at(T_SHORT, IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE, rax,
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY;
+#endif // OUR_PERSIST
+  __ access_load_at(T_SHORT, ds, rax,
                     Address(rdx, rax, Address::times_2, arrayOopDesc::base_offset_in_bytes(T_SHORT)),
                     noreg, noreg);
 }
@@ -1062,7 +1115,13 @@ void TemplateTable::iastore() {
   // rbx: index
   // rdx: array
   index_check(rdx, rbx); // prefer index in rbx
-  __ access_store_at(T_INT, IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE,
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY;
+#endif // OUR_PERSIST
+  __ access_store_at(T_INT, ds,
                      Address(rdx, rbx, Address::times_4,
                              arrayOopDesc::base_offset_in_bytes(T_INT)),
                      rax, noreg, noreg);
@@ -1076,7 +1135,13 @@ void TemplateTable::lastore() {
   // rdx: high(value)
   index_check(rcx, rbx);  // prefer index in rbx,
   // rbx,: index
-  __ access_store_at(T_LONG, IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE,
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY;
+#endif // OUR_PERSIST
+  __ access_store_at(T_LONG, ds,
                      Address(rcx, rbx, Address::times_8,
                              arrayOopDesc::base_offset_in_bytes(T_LONG)),
                      noreg /* ltos */, noreg, noreg);
@@ -1090,7 +1155,13 @@ void TemplateTable::fastore() {
   // rbx:  index
   // rdx:  array
   index_check(rdx, rbx); // prefer index in rbx
-  __ access_store_at(T_FLOAT, IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE,
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY;
+#endif // OUR_PERSIST
+  __ access_store_at(T_FLOAT, ds,
                      Address(rdx, rbx, Address::times_4,
                              arrayOopDesc::base_offset_in_bytes(T_FLOAT)),
                      noreg /* ftos */, noreg, noreg);
@@ -1103,7 +1174,13 @@ void TemplateTable::dastore() {
   // rbx:  index
   // rdx:  array
   index_check(rdx, rbx); // prefer index in rbx
-  __ access_store_at(T_DOUBLE, IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE,
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY;
+#endif // OUR_PERSIST
+  __ access_store_at(T_DOUBLE, ds,
                      Address(rdx, rbx, Address::times_8,
                              arrayOopDesc::base_offset_in_bytes(T_DOUBLE)),
                      noreg /* dtos */, noreg, noreg);
@@ -1147,16 +1224,26 @@ void TemplateTable::aastore() {
   // Get the value we will store
   __ movptr(rax, at_tos());
   __ movl(rcx, at_tos_p1()); // index
+#ifdef OUR_PERSIST
+  const DecoratorSet ds_1 = IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds_1 = IS_ARRAY;
+#endif // OUR_PERSIST
   // Now store using the appropriate barrier
-  do_oop_store(_masm, element_address, rax, IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE);
+  do_oop_store(_masm, element_address, rax, ds_1);
   __ jmp(done);
 
   // Have a NULL in rax, rdx=array, ecx=index.  Store NULL at ary[idx]
   __ bind(is_null);
   __ profile_null_seen(rbx);
 
+#ifdef OUR_PERSIST
+  const DecoratorSet ds_2 = IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds_2 = IS_ARRAY;
+#endif // OUR_PERSIST
   // Store a NULL
-  do_oop_store(_masm, element_address, noreg, IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE);
+  do_oop_store(_masm, element_address, noreg, ds_2);
 
   // Pop stack arguments
   __ bind(done);
@@ -1181,7 +1268,13 @@ void TemplateTable::bastore() {
   __ jccb(Assembler::zero, L_skip);
   __ andl(rax, 1);  // if it is a T_BOOLEAN array, mask the stored value to 0/1
   __ bind(L_skip);
-  __ access_store_at(T_BYTE, IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE,
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY;
+#endif // OUR_PERSIST
+  __ access_store_at(T_BYTE, ds,
                      Address(rdx, rbx,Address::times_1,
                              arrayOopDesc::base_offset_in_bytes(T_BYTE)),
                      rax, noreg, noreg);
@@ -1194,7 +1287,13 @@ void TemplateTable::castore() {
   // rbx: index
   // rdx: array
   index_check(rdx, rbx);  // prefer index in rbx
-  __ access_store_at(T_CHAR, IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE,
+
+#ifdef OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY | OURPERSIST_IS_NOT_STATIC | OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds = IN_HEAP | IS_ARRAY;
+#endif // OUR_PERSIST
+  __ access_store_at(T_CHAR, ds,
                      Address(rdx, rbx, Address::times_2,
                              arrayOopDesc::base_offset_in_bytes(T_CHAR)),
                      rax, noreg, noreg);
@@ -2890,12 +2989,22 @@ void TemplateTable::getfield_or_static(int byte_no, bool is_static, RewriteContr
   __ testl(rdx, rdx);
   __ jcc(Assembler::zero, notVolatile);
 
-  getfield_or_static_helper(byte_no, is_static, rc, obj, off, flags, OURPERSIST_IS_VOLATILE);
+#ifdef OUR_PERSIST
+  const DecoratorSet ds_1 = OURPERSIST_IS_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds_1 = DECORATORS_NONE;
+#endif // OUR_PERSIST
+  getfield_or_static_helper(byte_no, is_static, rc, obj, off, flags, ds_1);
 
   __ jmp(Done);
   __ bind(notVolatile);
 
-  getfield_or_static_helper(byte_no, is_static, rc, obj, off, flags, OURPERSIST_IS_NOT_VOLATILE);
+#ifdef OUR_PERSIST
+  const DecoratorSet ds_2 = OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds_2 = DECORATORS_NONE;
+#endif // OUR_PERSIST
+  getfield_or_static_helper(byte_no, is_static, rc, obj, off, flags, ds_2);
 
   __ bind(Done);
 }
@@ -2906,7 +3015,9 @@ void TemplateTable::getfield_or_static_helper(int byte_no, bool is_static, Rewri
   const Register bc = LP64_ONLY(c_rarg3) NOT_LP64(rcx); // uses same reg as obj, so don't mix them
 
   ds |= IN_HEAP;
+#ifdef OUR_PERSIST
   ds |= is_static ? OURPERSIST_IS_STATIC : OURPERSIST_IS_NOT_STATIC;
+#endif // OUR_PERSIST
 
   if (!is_static) pop_and_check_object(obj);
 
@@ -3168,13 +3279,23 @@ void TemplateTable::putfield_or_static(int byte_no, bool is_static, RewriteContr
   __ testl(rdx, rdx);
   __ jcc(Assembler::zero, notVolatile);
 
-  putfield_or_static_helper(byte_no, is_static, rc, obj, off, flags, OURPERSIST_IS_VOLATILE);
+#ifdef OUR_PERSIST
+  const DecoratorSet ds_1 = OURPERSIST_IS_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds_1 = DECORATORS_NONE;
+#endif // OUR_PERSIST
+  putfield_or_static_helper(byte_no, is_static, rc, obj, off, flags, ds_1);
   volatile_barrier(Assembler::Membar_mask_bits(Assembler::StoreLoad |
                                                Assembler::StoreStore));
   __ jmp(Done);
   __ bind(notVolatile);
 
-  putfield_or_static_helper(byte_no, is_static, rc, obj, off, flags, OURPERSIST_IS_NOT_VOLATILE);
+#ifdef OUR_PERSIST
+  const DecoratorSet ds_2 = OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds_2 = DECORATORS_NONE;
+#endif // OUR_PERSIST
+  putfield_or_static_helper(byte_no, is_static, rc, obj, off, flags, ds_2);
 
   __ bind(Done);
 }
@@ -3183,7 +3304,10 @@ void TemplateTable::putfield_or_static_helper(int byte_no, bool is_static, Rewri
                                               Register obj, Register off, Register flags, DecoratorSet ds) {
 
   ds |= IN_HEAP;
+#ifdef OUR_PERSIST
   ds |= is_static ? OURPERSIST_IS_STATIC : OURPERSIST_IS_NOT_STATIC;
+  ds |= OURPERSIST_NOT_DURABLE_ANNOTATION; // default
+#endif // OUR_PERSIST
 
   // field addresses
   const Address field(obj, off, Address::times_1, 0*wordSize);
@@ -3194,6 +3318,12 @@ void TemplateTable::putfield_or_static_helper(int byte_no, bool is_static, Rewri
   Label Done;
 
   const Register bc    = LP64_ONLY(c_rarg3) NOT_LP64(rcx);
+
+#ifdef OUR_PERSIST
+  if (is_static) {
+    __ movl(rdx, flags);
+  }
+#endif // OUR_PERSIST
 
   __ shrl(flags, ConstantPoolCacheEntry::tos_state_shift);
 
@@ -3235,12 +3365,41 @@ void TemplateTable::putfield_or_static_helper(int byte_no, bool is_static, Rewri
   {
     __ pop(atos);
     if (!is_static) pop_and_check_object(obj);
+
+#ifdef OUR_PERSIST
+    if (is_static) {
+      Label durableroot;
+      __ shrl(rdx, ConstantPoolCacheEntry::is_durableroot_shift);
+      __ andl(rdx, 0x1);
+      __ testl(rdx, rdx);
+      __ jcc(Assembler::notZero, durableroot);
+      // This field is not durableroot
+      // Store into the field
+      do_oop_store(_masm, field, rax, ds);
+      __ jmp(Done);
+      __ bind(durableroot);
+      // This field is durableroot
+      // Store into the field
+      DecoratorSet ds_droot = (ds & ~OURPERSIST_NOT_DURABLE_ANNOTATION) |
+                               OURPERSIST_DURABLE_ANNOTATION;
+      do_oop_store(_masm, field, rax, ds_droot);
+      __ jmp(Done);
+    } else {
+      // Store into the field
+      do_oop_store(_masm, field, rax, ds);
+      if (!is_static && rc == may_rewrite) {
+        patch_bytecode(Bytecodes::_fast_aputfield, bc, rbx, true, byte_no);
+      }
+      __ jmp(Done);
+    }
+#else  // OUR_PERSIST
     // Store into the field
     do_oop_store(_masm, field, rax, ds);
     if (!is_static && rc == may_rewrite) {
       patch_bytecode(Bytecodes::_fast_aputfield, bc, rbx, true, byte_no);
     }
     __ jmp(Done);
+#endif // OUR_PERSIST
   }
 
   __ bind(notObj);
@@ -3456,21 +3615,34 @@ void TemplateTable::fast_storefield(TosState state) {
   __ testl(rdx, rdx);
   __ jcc(Assembler::zero, notVolatile);
 
-  fast_storefield_helper(field, rax, OURPERSIST_IS_VOLATILE);
+#ifdef OUR_PERSIST
+  const DecoratorSet ds_1 = OURPERSIST_IS_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds_1 = DECORATORS_NONE;
+#endif // OUR_PERSIST
+  fast_storefield_helper(field, rax, ds_1);
   volatile_barrier(Assembler::Membar_mask_bits(Assembler::StoreLoad |
                                                Assembler::StoreStore));
   __ jmp(Done);
   __ bind(notVolatile);
 
-  fast_storefield_helper(field, rax, OURPERSIST_IS_NOT_VOLATILE);
+#ifdef OUR_PERSIST
+  const DecoratorSet ds_2 = OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds_2 = DECORATORS_NONE;
+#endif // OUR_PERSIST
+  fast_storefield_helper(field, rax, ds_2);
 
   __ bind(Done);
 }
 
 void TemplateTable::fast_storefield_helper(Address field, Register rax, DecoratorSet ds) {
 
+  ds |= IN_HEAP;
+#ifdef OUR_PERSIST
   // is_static = false
-  ds |= IN_HEAP | OURPERSIST_IS_NOT_STATIC;
+  ds |= OURPERSIST_IS_NOT_STATIC;
+#endif // OUR_PERSIST
 
   // access field
   switch (bytecode()) {
@@ -3556,20 +3728,33 @@ void TemplateTable::fast_accessfield(TosState state) {
   __ testl(rdx, rdx);
   __ jcc(Assembler::zero, notVolatile);
 
-  fast_accessfield_helper(field, rax, OURPERSIST_IS_VOLATILE);
+#ifdef OUR_PERSIST
+  const DecoratorSet ds_1 = OURPERSIST_IS_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds_1 = DECORATORS_NONE;
+#endif // OUR_PERSIST
+  fast_accessfield_helper(field, rax, ds_1);
 
   __ jmp(Done);
   __ bind(notVolatile);
 
-  fast_accessfield_helper(field, rax, OURPERSIST_IS_NOT_VOLATILE);
+#ifdef OUR_PERSIST
+  const DecoratorSet ds_2 = OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds_2 = DECORATORS_NONE;
+#endif // OUR_PERSIST
+  fast_accessfield_helper(field, rax, ds_2);
 
   __ bind(Done);
 }
 
 void TemplateTable::fast_accessfield_helper(Address field, Register rax, DecoratorSet ds) {
 
+  ds |= IN_HEAP;
+#ifdef OUR_PERSIST
   // is_static = false
-  ds |= IN_HEAP | OURPERSIST_IS_NOT_STATIC;
+  ds |= OURPERSIST_IS_NOT_STATIC;
+#endif // OUR_PERSIST
 
   // access field
   switch (bytecode()) {
@@ -3638,19 +3823,33 @@ void TemplateTable::fast_xaccess(TosState state) {
   __ testl(rdx, rdx);
   __ jcc(Assembler::zero, notVolatile);
 
-  fast_xaccess_helper(state, field, rax, OURPERSIST_IS_VOLATILE);
+#ifdef OUR_PERSIST
+  const DecoratorSet ds_1 = OURPERSIST_IS_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds_1 = DECORATORS_NONE;
+#endif // OUR_PERSIST
+  fast_xaccess_helper(state, field, rax, ds_1);
 
   __ jmp(Done);
   __ bind(notVolatile);
 
-  fast_xaccess_helper(state, field, rax, OURPERSIST_IS_NOT_VOLATILE);
+#ifdef OUR_PERSIST
+  const DecoratorSet ds_2 = OURPERSIST_IS_NOT_VOLATILE;
+#else  // OUR_PERSIST
+  const DecoratorSet ds_2 = DECORATORS_NONE;
+#endif // OUR_PERSIST
+  fast_xaccess_helper(state, field, rax, ds_2);
 
   __ bind(Done);
 }
 
 void TemplateTable::fast_xaccess_helper(TosState state, Address field, Register rax, DecoratorSet ds) {
+
+  ds |= IN_HEAP;
+#ifdef OUR_PERSIST
   // TODO: [unchecked] is_static = false
-  ds |= IN_HEAP | OURPERSIST_IS_NOT_STATIC;
+  ds |= OURPERSIST_IS_NOT_STATIC;
+#endif // OUR_PERSIST
 
   switch (state) {
   case itos:
@@ -3795,6 +3994,12 @@ void TemplateTable::invokevirtual_helper(Register index,
   __ jump_from_interpreted(method, rax);
 
   __ bind(notFinal);
+
+#ifdef NVM_COUNTER
+#ifdef NVM_COUNTER_CHECK_DACAPO_RUN
+  NVMCounter::set_dacapo_countable_flag_asm(_masm, method, index, recv);
+#endif // NVM_COUNTER_CHECK_DACAPO_RUN
+#endif // NVM_COUNTER
 
   // get receiver klass
   __ null_check(recv, oopDesc::klass_offset_in_bytes());
@@ -4166,7 +4371,14 @@ void TemplateTable::_new() {
 #ifdef OUR_PERSIST
     __ xorl(rsi, rsi);
     __ movptr(Address(rax, oopDesc::nvm_header_offset_in_bytes()), rsi);
-#endif
+#ifdef ASSERT
+    __ movptr(Address(rax, oopDesc::nvm_header_locked_offset_in_bytes()), rsi);
+#endif // ASSERT
+#endif // OUR_PERSIST
+#ifdef AUTO_PERSIST
+    __ xorl(rsi, rsi);
+    __ movptr(Address(rax, oopDesc::autopersist_nvm_header_offset_in_bytes()), rsi);
+#endif // AUTO_PERSIST
     if (UseBiasedLocking) {
       __ pop(rcx);   // get saved klass back in the register.
       __ movptr(rbx, Address(rcx, Klass::prototype_header_offset()));

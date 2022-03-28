@@ -3,6 +3,7 @@
 #ifndef SHARE_OOPS_NVMHEADER_HPP
 #define SHARE_OOPS_NVMHEADER_HPP
 
+#include "nvm/nvmMacro.hpp"
 #include "nvm/ourPersist.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/atomic.hpp"
@@ -12,9 +13,8 @@
 //
 //  64 bits:
 //  --------
-//  NULL:61  unused:3                                   (volatile object)
-//  BUSY:61  unused:3                                   (volatile object)
-//  fwd:61   unused:1   volatile_lock:1   atomic_lock:1 (persistent object)
+//  NULL:61  unused:3         (volatile object)
+//  fwd:61   unused:2  lock:1 (persistent object)
 //
 
 class nvmHeader {
@@ -47,27 +47,22 @@ class nvmHeader {
   uintptr_t value() const { return _value; }
 
   // Constants
-  static const int fwd_bits           = 61;
-  static const int unused_gap_bits    = 1;
-  static const int atomic_lock_bits   = 1;
-  static const int volatile_lock_bits = 1;
+  static const int fwd_bits        = 61;
+  static const int unused_gap_bits = 2;
+  static const int lock_bits       = 1;
 
-  static const int volatile_lock_shift = 0;
-  static const int atomic_lock_shift   = volatile_lock_shift + volatile_lock_bits;
-  static const int unused_gap_shift    = atomic_lock_shift + atomic_lock_bits;
+  static const int lock_shift = 0;
+  static const int unused_gap_shift    = lock_shift + lock_bits;
   static const int fwd_shift           = unused_gap_shift + unused_gap_bits;
 
-  static const uintptr_t volatile_lock_mask          = right_n_bits(volatile_lock_bits);
-  static const uintptr_t volatile_lock_mask_in_place = volatile_lock_mask << volatile_lock_shift;
-  static const uintptr_t atomic_lock_mask            = right_n_bits(atomic_lock_bits);
-  static const uintptr_t atomic_lock_mask_in_place   = atomic_lock_mask << atomic_lock_shift;
-  static const uintptr_t unused_gap_mask             = right_n_bits(unused_gap_bits);
-  static const uintptr_t unused_gap_mask_in_place    = unused_gap_mask << unused_gap_shift;
-  static const uintptr_t fwd_mask                    = right_n_bits(fwd_bits);
-  static const uintptr_t fwd_mask_in_place           = fwd_mask << fwd_shift;
+  static const uintptr_t lock_mask                = right_n_bits(lock_bits);
+  static const uintptr_t lock_mask_in_place       = lock_mask << lock_shift;
+  static const uintptr_t unused_gap_mask          = right_n_bits(unused_gap_bits);
+  static const uintptr_t unused_gap_mask_in_place = unused_gap_mask << unused_gap_shift;
+  static const uintptr_t fwd_mask                 = right_n_bits(fwd_bits);
+  static const uintptr_t fwd_mask_in_place        = fwd_mask << fwd_shift;
 
-  static const uintptr_t flags_mask_in_place         = volatile_lock_mask_in_place |
-                                                       atomic_lock_mask_in_place |
+  static const uintptr_t flags_mask_in_place         = lock_mask_in_place |
                                                        unused_gap_mask_in_place;
 
   static nvmHeader zero() { return nvmHeader(uintptr_t(0)); }
@@ -84,27 +79,33 @@ class nvmHeader {
 
   bool recoverable() {
     void* nvm_obj = fwd();
-    return nvm_obj != NULL && OurPersist::responsible_thread(nvm_obj) == NULL;
+    if (nvm_obj == NULL) {
+      return false;
+    }
+    return OurPersist::responsible_thread_noinline(nvm_obj) == NULL;
   }
 
   // Checker
   static bool is_null(void* _fwd);
-  static bool is_busy(void* _fwd);
   static bool is_fwd(void* _fwd);
 
   // Setter
   // WARNING: All setters are static functions.
 private:
-  inline static void lock_unlock_base(oop obj, uintptr_t mask, bool is_lock);
+  inline static nvmHeader lock_unlock_base(oop obj, uintptr_t mask, bool is_lock);
+  inline static void* cas_fwd(oop obj, void* compare_fwd, void* after_fwd);
 public:
   inline static void set_header(HeapWord* mem, nvmHeader h);
   inline static void set_header(oop obj, nvmHeader h);
-  inline static void* cas_fwd(oop obj, void* compare_fwd, void* after_fwd);
+
+  inline static bool cas_fwd(oop obj, void* after_fwd);
+  // NOTE: for OurPersist::set_responsible_thread and OurPersist::clear_responsible_thread
   inline static void set_fwd(oop obj, void* ptr);
-  inline static void lock_atomic(oop obj);
-  inline static void unlock_atomic(oop obj);
-  inline static void lock_volatile(oop obj);
-  inline static void unlock_volatile(oop obj);
+  // NOTE: unused
+  inline static bool cas_fwd_and_lock_when_swapped(oop obj, void* after_fwd);
+
+  inline static nvmHeader lock(oop obj);
+  inline static void unlock(oop obj);
 };
 
 #endif // SHARE_OOPS_NVMHEADER_HPP

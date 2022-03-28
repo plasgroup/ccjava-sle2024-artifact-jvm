@@ -212,6 +212,7 @@ const DecoratorSet ARRAYCOPY_DECORATOR_MASK       = ARRAYCOPY_CHECKCAST | ARRAYC
 const DecoratorSet ACCESS_READ                    = UCONST64(1) << 28;
 const DecoratorSet ACCESS_WRITE                   = UCONST64(1) << 29;
 
+#ifdef OUR_PERSIST
 // == OurPersist Decorators ==
 // DEBUG: barrierset assembler
 const DecoratorSet OURPERSIST_BS_ASM                  = UCONST64(1) << 30;
@@ -230,9 +231,14 @@ const DecoratorSet OURPERSIST_IS_VOLATILE             = UCONST64(1) << 35;
 const DecoratorSet OURPERSIST_IS_NOT_VOLATILE         = UCONST64(1) << 36;
 const DecoratorSet OURPERSIST_IS_VOLATILE_MASK        = OURPERSIST_IS_VOLATILE |
                                                         OURPERSIST_IS_NOT_VOLATILE;
+#endif // OUR_PERSIST
 
+#ifdef OUR_PERSIST
 // Keep track of the last decorator.
 const DecoratorSet DECORATOR_LAST = UCONST64(1) << 36;
+#else  // OUR_PERSIST
+const DecoratorSet DECORATOR_LAST = UCONST64(1) << 29;
+#endif // OUR_PERSIST
 
 namespace AccessInternal {
   // This class adds implied decorators that follow according to decorator rules.

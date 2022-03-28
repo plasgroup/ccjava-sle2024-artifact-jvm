@@ -356,6 +356,11 @@ protected:
   static ByteSize layout_helper_offset()         { return in_ByteSize(offset_of(Klass, _layout_helper)); }
   static ByteSize access_flags_offset()          { return in_ByteSize(offset_of(Klass, _access_flags)); }
 
+#ifdef OUR_PERSIST
+  // OurPersist support
+  static ByteSize id_offset()                    { return in_ByteSize(offset_of(Klass, _id)); }
+#endif // OUR_PERSIST
+
   // Unpacking layout_helper:
   static const int _lh_neutral_value           = 0;  // neutral non-array non-instance value
   static const int _lh_instance_slow_path_bit  = 0x01;

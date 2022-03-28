@@ -9,9 +9,12 @@
 // TODO: rename
 // return is_set_durableroot_annotation
 inline bool NVMCardTableBarrierSet::static_object_etc(oop obj, ptrdiff_t offset, oop value) {
+  assert(obj != NULL, "");
+
   if (!OurPersist::is_static_field(obj, offset)) {
     return false;
   }
+
   if (!OurPersist::is_set_durableroot_annotation(obj, offset)) {
     return false;
   }

@@ -14,32 +14,6 @@ void nvmHeader::set_header(oop obj, nvmHeader h) {
   *obj->nvm_header_addr() = h;
 }
 
-void* nvmHeader::cas_fwd(oop obj, void* compare_fwd, void* after_fwd) {
-  assert(is_null(compare_fwd), "");
-  assert(is_busy(after_fwd) || is_fwd(after_fwd), "");
-
-  uintptr_t* header_addr = (uintptr_t*)obj->nvm_header_addr();
-
-  void* before_fwd;
-  while (true) {
-    uintptr_t _flags = obj->nvm_header().flags();
-    uintptr_t compare_val = uintptr_t(compare_fwd) | _flags;
-    uintptr_t after_val   = uintptr_t(after_fwd)   | _flags;
-
-    uintptr_t before_val = Atomic::cmpxchg(header_addr, compare_val, after_val);
-
-    nvmHeader before_header = nvmHeader(before_val);
-    uintptr_t before_flags  = before_header.flags();
-    if (_flags == before_flags) {
-      before_fwd = before_header.fwd();
-      break;
-    }
-  }
-
-  return before_fwd;
-}
-
-// for OurPersist::set_responsible_thread
 void nvmHeader::set_fwd(oop obj, void* ptr) {
   assert(from_pointer(ptr).flags() == uintptr_t(0), "ptr is not a forwarding pointer.");
 
@@ -47,11 +21,68 @@ void nvmHeader::set_fwd(oop obj, void* ptr) {
   *obj->nvm_header_addr() = nvmHeader(header_val);
 }
 
-void nvmHeader::lock_unlock_base(oop obj, uintptr_t mask, bool is_lock) {
+bool nvmHeader::cas_fwd(oop obj, void* after_fwd) {
+  assert(is_fwd(after_fwd), "");
+
+  uintptr_t* header_addr = (uintptr_t*)obj->nvm_header_addr();
+
+  bool success;
+  while (true) {
+    uintptr_t _flags = obj->nvm_header().flags();
+    uintptr_t compare_val = uintptr_t(NULL) | (_flags & (~lock_mask_in_place));
+    uintptr_t after_val   = uintptr_t(after_fwd) | (_flags & (~lock_mask_in_place));
+
+    uintptr_t before_val = Atomic::cmpxchg(header_addr, compare_val, after_val);
+
+    if (nvmHeader(compare_val).fwd() != nvmHeader(before_val).fwd()) {
+      success = false;
+      break;
+    }
+
+    if (nvmHeader(compare_val).flags() == nvmHeader(before_val).flags()) {
+      // fwd1 == fwd2 && flag1 == flag2 <--> val1 == val2 <--> true
+      success = true;
+      break;
+    }
+  }
+
+  return success;
+}
+
+bool nvmHeader::cas_fwd_and_lock_when_swapped(oop obj, void* after_fwd) {
+  assert(is_fwd(after_fwd), "");
+
+  uintptr_t* header_addr = (uintptr_t*)obj->nvm_header_addr();
+
+  bool success;
+  while (true) {
+    uintptr_t _flags = obj->nvm_header().flags();
+    uintptr_t compare_val = uintptr_t(NULL) | (_flags & (~lock_mask_in_place));
+    uintptr_t after_val   = uintptr_t(after_fwd) | _flags | lock_mask_in_place;
+
+    uintptr_t before_val = Atomic::cmpxchg(header_addr, compare_val, after_val);
+
+    if (nvmHeader(compare_val).fwd() != nvmHeader(before_val).fwd()) {
+      success = false;
+      break;
+    }
+
+    if (nvmHeader(compare_val).flags() == nvmHeader(before_val).flags()) {
+      // fwd1 == fwd2 && flag1 == flag2 <--> val1 == val2 <--> true
+      success = true;
+      break;
+    }
+  }
+
+  return success;
+}
+
+nvmHeader nvmHeader::lock_unlock_base(oop obj, uintptr_t mask, bool is_lock) {
   assert(is_lock || (obj->nvm_header().value() & mask) != 0, "unlocked.");
 
   uintptr_t* header_addr = (uintptr_t*)obj->nvm_header_addr();
 
+  uintptr_t before_header;
   bool success = false;
   while (!success) {
     uintptr_t tmp_header     = obj->nvm_header().value();
@@ -59,25 +90,36 @@ void nvmHeader::lock_unlock_base(oop obj, uintptr_t mask, bool is_lock) {
     uintptr_t after_header   = is_lock ? (tmp_header |  mask) : (tmp_header & ~mask) ; // is_lock ? 1 : 0
 
     // is_lock ? CAS(0 --> 1) : CAS(1 --> 0)
-    uintptr_t before_header = Atomic::cmpxchg(header_addr, compare_header, after_header);
+    before_header = Atomic::cmpxchg(header_addr, compare_header, after_header);
     success = compare_header == before_header;
   }
+
+  return nvmHeader(before_header);
 }
 
-void nvmHeader::lock_atomic(oop obj) {
-  lock_unlock_base(obj, atomic_lock_mask_in_place, true);
+nvmHeader nvmHeader::lock(oop obj) {
+  nvmHeader result = lock_unlock_base(obj, lock_mask_in_place, true);
+
+#ifdef ASSERT
+  Thread* locked_thread = obj->nvm_header_locked_thread();
+  assert(locked_thread == NULL, "locked_thread: %p", locked_thread);
+  obj->set_nvm_header_locked_thread(Thread::current());
+#endif // ASSERT
+
+  return result;
 }
 
-void nvmHeader::unlock_atomic(oop obj) {
-  lock_unlock_base(obj, atomic_lock_mask_in_place, false);
-}
+void nvmHeader::unlock(oop obj) {
+  assert((obj->nvm_header().value() & lock_mask_in_place) != 0, "unlocked.");
 
-void nvmHeader::lock_volatile(oop obj) {
-  lock_unlock_base(obj, volatile_lock_mask_in_place, true);
-}
+#ifdef ASSERT
+  Thread* locked_thread = obj->nvm_header_locked_thread();
+  assert(locked_thread == Thread::current(), "locked_thread: %p", locked_thread);
+  obj->set_nvm_header_locked_thread(NULL);
+#endif // ASSERT
 
-void nvmHeader::unlock_volatile(oop obj) {
-  lock_unlock_base(obj, volatile_lock_mask_in_place, false);
+  uintptr_t header_val = obj->nvm_header().value() & (~lock_mask_in_place);
+  nvmHeader::set_header(obj, nvmHeader(header_val));
 }
 
 #endif // SHARE_OOPS_NVMHEADER_INLINE_HPP

@@ -32,7 +32,6 @@ public:
     typedef BarrierSet::AccessBarrier<decorators, BarrierSetT> Raw;
 
    public:
-    // DEBUG:
     static void oop_store_in_heap_raw(oop base, ptrdiff_t offset, oop value) {
       // Check annotation
       bool is_set_durableroot_annotation =
@@ -45,69 +44,78 @@ public:
         return;
       }
 
-RETRY:
-      void* before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
-      bool success = before_fwd == NULL;
-      if (success) {
-        // Store only in DRAM.
+#ifndef OURPERSIST_IGNORE_VOLATILE
+      // Volatile
+      if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
+        // Counter
+        NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
+                          base, offset, 1 /* volatile */, 1 /* oop */, 0 /* non-atomic */);)
+
+        nvmHeader::lock(base);
+
+        void* before_fwd = base->nvm_header().fwd();
+        if (before_fwd != NULL) {
+          assert(nvmHeader::is_fwd(before_fwd), "");
+
+          if (value != NULL) {
+            OurPersist::ensure_recoverable(value);
+          }
+
+          // Store in NVM.
+          oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
+          if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
+            // Skip
+            nvm_val = NULL;
+          }
+#ifndef NO_WUPD
+          Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
+          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // NO_WUPD
+        }
+        // Store in DRAM.
         Raw::oop_store_in_heap_at(base, offset, value);
-        nvmHeader::set_fwd(base, NULL);
+
+        nvmHeader::unlock(base);
         return;
       }
-      if (before_fwd == OURPERSIST_FWD_BUSY) {
-        // busy wait
-        goto RETRY;
-      }
+#endif // !OURPERSIST_IGNORE_VOLATILE
 
-      assert(nvmHeader::is_fwd(before_fwd), "");
-      if (value != NULL) {
-        OurPersist::ensure_recoverable(value);
-      }
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
+                        base, offset, 0 /* non-volatile */, 1 /* oop */, 0 /* non-atomic */);)
+
       // Store in DRAM.
       Raw::oop_store_in_heap_at(base, offset, value);
-      // Store in NVM.
-      oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
-      if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
-        // Skip
-        nvm_val = NULL;
+
+      OrderAccess::fence();
+      void* before_fwd = base->nvm_header().fwd();
+
+      if (before_fwd != NULL) {
+        assert(nvmHeader::is_fwd(before_fwd), "");
+        if (value != NULL) {
+          OurPersist::ensure_recoverable(value);
+        }
+
+        // Store in NVM.
+        oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
+        if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
+          // Skip
+          nvm_val = NULL;
+        }
+#ifndef NO_WUPD
+        Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // NO_WUPD
       }
-      Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
-      NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
     }
 
     // primitive
     template <typename T>
     static T load_in_heap_at(oop base, ptrdiff_t offset) {
-      // Skip markWord.
-      if (offset == oopDesc::mark_offset_in_bytes()) {
-        // Store in DRAM.
-        T result = Parent::template load_in_heap_at<T>(base, offset);
-        return result;
-      }
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(0 /* load */,
+                        base, offset, -1 /* unknown */, 0 /* primitive */, 0 /* non-atomic */);)
 
-      // Volatile
-      if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
-        assert(offset != oopDesc::mark_offset_in_bytes(), "");
-
-        _mm_mfence();
-        void* nvm_fwd = base->nvm_header().fwd();
-
-        T result;
-        if (nvm_fwd == NULL || nvm_fwd == OURPERSIST_FWD_BUSY) {
-          result = Parent::template load_in_heap_at<T>(base, offset);
-        } else {
-// DEBUG:
-#ifdef OURPERSIST_VOLATILE_PRIM_ALGO
-          result = Parent::template load_in_heap_at<T>(oop(nvm_fwd), offset);
-#else  // OURPERSIST_VOLATILE_PRIM_ALGO
-          result = Parent::template load_in_heap_at<T>(base, offset);
-#endif // OURPERSIST_VOLATILE_PRIM_ALGO
-        }
-
-        return result;
-      }
-
-      // Non volatile
       T result = Parent::template load_in_heap_at<T>(base, offset);
       return result;
     }
@@ -126,66 +134,66 @@ RETRY:
         return;
       }
 
+#ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
         assert(offset != oopDesc::mark_offset_in_bytes(), "");
 
-        bool success;
-        void* before_fwd;
-        while (true) {
-          before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
-          if (before_fwd != OURPERSIST_FWD_BUSY) {
-            success = before_fwd == NULL;
-            break;
-          }
-        }
+        // Counter
+        NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
+                          base, offset, 1 /* volatile */, 0 /* primitive */, 0 /* non-atomic */);)
 
-        if (success) {
-          // Store only in DRAM.
-          Parent::store_in_heap_at(base, offset, value);
-          nvmHeader::set_fwd(base, NULL);
-        } else {
-// DEBUG:
-#ifdef OURPERSIST_VOLATILE_PRIM_ALGO
-          // Store only in NVM.
-          Raw::store_in_heap_at(oop(before_fwd), offset, value);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-#else  // OURPERSIST_VOLATILE_PRIM_ALGO
-          nvmHeader::lock_volatile(base);
-          // Store in DRAM.
-          Parent::store_in_heap_at(base, offset, value);
+        nvmHeader::lock(base);
+
+        void* before_fwd = base->nvm_header().fwd();
+        if (before_fwd != NULL) {
           // Store in NVM.
+#ifndef NO_WUPD
           Raw::store_in_heap_at(oop(before_fwd), offset, value);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          nvmHeader::unlock_volatile(base);
-#endif // OURPERSIST_VOLATILE_PRIM_ALGO
+#endif // NO_WUPD
         }
+        // Store in DRAM.
+        Parent::store_in_heap_at(base, offset, value);
 
+        nvmHeader::unlock(base);
         return;
       }
+#endif // !OURPERSIST_IGNORE_VOLATILE
 
       // Non volatile
+
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
+                        base, offset, 0 /* non-volatile */, 0 /* primitive */, 0 /* non-atomic */);)
+
       // Store in DRAM.
       Parent::store_in_heap_at(base, offset, value);
 
-      _mm_mfence();
+      OrderAccess::fence();
       void* nvm_fwd = base->nvm_header().fwd();
-
-      if (nvm_fwd == NULL || nvm_fwd == OURPERSIST_FWD_BUSY) {
+      if (nvm_fwd == NULL) {
         // Store only in DRAM.
         return;
       }
       assert(nvmHeader::is_fwd(nvm_fwd), "");
 
       // Store in NVM.
+#ifndef NO_WUPD
       Raw::store_in_heap_at(oop(nvm_fwd), offset, value);
       NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
+#endif // NO_WUPD
     }
 
     template <typename T>
     static T atomic_xchg_in_heap_at(oop base, ptrdiff_t offset, T new_value) {
       // Original
       // T result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
+
+// DEBUG: ATOMIC
+#ifdef OURPERSIST_IGNORE_ATOMIC
+      return Parent::atomic_xchg_in_heap_at(base, offset, new_value);
+#endif // OURPERSIST_IGNORE_ATOMIC
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
@@ -195,55 +203,25 @@ RETRY:
         return Parent::atomic_xchg_in_heap_at(base, offset, new_value);
       }
 
-      // Volatile
-      if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
-        bool success;
-        void* before_fwd;
-        while (true) {
-          before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
-          if (before_fwd != OURPERSIST_FWD_BUSY) {
-            success = before_fwd == NULL;
-            break;
-          }
-        }
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
+                        base, offset, -1 /* unknown */, 0 /* primitive */, 1 /* atomic */);)
 
-        T result;
-        if (success) {
-          // Store only in DRAM.
-          result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
-          nvmHeader::set_fwd(base, NULL);
-        } else {
-// DEBUG:
-#ifdef OURPERSIST_VOLATILE_PRIM_ALGO
-          // Store only in NVM.
-          result = Raw::atomic_xchg_in_heap_at(oop(before_fwd), offset, new_value);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-#else  // OURPERSIST_VOLATILE_PRIM_ALGO
-          nvmHeader::lock_volatile(base);
-          // Store and load in DRAM.
-          result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
-          // Store in NVM.
-          Raw::atomic_xchg_in_heap_at(oop(before_fwd), offset, new_value);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          nvmHeader::unlock_volatile(base);
-#endif // OURPERSIST_VOLATILE_PRIM_ALGO
-        }
+      nvmHeader::lock(base);
+      T result = Parent::template load_in_heap_at<T>(base, offset);
 
-        return result;
+      void* before_fwd = base->nvm_header().fwd();
+      if (before_fwd != NULL) {
+        // Store in NVM.
+#ifndef NO_WUPD
+        Raw::store_in_heap_at(oop(before_fwd), offset, new_value);
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // NO_WUPD
       }
-
-      // Non volatile
-      nvmHeader::lock_atomic(base);
-      T result = load_in_heap_at<T>(base, offset);
+      // Store and load in DRAM.
       Parent::store_in_heap_at(base, offset, new_value);
-      _mm_mfence();
-      void* nvm_fwd = base->nvm_header().fwd();
-      if (nvm_fwd != NULL && nvm_fwd != OURPERSIST_FWD_BUSY) {
-        Raw::store_in_heap_at(oop(nvm_fwd), offset, new_value);
-        NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
-      }
-      nvmHeader::unlock_atomic(base);
 
+      nvmHeader::unlock(base);
       return result;
     }
 
@@ -252,70 +230,41 @@ RETRY:
       // Original
       // T result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
 
+// DEBUG: ATOMIC
+#ifdef OURPERSIST_IGNORE_ATOMIC
+      return Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+#endif // OURPERSIST_IGNORE_ATOMIC
+
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
       // Skip
-      if (!OurPersist::is_target(base->klass())) {
+      if (offset == oopDesc::mark_offset_in_bytes() || !OurPersist::is_target(base->klass())) {
         // Store in DRAM.
         return Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
       }
 
-      // Volatile
-      if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
-        bool success;
-        void* before_fwd;
-        while (true) {
-          before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
-          if (before_fwd != OURPERSIST_FWD_BUSY) {
-            success = before_fwd == NULL;
-            break;
-          }
-        }
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
+                        base, offset, -1 /* unknown */, 0 /* primitive */, 1 /* atomic */);)
 
-        T result;
-        if (success) {
-          // Store only in DRAM.
-          result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
-          nvmHeader::set_fwd(base, NULL);
-        } else {
-// DEBUG:
-#ifdef OURPERSIST_VOLATILE_PRIM_ALGO
-          // Store only in NVM.
-          result = Raw::atomic_cmpxchg_in_heap_at(oop(before_fwd), offset, compare_value, new_value);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-#else  // OURPERSIST_VOLATILE_PRIM_ALGO
-          nvmHeader::lock_volatile(base);
-          // Store and load in DRAM.
-          result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+      nvmHeader::lock(base);
+      T result = load_in_heap_at<T>(base, offset);
+
+      bool swap = result == compare_value;
+      if (swap) {
+        void* nvm_fwd = base->nvm_header().fwd();
+        if (nvm_fwd != NULL) {
           // Store in NVM.
-          Raw::atomic_cmpxchg_in_heap_at(oop(before_fwd), offset, compare_value, new_value);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          nvmHeader::unlock_volatile(base);
-#endif // OURPERSIST_VOLATILE_PRIM_ALGO
+#ifndef NO_WUPD
+          Raw::store_in_heap_at(oop(nvm_fwd), offset, new_value);
+          NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
+#endif // NO_WUPD
         }
-
-        return result;
+        // Store in DRAM.
+        Parent::store_in_heap_at(base, offset, new_value);
       }
 
-      // Non volatile
-      T result;
-      if (offset == oopDesc::mark_offset_in_bytes()) {
-        result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
-      } else {
-        nvmHeader::lock_atomic(base);
-        result = load_in_heap_at<T>(base, offset);
-        bool swap = result == compare_value;
-        if (swap) {
-          Parent::store_in_heap_at(base, offset, new_value);
-          _mm_mfence();
-          void* nvm_fwd = base->nvm_header().fwd();
-          if (nvm_fwd != NULL && nvm_fwd != OURPERSIST_FWD_BUSY) {
-            Raw::store_in_heap_at(oop(nvm_fwd), offset, new_value);
-            NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
-          }
-        }
-        nvmHeader::unlock_atomic(base);
-      }
+      nvmHeader::unlock(base);
 
       return result;
     }
@@ -337,14 +286,16 @@ RETRY:
                                   dst_obj, dst_offset_in_bytes, dst_raw,
                                   length);
 
-        _mm_mfence();
+        OrderAccess::fence();
         void* dst_nvm_obj = dst_obj->nvm_header().fwd();
-        if (dst_nvm_obj != NULL && dst_nvm_obj != OURPERSIST_FWD_BUSY) {
+        if (dst_nvm_obj != NULL) {
           // Store in NVM.
+#ifndef NO_WUPD
           Raw::arraycopy_in_heap(dst_obj,               dst_offset_in_bytes, (T*)NULL,
                                  arrayOop(dst_nvm_obj), dst_offset_in_bytes, (T*)NULL,
                                  length);
           NVM_WRITEBACK_LOOP(AccessInternal::field_addr(oop(dst_nvm_obj), dst_offset_in_bytes), length)
+#endif // NO_WUPD
         }
       } else {
         // heap to native or native to native ?
@@ -360,7 +311,10 @@ RETRY:
 
     // oop
     static oop oop_load_in_heap_at(oop base, ptrdiff_t offset) {
-      // Volatile & non volatile
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(0 /* load */,
+                        base, offset, -1/* unknown */, 1 /* oop */, 0 /* non-atomic */);)
+
       oop result = Parent::oop_load_in_heap_at(base, offset);
       return result;
     }
@@ -386,80 +340,79 @@ RETRY:
         return;
       }
 
+#ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
       if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
-        bool success;
-        void* before_fwd;
-        while (true) {
-          before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
-          if (before_fwd != OURPERSIST_FWD_BUSY) {
-            success = before_fwd == NULL;
-            break;
-          }
-        }
 
-        if (success) {
-          // Store only in DRAM.
-          Parent::oop_store_in_heap_at(base, offset, value);
-          nvmHeader::set_fwd(base, NULL);
-        } else {
+        // Counter
+        NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
+                          base, offset, 1 /* volatile */, 1 /* oop */, 0 /* non-atomic */);)
+        nvmHeader::lock(base);
+
+        void* before_fwd = base->nvm_header().fwd();
+        if (before_fwd != NULL) {
           assert(nvmHeader::is_fwd(before_fwd), "");
 
           if (value != NULL) {
             OurPersist::ensure_recoverable(value);
           }
 
-          nvmHeader::lock_volatile(base);
-          // Store in DRAM.
-          Parent::oop_store_in_heap_at(base, offset, value);
           // Store in NVM.
           oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
           if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
             // Skip
             nvm_val = NULL;
           }
+#ifndef NO_WUPD
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          nvmHeader::unlock_volatile(base);
+#endif // NO_WUPD
         }
+        // Store in DRAM.
+        Parent::oop_store_in_heap_at(base, offset, value);
 
+        nvmHeader::unlock(base);
         return;
       }
+#endif // !OURPERSIST_IGNORE_VOLATILE
 
       // Non volatile
-RETRY:
-      void* before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
-      bool success = before_fwd == NULL;
-      if (success) {
-        // Store only in DRAM.
-        Parent::oop_store_in_heap_at(base, offset, value);
-        nvmHeader::set_fwd(base, NULL);
-        return;
-      }
-      if (before_fwd == OURPERSIST_FWD_BUSY) {
-        // busy wait
-        goto RETRY;
-      }
 
-      assert(nvmHeader::is_fwd(before_fwd), "");
-      if (value != NULL) {
-        OurPersist::ensure_recoverable(value);
-      }
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
+                        base, offset, 0 /* non-volatile */, 1 /* oop */, 0 /* non-atomic */);)
+
       // Store in DRAM.
       Parent::oop_store_in_heap_at(base, offset, value);
-      // Store in NVM.
-      oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
-      if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
-        // Skip
-        nvm_val = NULL;
+
+      OrderAccess::fence();
+      void* before_fwd = base->nvm_header().fwd();
+      if (before_fwd != NULL) {
+        assert(nvmHeader::is_fwd(before_fwd), "");
+        if (value != NULL) {
+          OurPersist::ensure_recoverable(value);
+        }
+        // Store in NVM.
+        oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
+        if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
+          // Skip
+          nvm_val = NULL;
+        }
+#ifndef NO_WUPD
+        Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // NO_WUPD
       }
-      Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
-      NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
     }
 
     static oop oop_atomic_xchg_in_heap_at(oop base, ptrdiff_t offset, oop new_value) {
       // Original
       // oop result = Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
+
+// DEBUG: ATOMIC
+#ifdef OURPERSIST_IGNORE_ATOMIC
+      return Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
+#endif // OURPERSIST_IGNORE_ATOMIC
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
@@ -473,87 +426,48 @@ RETRY:
         return Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
       }
 
-      // Volatile
-      if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
-        bool success;
-        void* before_fwd;
-        while (true) {
-          before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
-          if (before_fwd != OURPERSIST_FWD_BUSY) {
-            success = before_fwd == NULL;
-            break;
-          }
-        }
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
+                        base, offset, -1 /* unknown */, 1 /* oop */, 1 /* atomic */);)
 
-        oop result;
-        if (success) {
-          // Store only in DRAM.
-          result = Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
-          nvmHeader::set_fwd(base, NULL);
-        } else {
-          assert(nvmHeader::is_fwd(before_fwd), "");
+      nvmHeader::lock(base);
+      oop result = Parent::oop_load_in_heap_at(base, offset);
 
-          if (new_value != NULL) {
-            OurPersist::ensure_recoverable(new_value);
-          }
+      void* before_fwd = base->nvm_header().fwd();
 
-          nvmHeader::lock_volatile(base);
-          result = Parent::oop_load_in_heap_at(base, offset);
-          // Store in DRAM.
-          Parent::oop_store_in_heap_at(base, offset, new_value);
-          // Store in NVM.
-          oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
-          if (nvm_val != NULL && !OurPersist::is_target(new_value->klass())) {
-            // Skip
-            nvm_val = NULL;
-          }
-          Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          nvmHeader::unlock_volatile(base);
-        }
+      if (before_fwd != NULL) {
+        assert(nvmHeader::is_fwd(before_fwd), "");
 
-        return result;
-      }
-
-      // Non volatile
-      bool success;
-      void* before_fwd;
-      while (true) {
-        before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
-        if (before_fwd != OURPERSIST_FWD_BUSY) {
-          success = before_fwd == NULL;
-          break;
-        }
-      }
-
-      oop result;
-      if (success) {
-        result = Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
-        nvmHeader::set_fwd(base, NULL);
-      } else {
         if (new_value != NULL) {
           OurPersist::ensure_recoverable(new_value);
         }
 
-        nvmHeader::lock_atomic(base);
-        result = Parent::oop_load_in_heap_at(base, offset);
-        Parent::oop_store_in_heap_at(base, offset, new_value);
+        // Store in NVM.
         oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
         if (nvm_val != NULL && !OurPersist::is_target(new_value->klass())) {
           // Skip
           nvm_val = NULL;
         }
+#ifndef NO_WUPD
         Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-        nvmHeader::unlock_atomic(base);
+#endif // NO_WUPD
       }
+      // Store in DRAM.
+      Parent::oop_store_in_heap_at(base, offset, new_value);
 
+      nvmHeader::unlock(base);
       return result;
     }
 
     static oop oop_atomic_cmpxchg_in_heap_at(oop base, ptrdiff_t offset, oop compare_value, oop new_value) {
       // Original
       // oop result = Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+
+// DEBUG: ATOMIC
+#ifdef OURPERSIST_IGNORE_ATOMIC
+      return Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+#endif // OURPERSIST_IGNORE_ATOMIC
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
@@ -567,82 +481,37 @@ RETRY:
         return Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
       }
 
-      // Volatile
-      if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
-        bool success;
-        void* before_fwd;
-        while (true) {
-          before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
-          if (before_fwd != OURPERSIST_FWD_BUSY) {
-            success = before_fwd == NULL;
-            break;
-          }
-        }
+      // Counter
+      NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
+                        base, offset, -1 /* unknown */, 1 /* oop */, 1 /* atomic */);)
 
-        oop result;
-        if (success) {
-          result = Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
-          nvmHeader::set_fwd(base, NULL);
-        } else {
+      nvmHeader::lock(base);
+      oop result = oop_load_in_heap_at(base, offset);
+
+      bool swap = result == compare_value;
+      if (swap) {
+        void* before_fwd = base->nvm_header().fwd();
+        if (before_fwd != NULL) {
           if (new_value != NULL) {
             OurPersist::ensure_recoverable(new_value);
           }
 
-          nvmHeader::lock_volatile(base);
-          result = oop_load_in_heap_at(base, offset);
-          bool swap = result == compare_value;
-          if (swap) {
-            // Store in DRAM.
-            Parent::oop_store_in_heap_at(base, offset, new_value);
-            // Store in NVM.
-            oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
-            if (nvm_val != NULL && !OurPersist::is_target(new_value->klass())) {
-              // Skip
-              nvm_val = NULL;
-            }
-            Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
-            NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          }
-          nvmHeader::unlock_volatile(base);
-        }
-
-        return result;
-      }
-
-      // Non volatile
-      bool success;
-      void* before_fwd;
-      while (true) {
-        before_fwd = nvmHeader::cas_fwd(base, NULL, OURPERSIST_FWD_BUSY);
-        if (before_fwd != OURPERSIST_FWD_BUSY) {
-          success = before_fwd == NULL;
-          break;
-        }
-      }
-      oop result;
-      if (success) {
-        result = Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
-        nvmHeader::set_fwd(base, NULL);
-      } else {
-        if (new_value != NULL) {
-          OurPersist::ensure_recoverable(new_value);
-        }
-        nvmHeader::lock_atomic(base);
-        result = oop_load_in_heap_at(base, offset);
-        bool swap = result == compare_value;
-        if (swap) {
-          Parent::oop_store_in_heap_at(base, offset, new_value);
+          // Store in NVM.
           oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
           if (nvm_val != NULL && !OurPersist::is_target(new_value->klass())) {
             // Skip
             nvm_val = NULL;
           }
+#ifndef NO_WUPD
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+#endif // NO_WUPD
         }
-        nvmHeader::unlock_atomic(base);
+        // Store in DRAM.
+        Parent::oop_store_in_heap_at(base, offset, new_value);
       }
 
+      nvmHeader::unlock(base);
       return result;
     }
 
@@ -661,20 +530,16 @@ RETRY:
 
       bool success;
       void* before_fwd;
-      while (true) {
-        before_fwd = nvmHeader::cas_fwd(dst_obj, NULL, OURPERSIST_FWD_BUSY);
-        if (before_fwd != OURPERSIST_FWD_BUSY) {
-          success = before_fwd == NULL;
-          break;
-        }
-      }
+
+      OrderAccess::fence();
+      before_fwd = dst_obj->nvm_header().fwd();
+      success = before_fwd == NULL;
 
       bool result;
       if (success) {
         result = Parent::oop_arraycopy_in_heap(src_obj, src_offset_in_bytes, src_raw,
                                                dst_obj, dst_offset_in_bytes, dst_raw,
                                                length);
-        nvmHeader::set_fwd(dst_obj, NULL);
       } else {
         int oop_bytes = 8;
         assert(HeapWordSize == oop_bytes && type2size[T_OBJECT] * HeapWordSize == oop_bytes, "");
@@ -703,9 +568,13 @@ RETRY:
             nvm_val = NULL;
           }
           assert(nvm_val == NULL || val->nvm_header().recoverable(), "");
+#ifndef NO_WUPD
           Raw::store_in_heap_at(oop(dst_nvm_obj), dst_offset_in_bytes + offset, nvm_val);
+#endif // NO_WUPD
         }
+#ifndef NO_WUPD
         NVM_WRITEBACK_LOOP(AccessInternal::field_addr(oop(dst_nvm_obj), dst_offset_in_bytes), length)
+#endif // NO_WUPD
       }
 
       return result;

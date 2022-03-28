@@ -27,13 +27,6 @@
 
 #include "utilities/macros.hpp"
 
-// Define BSCONF_OUR_PERSIST_ONLY macro for barrierSetConfig.hpp.
-#ifdef OUR_PERSIST
-#define BSCONF_OUR_PERSIST_ONLY(x) x
-#else
-#define BSCONF_OUR_PERSIST_ONLY(x)
-#endif // OUR_PERSIST
-
 // Do something for each concrete barrier set part of the build.
 #define FOR_EACH_CONCRETE_BARRIER_SET_DO(f)          \
   f(CardTableBarrierSet)                             \
@@ -41,7 +34,8 @@
   G1GC_ONLY(f(G1BarrierSet))                         \
   SHENANDOAHGC_ONLY(f(ShenandoahBarrierSet))         \
   ZGC_ONLY(f(ZBarrierSet))                           \
-  BSCONF_OUR_PERSIST_ONLY(f(NVMCardTableBarrierSet))
+  OUR_PERSIST_ONLY(f(NVMCardTableBarrierSet))        \
+  AUTO_PERSIST_ONLY(f(AutoPersistBarrierSet))
 
 #define FOR_EACH_ABSTRACT_BARRIER_SET_DO(f)          \
   f(ModRef)

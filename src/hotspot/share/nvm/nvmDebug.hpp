@@ -10,12 +10,16 @@
 class NVMDebug : AllStatic {
 private:
 public:
+  static int obj_cnt;
+
   static void print_native_stack();
   static void print_decorators(DecoratorSet ds);
   static void print_klass_id(Klass* k);
+  static void print_dram_and_nvm_val(oop dram_obj, ptrdiff_t offset, BasicType type);
+  static void print_dram_and_nvm_obj(oop dram_obj);
 
   static bool cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
-                                   BasicType type, bool is_volatile);
+                                   BasicType type, AccessFlags field_flags);
   static bool cmp_dram_and_nvm_obj_during_gc(oop dram_obj);
 };
 

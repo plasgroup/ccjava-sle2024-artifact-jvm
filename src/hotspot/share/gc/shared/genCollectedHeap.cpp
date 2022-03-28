@@ -126,14 +126,34 @@ jint GenCollectedHeap::initialize() {
 
   _rem_set = create_rem_set(heap_rs.region());
   _rem_set->initialize();
-  // TODO: (OUR_PERSIST) Must check for more flags.
+
 #ifdef OUR_PERSIST
-  NVMCardTableBarrierSet *bs = new NVMCardTableBarrierSet(_rem_set);
-#else
-  CardTableBarrierSet *bs = new CardTableBarrierSet(_rem_set);
-#endif
-  bs->initialize();
-  BarrierSet::set_barrier_set(bs);
+#ifdef AUTO_PERSIST
+  ShouldNotReachHere();
+#endif // AUTO_PERSIST
+  if (OurPersist::enable()) {
+#ifdef NO_BARRIER
+    CardTableBarrierSet *bs = new CardTableBarrierSet(_rem_set);
+#else  // NO_BARRIER
+    NVMCardTableBarrierSet *bs = new NVMCardTableBarrierSet(_rem_set);
+#endif // NO_BARRIER
+    bs->initialize();
+    BarrierSet::set_barrier_set(bs);
+  } else {
+#endif // OUR_PERSIST
+#ifdef AUTO_PERSIST
+#ifdef NO_BARRIER
+    ShouldNotReachHere();
+#endif // NO_BARRIER
+    AutoPersistBarrierSet *bs = new AutoPersistBarrierSet(_rem_set);
+#else  // AUTO_PERSIST
+    CardTableBarrierSet *bs = new CardTableBarrierSet(_rem_set);
+#endif // AUTO_PERSIST
+    bs->initialize();
+    BarrierSet::set_barrier_set(bs);
+#ifdef OUR_PERSIST
+  }
+#endif // OUR_PERSIST
 
   ReservedSpace young_rs = heap_rs.first_part(_young_gen_spec->max_size());
   _young_gen = _young_gen_spec->init(young_rs, rem_set());

@@ -384,7 +384,13 @@ oop MemAllocator::finish(HeapWord* mem) const {
   assert(mem != NULL, "NULL object pointer");
 #ifdef OUR_PERSIST
   nvmHeader::set_header(mem, nvmHeader::zero());
+#ifdef ASSERT
+  oopDesc::set_nvm_header_locked_thread(mem, NULL);
+#endif // ASSERT
 #endif // OUR_PERSIST
+#ifdef AUTO_PERSIST
+  oopDesc::set_autopersist_nvm_header(mem, uintptr_t(0));
+#endif // AUTO_PERSIST
   if (UseBiasedLocking) {
     oopDesc::set_mark(mem, _klass->prototype_header());
   } else {

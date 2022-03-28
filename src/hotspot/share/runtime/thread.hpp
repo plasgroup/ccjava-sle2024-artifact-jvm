@@ -61,7 +61,9 @@
 #include "nvm/nonVolatileThreadLocalAllocBuffer.hpp"
 #endif // USE_NVTLAB
 #endif // OUR_PERSIST
-
+#ifdef NVM_COUNTER
+#include "nvm/nvmCounter.hpp"
+#endif // NVM_COUNTER
 
 class SafeThreadsListPtr;
 class ThreadSafepointState;
@@ -182,6 +184,15 @@ class Thread: public ThreadShadow {
   void set_dependent_obj_list_head(void* val) { _dependent_obj_list_head = val; }
   void set_dependent_obj_list_tail(void* val) { _dependent_obj_list_tail = val; }
 #endif // OUR_PERSIST
+
+#ifdef NVM_COUNTER
+ private:
+  NVMCounter* _nvm_counter;
+
+ public:
+  NVMCounter* nvm_counter() { return _nvm_counter; }
+  void set_nvm_counter(NVMCounter* val) { _nvm_counter = val; }
+#endif // NVM_COUNTER
 
   friend class VMStructs;
   friend class JVMCIVMStructs;

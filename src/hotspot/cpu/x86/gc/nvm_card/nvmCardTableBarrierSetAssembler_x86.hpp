@@ -22,10 +22,28 @@ public:
                             Address dst, Register val, Register tmp1, Register tmp2);
   void interpreter_oop_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                 Address dst, Register val, Register tmp1, Register tmp2);
-  void interpreter_load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
-                           Register dst, Address src, Register tmp1, Register tmp_thread);
-  void interpreter_oop_load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
-                               Register dst, Address src, Register tmp1, Register tmp_thread);
+  void interpreter_volatile_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
+                                     Address dst, Register val, Register tmp1, Register tmp2);
+  void interpreter_volatile_oop_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
+                                         Address dst, Register val, Register tmp1, Register tmp2);
+
+  // utilities
+  void writeback(MacroAssembler* masm, Address field, Register tmp = rscratch1);
+  void lock_nvmheader(MacroAssembler* masm, Register base, Register tmp1, Register tmp2);
+  void unlock_nvmheader(MacroAssembler* masm, Register base, Register tmp);
+  // NOTE: set EFLAGS
+  void load_nvm_fwd(MacroAssembler* masm, Register dst, Register base);
+  // NOTE: set EFLAGS
+  void is_target(MacroAssembler* masm, Register dst, Register base, Register tmp);
+  void push_or_pop_all(MacroAssembler* masm, bool is_push, bool can_use_rdi, bool can_use_rsi,
+                       Register tmp1 = noreg, Register tmp2 = noreg, Register tmp3 = noreg,
+                       Register tmp4 = noreg, Register tmp5 = noreg, Register tmp6 = noreg,
+                       Register tmp7 = noreg, Register tmp8 = noreg, Register tmp9 = noreg);
+
+  // assertions
+#ifdef ASSERT
+  bool assert_sign_extended(uintptr_t mask);
+#endif // ASSERT
 
   // call runtime
   void runtime_store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
@@ -34,6 +52,8 @@ public:
                        Register dst, Address src, Register tmp1, Register tmp_thread);
   void runtime_ensure_recoverable(MacroAssembler* masm, Register val,
                                   Register tmp1, Register tmp2, Register tmp3, Register tmp4);
+  void runtime_is_target(MacroAssembler* masm, Register dst, Register obj,
+                         Register tmp1, Register tmp2, Register tmp3, Register tmp4);
 };
 
 #endif // CPU_X86_GC_NVMCARD_NVMCARDTABLEBARRIERSETASSEMBLER_X86_HPP

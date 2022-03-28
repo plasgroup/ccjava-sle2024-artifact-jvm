@@ -1092,6 +1092,9 @@ public:
     _field_Stable,
     _jdk_internal_vm_annotation_ReservedStackAccess,
     _jdk_internal_ValueBased,
+#ifdef OUR_PERSIST
+    _ourpersist_durableroot_annotaion,
+#endif // OUR_PERSIST
     _annotation_LIMIT
   };
   const Location _location;
@@ -1715,6 +1718,14 @@ void ClassFileParser::parse_fields(const ClassFileStream* const cfs,
         _has_contended_fields = true;
       }
     }
+
+    // Counter
+#ifdef NVM_COUNTER
+    Thread::current()->nvm_counter()->inc_fields();
+    if (access_flags.is_volatile()) {
+      Thread::current()->nvm_counter()->inc_volatile_fields();
+    }
+#endif // NVM_COUNTER
   }
 
   int index = length;
@@ -2153,6 +2164,12 @@ AnnotationCollector::annotation_index(const ClassLoaderData* loader_data,
       if (!privileged)              break;  // only allow in priviledged code
       return _jdk_internal_ValueBased;
     }
+#ifdef OUR_PERSIST
+    case VM_SYMBOL_ENUM_NAME(ourpersist_durableroot_annotaion_signature): {
+      if (_location != _in_field)   break;  // only allow for fields
+      return _ourpersist_durableroot_annotaion;
+    }
+#endif // OUR_PERSIST
     default: {
       break;
     }
@@ -2165,6 +2182,12 @@ void ClassFileParser::FieldAnnotationCollector::apply_to(FieldInfo* f) {
     f->set_contended_group(contended_group());
   if (is_stable())
     f->set_stable(true);
+
+#ifdef OUR_PERSIST
+  if (has_annotation(_ourpersist_durableroot_annotaion)) {
+    f->set_durableroot(true);
+  }
+#endif // OUR_PERSIST
 }
 
 ClassFileParser::FieldAnnotationCollector::~FieldAnnotationCollector() {

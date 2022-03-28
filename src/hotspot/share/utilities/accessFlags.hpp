@@ -87,16 +87,22 @@ enum {
   JVM_ACC_FIELD_STABLE                    = 0x00000020, // @Stable field, same as JVM_ACC_SYNCHRONIZED and JVM_ACC_SUPER
   JVM_ACC_FIELD_INITIALIZED_FINAL_UPDATE  = 0x00000100, // (static) final field updated outside (class) initializer, same as JVM_ACC_NATIVE
   JVM_ACC_FIELD_HAS_GENERIC_SIGNATURE     = 0x00000800, // field has generic signature
+#ifdef OUR_PERSIST
+  JVM_ACC_OURPERSIST_DURABLEROOT          = 0x00000200, // durable root
+#endif // OUR_PERSIST
 
   JVM_ACC_FIELD_INTERNAL_FLAGS       = JVM_ACC_FIELD_ACCESS_WATCHED |
                                        JVM_ACC_FIELD_MODIFICATION_WATCHED |
                                        JVM_ACC_FIELD_INTERNAL |
                                        JVM_ACC_FIELD_STABLE |
+                                       JVM_ACC_FIELD_INITIALIZED_FINAL_UPDATE |
                                        JVM_ACC_FIELD_HAS_GENERIC_SIGNATURE,
 
                                                     // flags accepted by set_field_flags()
   JVM_ACC_FIELD_FLAGS                = JVM_RECOGNIZED_FIELD_MODIFIERS | JVM_ACC_FIELD_INTERNAL_FLAGS
-
+#ifdef OUR_PERSIST
+                                       | JVM_ACC_OURPERSIST_DURABLEROOT
+#endif // OUR_PERSIST
 };
 
 
@@ -170,6 +176,9 @@ class AccessFlags {
   bool is_stable() const                { return (_flags & JVM_ACC_FIELD_STABLE) != 0; }
   bool field_has_generic_signature() const
                                         { return (_flags & JVM_ACC_FIELD_HAS_GENERIC_SIGNATURE) != 0; }
+#ifdef OUR_PERSIST
+  bool is_durableroot() const           { return (_flags & JVM_ACC_OURPERSIST_DURABLEROOT) != 0; }
+#endif // OUR_PERSIST
 
   // get .class file flags
   jint get_flags               () const { return (_flags & JVM_ACC_WRITTEN_FLAGS); }

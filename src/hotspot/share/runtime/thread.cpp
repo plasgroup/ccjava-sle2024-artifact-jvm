@@ -243,6 +243,8 @@ Thread::Thread() {
 #endif // USE_NVTLAB_BUMP
 #endif // OUR_PERSIST
 
+  NVM_COUNTER_ONLY(_nvm_counter = new NVMCounter(DEBUG_ONLY(this));)
+
   DEBUG_ONLY(_run_state = PRE_CALL_RUN;)
 
   // stack and get_thread
@@ -435,6 +437,9 @@ Thread::~Thread() {
   delete nvm_work_list();
   delete nvm_barrier_sync();
 #endif // OUR_PERSIST
+
+  NVM_COUNTER_ONLY(this->nvm_counter()->exit(DEBUG_ONLY(this));)
+  NVM_COUNTER_ONLY(delete nvm_counter();)
 
   // Attached threads will remain in PRE_CALL_RUN, as will threads that don't actually
   // get started due to errors etc. Any active thread should at least reach post_run
@@ -1367,6 +1372,11 @@ void WatcherThread::run() {
   // Signal that it is terminated
   {
     MutexLocker mu(Terminator_lock, Mutex::_no_safepoint_check_flag);
+#ifdef NVM_COUNTER
+    if (_watcher_thread != NULL) {
+      _watcher_thread->nvm_counter()->exit(DEBUG_ONLY(_watcher_thread));
+    }
+#endif // NVM_COUNTER
     _watcher_thread = NULL;
     Terminator_lock->notify_all();
   }

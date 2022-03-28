@@ -61,6 +61,8 @@
 #include "jvmci/jvmci.hpp"
 #endif
 
+
+
 void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_softrefs) {
   assert(SafepointSynchronize::is_at_safepoint(), "must be at a safepoint");
 
@@ -88,6 +90,9 @@ void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_so
   gch->save_used_regions();
 
   allocate_stacks();
+
+
+
 
   mark_sweep_phase1(clear_all_softrefs);
 
@@ -142,14 +147,7 @@ void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_so
 
   gch->trace_heap_after_gc(_gc_tracer);
 
-#ifdef OUR_PERSIST
-#ifdef USE_NVTLAB
-#ifdef NVMGC
-  NonVolatileChunkSegregate::sweep_objects();
-  NonVolatileChunkLarge::sweep_objects();
-#endif // NVMGC
-#endif // USE_NVTLAB
-#endif // OUR_PERSIST
+
 }
 
 void GenMarkSweep::allocate_stacks() {

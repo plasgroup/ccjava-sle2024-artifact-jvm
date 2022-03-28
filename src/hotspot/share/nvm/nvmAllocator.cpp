@@ -103,7 +103,7 @@ void* NVMAllocator::allocate(size_t _size)
   size = (size + 63) & ~63;
 #endif // AVOID_SAME_CACHELINE_ALLOCATION
 
-  if (size > chunk_size) {
+  if (size > 256 * HeapWordSize) {
     // large object
 #ifdef ASSERT
     tty->print_cr("allocate size: %d", size);

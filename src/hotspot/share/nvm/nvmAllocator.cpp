@@ -47,6 +47,9 @@ void NVMAllocator::init() {
   NVMAllocator::nvm_tail = (void*)(((char*)NVMAllocator::nvm_head) + size);
 
 #ifdef USE_NVTLAB
+  NonVolatileThreadLocalAllocBuffer::initialize_csi();
+  NonVolatileThreadLocalAllocBuffer::initialize_wsize_to_index();
+  NonVolatileChunkSegregate::initialize_count_1_on_uint64_t();
   NVMAllocator::large_head = (void*)(((char*)NVMAllocator::nvm_head) + (NVMAllocator::SEGREGATED_REGION_SIZE_GB * 1024 * 1024 * 1024));
   NVMAllocator::large_top = NVMAllocator::large_head;
 

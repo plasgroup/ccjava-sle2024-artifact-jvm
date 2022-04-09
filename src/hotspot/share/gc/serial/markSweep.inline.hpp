@@ -70,6 +70,7 @@ template <class T> inline void MarkSweep::mark_and_push(T* p) {
 #endif // USE_NVTLAB
       }
 #ifdef ASSERT
+      assert(!obj->nvm_header().is_locked(), "");
 #ifdef CMP_OBJ
       NVMDebug::cmp_dram_and_nvm_obj_during_gc(obj);
 #endif

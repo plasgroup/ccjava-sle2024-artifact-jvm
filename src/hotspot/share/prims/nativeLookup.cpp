@@ -31,6 +31,9 @@
 #include "logging/logTag.hpp"
 #include "memory/oopFactory.hpp"
 #include "memory/resourceArea.hpp"
+#ifdef OUR_PERSIST
+#include "nvm/recovery/ourPersistJNI.hpp"
+#endif // OUR_PERSIST
 #include "oops/instanceKlass.hpp"
 #include "oops/klass.inline.hpp"
 #include "oops/method.hpp"
@@ -235,6 +238,9 @@ extern "C" {
 #define FN_PTR(f) CAST_FROM_FN_PTR(void*, &f)
 
 static JNINativeMethod lookup_special_native_methods[] = {
+#ifdef OUR_PERSIST
+  { CC"Java_ourpersist_Recovery_registerNatives", NULL, FN_PTR(JVM_RegisterOurPersistMethods) },
+#endif // OUR_PERSIST
   { CC"Java_jdk_internal_misc_Unsafe_registerNatives",             NULL, FN_PTR(JVM_RegisterJDKInternalMiscUnsafeMethods) },
   { CC"Java_java_lang_invoke_MethodHandleNatives_registerNatives", NULL, FN_PTR(JVM_RegisterMethodHandleMethods) },
   { CC"Java_jdk_internal_foreign_abi_UpcallStubs_registerNatives",      NULL, FN_PTR(JVM_RegisterUpcallHandlerMethods) },

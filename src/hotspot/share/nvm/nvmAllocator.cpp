@@ -17,36 +17,55 @@ NonVolatileChunkLarge* NVMAllocator::first_free_nvcl = (NonVolatileChunkLarge*) 
 pthread_mutex_t NVMAllocator::allocate_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 void NVMAllocator::init() {
-  struct stat stat_buf;
-  const char* nvm_path = XSTR(NVM_FILE_PATH);
-
-  int nvm_fd = open(nvm_path, O_CREAT | O_RDWR, 0666);
-  if(nvm_fd < 0) {
-    report_vm_error(__FILE__, __LINE__, "Failed to open the file. path: " XSTR(NVM_FILE_PATH));
-  }
-
-  fstat(nvm_fd, &stat_buf);
-  off_t size = stat_buf.st_size;
-
 #ifdef USE_NVM
-  NVMAllocator::nvm_head = (void*)mmap(NULL, size, PROT_WRITE, MAP_SHARED, nvm_fd, 0);
-  NVMAllocator::segregated_top = NVMAllocator::nvm_head;
-  bool success = NVMAllocator::nvm_head != MAP_FAILED;
-  if (!success) {
-    report_vm_error(__FILE__, __LINE__, "Failed to map the file.");
-  }
-#else
-  NVMAllocator::nvm_head = (void*)AllocateHeap(size, mtNone, NativeCallStack::empty_stack(), AllocFailStrategy::RETURN_NULL);
-  NVMAllocator::segregated_top = NVMAllocator::nvm_head;
-  bool success = NVMAllocator::nvm_head != NULL;  //TODO: nvm_topに対応させる
-  if (!success) {
-    report_vm_error(__FILE__, __LINE__, "Failed to allocate the dram.");
-  }
-#endif
+  const char* nvm_path = XSTR(NVM_FILE_PATH); // NVM
+#else  // USE_NVM
+  const char* nvm_path = "/dev/zero";         // DRAM
+#endif // USE_NVM
+  const void* nvm_target_addr = (void*)0x700000000000;
 
+  // get the size of the NVM file.
+  off_t size = 0;
+  {
+    const char* nvm_path_for_size = XSTR(NVM_FILE_PATH);
+    struct stat stat_buf;
+    int nvm_fd_for_size = open(nvm_path_for_size, O_CREAT | O_RDWR, 0666);
+    if(nvm_fd_for_size < 0) {
+      report_vm_error(__FILE__, __LINE__,
+                      "Failed to open the file.", "nvm_path_for_size: %s", nvm_path_for_size);
+    }
+    fstat(nvm_fd_for_size, &stat_buf);
+    size = stat_buf.st_size;
+  }
+
+  // map the NVM file.
+  void* nvm_addr = NULL;
+  {
+    int nvm_fd = open(nvm_path, O_CREAT | O_RDWR, 0666);
+    if(nvm_fd < 0) {
+      report_vm_error(__FILE__, __LINE__,
+                      "Failed to open the file.", "nvm_path: %s", nvm_path);
+    }
+    nvm_addr = (void*)mmap((void*)nvm_target_addr, size, PROT_WRITE, MAP_SHARED, nvm_fd, 0);
+    bool success = (nvm_addr != MAP_FAILED) && (nvm_addr == nvm_target_addr);
+    if (!success) {
+      report_vm_error(__FILE__, __LINE__,
+                      "Failed to map the file.", "nvm_path: %s, nvm_addr: %p, nvm_target_addr: %p",
+                      nvm_path, nvm_addr, nvm_target_addr);
+    }
+  }
+
+  // initialize the NVM allocator.
+  NVMAllocator::nvm_head = nvm_addr;
+  NVMAllocator::segregated_top = NVMAllocator::nvm_head;
   NVMAllocator::nvm_tail = (void*)(((char*)NVMAllocator::nvm_head) + size);
 
 #ifdef USE_NVTLAB
+  NonVolatileThreadLocalAllocBuffer::initialize_csi();
+  NonVolatileThreadLocalAllocBuffer::initialize_wsize_to_index();
+#ifdef NVMGC
+  NonVolatileChunkSegregate::initialize_count_1_on_uint64_t();
+#endif // NVMGC
   NVMAllocator::large_head = (void*)(((char*)NVMAllocator::nvm_head) + (NVMAllocator::SEGREGATED_REGION_SIZE_GB * 1024 * 1024 * 1024));
   NVMAllocator::large_top = NVMAllocator::large_head;
 
@@ -103,7 +122,7 @@ void* NVMAllocator::allocate(size_t _size)
   size = (size + 63) & ~63;
 #endif // AVOID_SAME_CACHELINE_ALLOCATION
 
-  if (size > chunk_size) {
+  if (size > 256 * HeapWordSize) {
     // large object
 #ifdef ASSERT
     tty->print_cr("allocate size: %d", size);

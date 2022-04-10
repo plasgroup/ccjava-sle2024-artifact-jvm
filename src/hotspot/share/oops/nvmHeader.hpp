@@ -88,6 +88,9 @@ class nvmHeader {
   // Checker
   static bool is_null(void* _fwd);
   static bool is_fwd(void* _fwd);
+  bool is_locked() {
+    return (flags() & lock_mask) != 0;
+  }
 
   // Setter
   // WARNING: All setters are static functions.

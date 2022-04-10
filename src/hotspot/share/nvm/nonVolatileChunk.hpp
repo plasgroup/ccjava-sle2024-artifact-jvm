@@ -17,47 +17,61 @@ class NonVolatileChunkSegregate: public CHeapObj<mtGC> {
 protected:
   void* start;
   void* end;
+  size_t min_size;  // minimum size of objects
   size_t size_class;
-  size_t max_idx;
+  size_t nslots;  // number of slots
   size_t allocation_top;
   bool is_using;
-  bool is_full;
-  uint64_t abit[NonVolatileThreadLocalAllocBuffer::kbyte_per_nvc * 1024/(HeapWordSize * sizeof(uint64_t) * 8)];
-  uint64_t mbit[NonVolatileThreadLocalAllocBuffer::kbyte_per_nvc * 1024/(HeapWordSize * sizeof(uint64_t) * 8)];
+  uint64_t* abit;  // pointer to an array of allocation bits.
+  uint64_t* mbit;  // pointer to an array of mark bits.
   NonVolatileChunkSegregate* next_chunk;
+  static size_t count_1_on_uint64_t[256];
 
-  static NonVolatileChunkSegregate* standby_for_gc[40];
-  static void* nvc_address[3750000]; // FIXME: hardcoding
+  static NonVolatileChunkSegregate* standby_for_gc[NonVolatileThreadLocalAllocBuffer::segregated_num];
+  static void* nvc_address[NonVolatileThreadLocalAllocBuffer::total_chunks];
   static char fill_memory[4];
   static void add_standby_for_gc(NonVolatileChunkSegregate* nvc, size_t idx);
   void set_nvc_address();
   static void* get_nvc_address(size_t idx) { return nvc_address[idx]; }
 
-  virtual bool is_nvc_small() = 0;
-  virtual bool is_nvc_medium() = 0;
+  bool is_nvc_small() { return size_class == min_size; };
+  bool is_nvc_medium() { return size_class != min_size; } ;
+#ifdef USE_NVTLAB
+#ifdef NVMGC
+  size_t num_of_empty_slots;
+  static NonVolatileChunkSegregate* ready_for_use[NonVolatileThreadLocalAllocBuffer::segregated_num];
+  static const float ready_for_use_threshold;
+#endif // NVMGC
+#endif // USE_NVLTAB
 
 public:
   static pthread_mutex_t gc_mtx;
-  NonVolatileChunkSegregate(void* _start, void* _end, size_t _size_class)
+  NonVolatileChunkSegregate(void* _start, void* _end, size_t _min_size, size_t _size_class)
   : start(_start)
   , end(_end)
+  , min_size(_min_size)
   , size_class(_size_class)
   , allocation_top(0)
   , is_using(true)
-  , is_full(false)
+  // , is_full(false)
   , next_chunk((NonVolatileChunkSegregate*) NULL)
   {
+#ifdef USE_NVTLAB
+#ifdef NVMGC
+    num_of_empty_slots = 0;
+#endif // NVMGC
+#endif //USE_NVTLAB
     if (size_class == 0) {
       printf("size_class == 0\n");
       size_class = 1;
     }
-    max_idx = 512 / size_class;
-
-    size_t max_idx = NonVolatileThreadLocalAllocBuffer::kbyte_per_nvc*1024/(HeapWordSize * sizeof(u_int64_t)*8);
-    for (size_t i = 0; i < max_idx; i++) {
+    nslots = (NonVolatileThreadLocalAllocBuffer::nvm_chunk_byte_size / HeapWordSize) / size_class;
+    size_t n = (nslots + sizeof(uint64_t) - 1) / sizeof(uint64_t); // required number of uint64_t for nslots.
+    abit = (uint64_t*) os::malloc(sizeof(uint64_t) * n, mtInternal);
+    mbit = (uint64_t*) os::malloc(sizeof(uint64_t) * n, mtInternal);
+    for (size_t i = 0; i < n; i++) {
       abit[i] = (uint64_t) 0;
       mbit[i] = (uint64_t) 0;
-
     }
     set_nvc_address();
   }
@@ -66,14 +80,16 @@ public:
   void set_allication_top(size_t t) { allocation_top = t; }
   
   void print_nvc_info();
+  static void add_standby_for_gc_without_lock(NonVolatileChunkSegregate* nvc, size_t idx);
   static NonVolatileChunkSegregate* get_standby_for_gc_head(size_t idx) { return standby_for_gc[idx]; }
   NonVolatileChunkSegregate* get_next_chunk() { return next_chunk; }
+  void set_next_chunk(NonVolatileChunkSegregate* nvc) { next_chunk = nvc; }
   size_t get_size_class() { return size_class; }
-  size_t get_max_idx()  { return max_idx; }
+  size_t get_nslots()  { return nslots; }
   bool get_is_using() { return is_using; }
-  bool get_is_full() { return is_full; }
+  // bool get_is_full() { return is_full; }
   void set_is_using(bool b)  { is_using = b; }
-  void set_is_full(bool b)  { is_full = b; }
+  // void set_is_full(bool b)  { is_full = b; }
   void* get_start() { return start; }
 
   bool get_abit(size_t idx);
@@ -82,7 +98,7 @@ public:
   void a_0_to_1(size_t idx);
   void a_1_to_0(size_t idx);
 
-  virtual void* allocation() = 0;
+  void* allocation();
   void* idx_2_address(size_t idx);
   static void* address_to_nvc(void* ptr);
   size_t address_to_idx(void* ptr);
@@ -90,50 +106,32 @@ public:
   static NonVolatileChunkSegregate* generate_new_nvc(size_t idx);
   static void initialize_standby_for_gc();
   static void print_standby_for_gc();
-
+#ifdef USE_NVTLAB
 #ifdef NVMGC
+  static void initialize_count_1_on_uint64_t();
   static void mark_object(void* ptr, size_t obj_word_size);
   static void sweep_objects();
+  static NonVolatileChunkSegregate* get_ready_for_use_head(size_t idx) { return ready_for_use[idx]; }
+  static void set_ready_for_use_head(NonVolatileChunkSegregate* nvc, size_t idx) { ready_for_use[idx] = nvc; }
+  static void update_ready_for_use();
+  static void move_from_standby_to_ready(NonVolatileChunkSegregate* nvc, size_t list_idx);
+  static void move_from_ready_to_standby(NonVolatileChunkSegregate* nvc, size_t list_idx);
 
   bool get_mbit(size_t idx);
   void reverse_mbit(size_t idx);
 
   void m_0_to_1(size_t idx);
   void m_1_to_0(size_t idx);
+  void clear_mbit();
+  size_t count_abit_1();
+  inline void swap_abit_mbit();
+
+  size_t get_num_of_empty_slots() { return num_of_empty_slots; }
+  void set_num_of_empty_slots(size_t num)  { num_of_empty_slots = num; }
 #endif // NVMGC
+#endif // USE_NVTLAB
 };
 
-class NonVolatileChunkSmall: public NonVolatileChunkSegregate {
-public:
-  NonVolatileChunkSmall(void* _start, void* _end, size_t _size_class)
-  : NonVolatileChunkSegregate(_start, _end, _size_class)
-  {
-  }
-
-  void* allocation();
-  bool is_nvc_small() { return true; }
-  bool is_nvc_medium() { return false; }
-};
-
-class NonVolatileChunkMedium: public NonVolatileChunkSegregate {
-private:
-  size_t size_class_minimum;
-public:
-  NonVolatileChunkMedium(void* _start, void* _end, size_t _size_class, size_t _size_class_minimum)
-  : NonVolatileChunkSegregate(_start, _end, _size_class)
-  , size_class_minimum(_size_class_minimum)
-  {
-    if (size_class == 0)
-    {
-      printf("size_class == 0\n");
-      size_class = 1;
-    }
-  }
-
-  void* allocation();
-  bool is_nvc_small() { return false; }
-  bool is_nvc_medium() { return true; }
-};
 
 class NonVolatileChunkLarge {
 private:
@@ -168,6 +166,7 @@ public:
   void* get_dummy() { return (void*) dummy; }
   void a_0_to_1();
   void a_1_to_0();
+  void a_1_to_0_anyway() { alloc = false; }
 
 #ifdef NVMGC
   bool is_next(NonVolatileChunkLarge* nvcl);
@@ -176,11 +175,11 @@ public:
   static void sweep_objects();
   void m_0_to_1();
   void m_1_to_0();
+  static void follow_empty_large_header();
+  static void follow_all_large_header();
 #endif // NVMGC
-
 };
 
 #endif // NVM_NVTLAB_HPP
-
 #endif // USE_NVTLAB
 #endif // OUR_PERSIST

@@ -132,6 +132,11 @@ const char* GCCause::to_string(GCCause::Cause cause) {
     case _z_high_usage:
       return "High Usage";
 
+#ifdef OUR_PERSIST
+    case _ourpersist_collect_class_loader:
+      return "Collect class loaders for OurPersist";
+#endif // OUR_PERSIST
+
     case _last_gc_cause:
       return "ILLEGAL VALUE - last gc cause - ILLEGAL VALUE";
 

@@ -312,6 +312,8 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
 }
 
 bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
+  assert(!dram_obj->nvm_header().is_locked(), "");
+
   oop nvm_obj = oop(dram_obj->nvm_header().fwd());
   if (nvm_obj == NULL) {
     // tty->print("doesn't have nvm copy.\n");

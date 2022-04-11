@@ -77,16 +77,16 @@ void NVMAllocator::init() {
 #endif  // USE_NVTLAB
 }
 
-void* NVMAllocator::allocate(size_t _size)
+void* NVMAllocator::allocate(size_t _word_size)
 {
   // calc size in bytes
-  int size = _size * HeapWordSize;
+  int _byte_size = _word_size * HeapWordSize;
   void* ptr = NULL;
 
 #ifdef USE_NVTLAB
 
-  if (_size >= NonVolatileChunkLarge::MINIMUM_WORD_SIZE_OF_NVCLARGE_ALLOCATION) {
-    ptr = NonVolatileChunkLarge::allocation(_size);
+  if (_word_size >= NonVolatileChunkLarge::MINIMUM_WORD_SIZE_OF_NVCLARGE_ALLOCATION) {
+    ptr = NonVolatileChunkLarge::allocation(_word_size);
     return ptr;
   }
 
@@ -101,7 +101,7 @@ void* NVMAllocator::allocate(size_t _size)
   Thread* thr = Thread::current();
   NonVolatileThreadLocalAllocBuffer& nvtlab = thr->nvtlab();
 
-  ptr = nvtlab.allocate(_size);
+  ptr = nvtlab.allocate(_word_size);
 
   if (ptr == NULL) {
       printf("allocation failed\n");
@@ -119,19 +119,19 @@ void* NVMAllocator::allocate(size_t _size)
   const int chunk_size = NVTLAB_BUMP_CHUNK_SIZE_KB * 1024;
 
 #ifdef AVOID_SAME_CACHELINE_ALLOCATION
-  size = (size + 63) & ~63;
+  _byte_size = (_byte_size + 63) & ~63;
 #endif // AVOID_SAME_CACHELINE_ALLOCATION
 
-  if (size > 256 * HeapWordSize) {
+  if (_byte_size > 256 * HeapWordSize) {
     // large object
 #ifdef ASSERT
-    tty->print_cr("allocate size: %d", size);
+    tty->print_cr("allocate size: %d", _byte_size);
 #endif // ASSERT
     pthread_mutex_lock(&NVMAllocator::allocate_mtx);
     if (NVMAllocator::nvm_head == NULL) NVMAllocator::init();
 
     ptr = NVMAllocator::nvm_head;
-    void* nvm_next = (void*)(((char*)NVMAllocator::nvm_head) + size);
+    void* nvm_next = (void*)(((char*)NVMAllocator::nvm_head) + _byte_size);
     NVMAllocator::nvm_head = nvm_next;
 
     // check
@@ -141,7 +141,7 @@ void* NVMAllocator::allocate(size_t _size)
     pthread_mutex_unlock(&NVMAllocator::allocate_mtx);
   } else {
     // small object
-    if (size > bump_size || bump_head == NULL) {
+    if (_byte_size > bump_size || bump_head == NULL) {
       // allocate chunk
       pthread_mutex_lock(&NVMAllocator::allocate_mtx);
       if (NVMAllocator::nvm_head == NULL) NVMAllocator::init();
@@ -159,8 +159,8 @@ void* NVMAllocator::allocate(size_t _size)
     }
     // allocate object
     ptr = bump_head;
-    cur_thread->set_nvtlab_bump_head((void*)(((char*)bump_head) + size));
-    cur_thread->set_nvtlab_bump_size(bump_size - size);
+    cur_thread->set_nvtlab_bump_head((void*)(((char*)bump_head) + _byte_size));
+    cur_thread->set_nvtlab_bump_size(bump_size - _byte_size);
   }
 #else
   // 大域的な領域からメモリを確保する
@@ -169,7 +169,7 @@ void* NVMAllocator::allocate(size_t _size)
   if (NVMAllocator::nvm_head == NULL) NVMAllocator::init();
 
   ptr = NVMAllocator::nvm_head;
-  void* nvm_next = (void*)(((char*)NVMAllocator::nvm_head) + size);
+  void* nvm_next = (void*)(((char*)NVMAllocator::nvm_head) + _byte_size);
   NVMAllocator::nvm_head = nvm_next;
 
   // check

@@ -30,7 +30,7 @@ public:
  public:
   static void init();
   // allocate an UNINITILIZED memory block in NVM
-  static void* allocate(size_t size);
+  static void* allocate(size_t _word_size);
 
   static void* allocate_chunksize();
 };

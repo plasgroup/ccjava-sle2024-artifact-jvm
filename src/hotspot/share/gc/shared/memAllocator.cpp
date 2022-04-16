@@ -22,18 +22,19 @@
  *
  */
 
-#include "precompiled.hpp"
 #include "classfile/javaClasses.hpp"
 #include "gc/shared/allocTracer.hpp"
 #include "gc/shared/collectedHeap.hpp"
 #include "gc/shared/memAllocator.hpp"
 #include "gc/shared/threadLocalAllocBuffer.inline.hpp"
 #include "memory/universe.hpp"
+#include "nvm/nvmCounter.hpp"
 #include "oops/arrayOop.hpp"
 #include "oops/oop.inline.hpp"
+#include "precompiled.hpp"
 #include "prims/jvmtiExport.hpp"
-#include "runtime/sharedRuntime.hpp"
 #include "runtime/handles.inline.hpp"
+#include "runtime/sharedRuntime.hpp"
 #include "runtime/thread.inline.hpp"
 #include "services/lowMemoryDetector.hpp"
 #include "utilities/align.hpp"
@@ -382,6 +383,9 @@ void MemAllocator::mem_clear(HeapWord* mem) const {
 
 oop MemAllocator::finish(HeapWord* mem) const {
   assert(mem != NULL, "NULL object pointer");
+#ifdef NVM_COUNTER
+  _thread->nvm_counter()->inc_alloc_dram(_word_size);
+#endif // NVM_COUNTER
 #ifdef OUR_PERSIST
   nvmHeader::set_header(mem, nvmHeader::zero());
 #ifdef ASSERT

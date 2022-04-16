@@ -10,6 +10,8 @@
 #include "runtime/thread.hpp"
 
 // global counters
+unsigned long NVMCounter::_alloc_dram_g = 0;
+unsigned long NVMCounter::_alloc_dram_word_g = 0;
 unsigned long NVMCounter::_alloc_nvm_g = 0;
 unsigned long NVMCounter::_alloc_nvm_word_g = 0;
 unsigned long NVMCounter::_persistent_obj_g = 0;
@@ -40,6 +42,8 @@ bool NVMCounter::_countable = true;
 
 void NVMCounter::entry(DEBUG_ONLY(Thread* cur_thread)) {
   _enable = true;
+  _alloc_dram = 0;
+  _alloc_dram_word = 0;
   _alloc_nvm = 0;
   _alloc_nvm_word = 0;
   _persistent_obj = 0;
@@ -93,6 +97,12 @@ void NVMCounter::exit(DEBUG_ONLY(Thread* cur_thread)) {
   assert(_cnt_list[_cnt_list_offset] == this, "");
   _cnt_list[_cnt_list_offset] = NULL;
   _cnt_list_offset = _cnt_list_size;
+
+  _alloc_dram_g += _alloc_dram;
+  _alloc_dram = 0;
+
+  _alloc_dram_word_g += _alloc_dram_word;
+  _alloc_dram_word = 0;
 
   _alloc_nvm_g += _alloc_nvm;
   _alloc_nvm = 0;
@@ -222,13 +232,15 @@ void NVMCounter::print() {
   }
 
   #define NVMCOUNTER_PREFIX "[NVMCounter] "
-  tty->print_cr(NVMCOUNTER_PREFIX "_thr_create:       %lu", _thr_create);
-  tty->print_cr(NVMCOUNTER_PREFIX "_thr_delete:       %lu", _thr_delete);
-  tty->print_cr(NVMCOUNTER_PREFIX "_alloc_nvm_g:      %lu", _alloc_nvm_g);
-  tty->print_cr(NVMCOUNTER_PREFIX "_alloc_nvm_word_g: %lu", _alloc_nvm_word_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "_thr_create:            %lu", _thr_create);
+  tty->print_cr(NVMCOUNTER_PREFIX "_thr_delete:            %lu", _thr_delete);
+  tty->print_cr(NVMCOUNTER_PREFIX "_alloc_dram_g:          %lu", _alloc_dram_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "_alloc_dram_word_g:     %lu", _alloc_dram_word_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "_alloc_nvm_g:           %lu", _alloc_nvm_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "_alloc_nvm_word_g:      %lu", _alloc_nvm_word_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_persistent_obj_g:      %lu", _persistent_obj_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_persistent_obj_word_g: %lu", _persistent_obj_word_g);
-  tty->print_cr(NVMCOUNTER_PREFIX "_copy_obj_retry_g: %lu", _copy_obj_retry_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "_copy_obj_retry_g:      %lu", _copy_obj_retry_g);
 
   tty->print_cr(NVMCOUNTER_PREFIX "_access_g: (is_store, is_volatile, is_oop, is_static, is_runtime, is_atomic)");
   for (int i = 0; i < _access_n; i++) {

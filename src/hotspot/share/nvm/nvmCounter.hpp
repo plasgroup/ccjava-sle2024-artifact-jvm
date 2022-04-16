@@ -32,6 +32,8 @@ class NVMCounter: public CHeapObj<mtNone> {
   static const int _access_n = 1 << 6;
 
   // local counters
+  unsigned long _alloc_dram;
+  unsigned long _alloc_dram_word;
   unsigned long _alloc_nvm;
   unsigned long _alloc_nvm_word;
   unsigned long _persistent_obj;
@@ -44,6 +46,8 @@ class NVMCounter: public CHeapObj<mtNone> {
   unsigned long _call_ensure_recoverable;
 
   // global counters
+  static unsigned long _alloc_dram_g;
+  static unsigned long _alloc_dram_word_g;
   static unsigned long _alloc_nvm_g;
   static unsigned long _alloc_nvm_word_g;
   static unsigned long _persistent_obj_g;
@@ -96,6 +100,10 @@ class NVMCounter: public CHeapObj<mtNone> {
     *count += value;
   }
 
+  inline void inc_alloc_dram(int word_size) {
+    add_count(&_alloc_dram, 1);
+    add_count(&_alloc_dram_word, word_size);
+  }
   inline void inc_alloc_nvm(int word_size) {
     add_count(&_alloc_nvm, 1);
     add_count(&_alloc_nvm_word, word_size);
@@ -135,6 +143,9 @@ class NVMCounter: public CHeapObj<mtNone> {
   }
 
   // for assembller
+  static void inc_alloc_dram(Thread* thr, oopDesc* obj);
+  static void inc_alloc_dram_asm(MacroAssembler* masm, Register obj);
+
   static void inc_access(Thread* thr, int flags);
   static void inc_access_asm(MacroAssembler* masm, bool is_store, bool is_volatile, bool is_oop,
                              bool is_static, bool is_runtime, bool is_atomic);

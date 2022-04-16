@@ -4404,6 +4404,10 @@ void TemplateTable::_new() {
       __ pop(atos);
     }
 
+#ifdef NVM_COUNTER
+    NVMCounter::inc_alloc_dram_asm(_masm, rax);
+#endif // NVM_COUNTER
+
     __ jmp(done);
   }
 

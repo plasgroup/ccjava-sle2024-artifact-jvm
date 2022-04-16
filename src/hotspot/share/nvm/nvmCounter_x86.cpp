@@ -1,12 +1,13 @@
 #ifdef NVM_COUNTER
 
-#include "nvm/nvmCounter.hpp"
 #include "asm/assembler.inline.hpp"
 #include "asm/macroAssembler.hpp"
-#include "interpreter/interpreter.hpp"
 #include "interpreter/interp_masm.hpp"
+#include "interpreter/interpreter.hpp"
+#include "nvm/nvmCounter.hpp"
 #include "oops/klass.hpp"
 #include "oops/method.hpp"
+#include "oops/oop.inline.hpp"
 
 #define __ ((InterpreterMacroAssembler*)masm)->
 
@@ -78,6 +79,17 @@ void NVMCounter::inc_access_asm(MacroAssembler* masm, bool is_store, bool is_vol
   int flags = NVMCounter::access_bool2flags(is_store, is_volatile, is_oop, is_static, is_runtime, is_atomic);
   __ movl(c_rarg1, flags);
   __ call_VM_leaf(func, r15_thread, c_rarg1);
+  __ popa();
+}
+
+void NVMCounter::inc_alloc_dram(Thread* thr, oopDesc* obj) {
+  thr->nvm_counter()->inc_alloc_dram(obj->size());
+}
+
+void NVMCounter::inc_alloc_dram_asm(MacroAssembler* masm, Register obj) {
+  __ pusha();
+  address func = CAST_FROM_FN_PTR(address, ((void(*)(Thread*, oopDesc*))NVMCounter::inc_alloc_dram));
+  __ call_VM_leaf(func, r15_thread, obj);
   __ popa();
 }
 

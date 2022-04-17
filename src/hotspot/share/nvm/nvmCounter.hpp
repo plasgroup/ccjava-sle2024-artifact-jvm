@@ -27,6 +27,8 @@ class MacroAssembler;
 // 6. カウントアップ関数を定義（例: inc_alloc_nvm() 関数）
 // 7. カウントアップしたい箇所から Thread::current()->nvm_counter()->カウントアップ関数(); を呼び出す
 
+#define NVMCOUNTER_PREFIX "[NVMCounter] "
+
 class NVMCounter: public CHeapObj<mtNone> {
  private:
   static const int _access_n = 1 << 6;
@@ -151,6 +153,9 @@ class NVMCounter: public CHeapObj<mtNone> {
                              bool is_static, bool is_runtime, bool is_atomic);
   static void inc_clwb(Thread* thr);
   static void inc_clwb_asm(MacroAssembler* masm);
+
+  // for gc
+  static void count_object_snapshot_during_gc();
 
   void entry(DEBUG_ONLY(Thread* cur_thread));
   void exit(DEBUG_ONLY(Thread* cur_thread));

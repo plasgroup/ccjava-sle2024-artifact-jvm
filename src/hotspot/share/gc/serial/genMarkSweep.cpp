@@ -105,6 +105,10 @@ void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_so
   }
 #endif // OUR_PERSIST
 
+#ifdef NVM_COUNTER
+  NVMCounter::count_object_snapshot_during_gc();
+#endif // NVM_COUNTER
+
   mark_sweep_phase2();
 
   // Don't add any more derived pointers during phase3

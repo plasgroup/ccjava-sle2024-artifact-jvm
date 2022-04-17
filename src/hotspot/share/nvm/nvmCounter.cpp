@@ -231,7 +231,6 @@ void NVMCounter::print() {
     report_vm_error(__FILE__, __LINE__, "exit() has not been executed in some threads.");
   }
 
-  #define NVMCOUNTER_PREFIX "[NVMCounter] "
   tty->print_cr(NVMCOUNTER_PREFIX "_thr_create:            %lu", _thr_create);
   tty->print_cr(NVMCOUNTER_PREFIX "_thr_delete:            %lu", _thr_delete);
   tty->print_cr(NVMCOUNTER_PREFIX "_alloc_dram_g:          %lu", _alloc_dram_g);
@@ -280,6 +279,44 @@ void NVMCounter::print() {
   tty->print_cr(NVMCOUNTER_PREFIX "_volatile_fields_g: %lu", _volatile_fields_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_clwb_g:            %lu", _clwb_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_call_ensure_recoverable_g: %lu", _call_ensure_recoverable_g);
+}
+
+class CountObjectSnapshotDuringGC : public ObjectClosure {
+ private:
+  unsigned long alloc_dram;
+  unsigned long alloc_dram_word;
+  unsigned long alloc_nvm;
+  unsigned long alloc_nvm_word;
+
+ public:
+  CountObjectSnapshotDuringGC():
+    alloc_dram(0), alloc_dram_word(0), alloc_nvm(0), alloc_nvm_word(0) {}
+
+  void print() {
+    tty->print_cr(NVMCOUNTER_PREFIX "(CountObjectSnapshotDuringGC)"
+                  " alloc_dram: %lu, alloc_dram_word: %lu, alloc_nvm: %lu, alloc_nvm_word: %lu",
+                  alloc_dram, alloc_dram_word, alloc_nvm, alloc_nvm_word);
+  }
+
+  void do_object(oop obj) {
+    const int word_size = obj->size();
+
+    if (!obj->is_gc_marked()) return;
+    alloc_dram++;
+    alloc_dram_word += word_size;
+
+#ifdef OUR_PERSIST
+    if (obj->nvm_header().fwd() == NULL) return;
+    alloc_nvm++;
+    alloc_nvm_word += word_size;
+#endif // OUR_PERSIST
+  }
+};
+
+void NVMCounter::count_object_snapshot_during_gc() {
+  CountObjectSnapshotDuringGC closure;
+  Universe::heap()->object_iterate(&closure);
+  closure.print();
 }
 
 #endif // NVM_COUNTER

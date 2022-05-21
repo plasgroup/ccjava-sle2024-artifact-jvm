@@ -39,26 +39,26 @@
 }
 
 // fence
-#define NVM_FENCH {\
+#define NVM_FENCE {\
   _mm_sfence();\
 }
 
 // flush and fence
 #define NVM_WRITEBACK(mem) {\
   NVM_FLUSH(mem);\
-  NVM_FENCH\
+  NVM_FENCE\
 }
 
 #define NVM_WRITEBACK_LOOP(mem, len) {\
   NVM_FLUSH_LOOP(mem, len)\
-  NVM_FENCH\
+  NVM_FENCE\
 }
 
 #else  // ENABLE_NVM_WRITEBACK
 
 #define NVM_FLUSH(mem)
 #define NVM_FLUSH_LOOP(mem, len)
-#define NVM_FENCH
+#define NVM_FENCE
 #define NVM_WRITEBACK(mem)
 #define NVM_WRITEBACK_LOOP(mem, len)
 

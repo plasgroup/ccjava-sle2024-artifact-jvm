@@ -73,7 +73,7 @@ void OurPersist::ensure_recoverable(oop obj) {
   }
 
   // sfence
-  NVM_FENCH
+  NVM_FENCE
 
   barrier_sync->sync();
   OurPersist::clear_responsible_thread(cur_thread);

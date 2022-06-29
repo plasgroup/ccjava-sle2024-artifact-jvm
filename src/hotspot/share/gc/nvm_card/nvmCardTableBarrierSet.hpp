@@ -23,7 +23,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
   // return is_set_durableroot_annotation
   inline static bool static_object_etc(oop obj, ptrdiff_t offset, oop value);
 
-public:
+ public:
   template <DecoratorSet decorators, typename BarrierSetT = NVMCardTableBarrierSet>
   class AccessBarrier: public BarrierSet::AccessBarrier<decorators, BarrierSetT> {
     // parent barrierset class

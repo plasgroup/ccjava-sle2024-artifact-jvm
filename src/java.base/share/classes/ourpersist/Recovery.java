@@ -114,6 +114,7 @@ public class Recovery {
   }
   public static native Object test2(long offset);
   public static native void getLoader(ClassLoader[] obj);
+  public static native void createDramCopyTest(Object[] root_head);
 
   // native
   private static native int getKlassNames(String[] names, int start_pos);

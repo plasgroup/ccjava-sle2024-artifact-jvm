@@ -20,6 +20,45 @@
 
 #include "runtime/vmThread.hpp"
 #include "runtime/vmOperations.hpp"
+#include "classfile/vmSymbols.hpp"
+
+JVM_ENTRY(static jobject, OurPersist_createDramCopyTest(JNIEnv *env, jobject clazz, jobject obj))
+  ObjArrayKlass* k = NULL;
+  int len = -1;
+  {
+    oop p = JNIHandles::resolve(obj);
+    assert(oopDesc::is_oop(p), "");
+    assert(p->klass()->is_objArray_klass(), "");
+    k = ObjArrayKlass::cast(p->klass());
+    len = objArrayOop(p)->length();
+    assert(len >= 2, "");
+  }
+
+  jobject ary = obj;
+  int test_loop = 1024*64;
+  for (int i = 0; i < test_loop; i++) {
+    for (int i = 0; i < len-1; i++) {
+      oop elem = k->allocate(64, THREAD);
+      objArrayOop p = objArrayOop(JNIHandles::resolve(ary));
+      p->obj_at_put(i, elem);
+    }
+
+    if (i + 1 == test_loop) {
+      objArrayOop(JNIHandles::resolve(ary))->obj_at_put(len-1, NULL);
+      JNIHandles::destroy_local(ary);
+    } else {
+      objArrayOop next = k->allocate(len, THREAD);
+      objArrayOop p = objArrayOop(JNIHandles::resolve(ary));
+      p->obj_at_put(len-1, next);
+      JNIHandles::destroy_local(ary);
+      ary = JNIHandles::make_local(next);
+    }
+  }
+
+
+  tty->print_cr("OurPersist_createDramCopyTest %s", k->external_name());
+  return NULL;
+JVM_END
 
 JVM_ENTRY(static jobject, OurPersist_Test(JNIEnv *env, jobject clazz, jobject obj, jlong offset))
   // oop p = JNIHandles::resolve(obj);
@@ -87,6 +126,7 @@ JVM_END
 #define FN_PTR(f) CAST_FROM_FN_PTR(void*, &f)
 
 static JNINativeMethod ourpersist_methods[] = {
+    {CC "createDramCopyTest", CC "([" OBJ ")V", FN_PTR(OurPersist_createDramCopyTest)},
     {CC "test2", CC "(J)" OBJ "", FN_PTR(OurPersist_Test2)},
     {CC "test", CC "(" OBJ "J)" OBJ "", FN_PTR(OurPersist_Test)},
     {CC "getLoader", CC "([Ljava/lang/ClassLoader;)V", FN_PTR(OurPersist_Get_Loader)},

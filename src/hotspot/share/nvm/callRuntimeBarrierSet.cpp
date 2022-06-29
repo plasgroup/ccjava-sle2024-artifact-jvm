@@ -43,9 +43,13 @@
 #define OURPERSIST_STORE_FUNC_PTR_IF_BASE(cmp_ds, ds) {\
   OURPERSIST_RUNTIME_BS_PTR_IF(cmp_ds, ds, true) \
 }
+#define OURPERSIST_STORE_FUNC_PTR_IF_3(cmp_ds, ds) {\
+  OURPERSIST_STORE_FUNC_PTR_IF_BASE(cmp_ds, ds|OURPERSIST_NOT_DURABLE_ANNOTATION) \
+  OURPERSIST_STORE_FUNC_PTR_IF_BASE(cmp_ds, ds|OURPERSIST_DURABLE_ANNOTATION) \
+}
 #define OURPERSIST_STORE_FUNC_PTR_IF_2(cmp_ds, ds) {\
-  OURPERSIST_STORE_FUNC_PTR_IF_BASE(cmp_ds, ds|OURPERSIST_IS_NOT_VOLATILE) \
-  OURPERSIST_STORE_FUNC_PTR_IF_BASE(cmp_ds, ds|OURPERSIST_IS_VOLATILE) \
+  OURPERSIST_STORE_FUNC_PTR_IF_3(cmp_ds, ds|OURPERSIST_IS_NOT_VOLATILE) \
+  OURPERSIST_STORE_FUNC_PTR_IF_3(cmp_ds, ds|OURPERSIST_IS_VOLATILE) \
 }
 #define OURPERSIST_STORE_FUNC_PTR_IF_1(cmp_ds, ds) {\
   OURPERSIST_STORE_FUNC_PTR_IF_2(cmp_ds, ds|OURPERSIST_IS_NOT_STATIC) \
@@ -73,6 +77,7 @@
 void* CallRuntimeBarrierSet::store_in_heap_at_ptr(DecoratorSet decorators, BasicType type) {
   assert(decorators & OURPERSIST_IS_VOLATILE_MASK, "");
   assert(decorators & OURPERSIST_IS_STATIC_MASK, "");
+  assert(decorators & OURPERSIST_DURABLE_ANNOTATION_MASK, "");
 
   DecoratorSet cmp_ds = decorators | OURPERSIST_BS_ASM;
 
@@ -87,6 +92,8 @@ void* CallRuntimeBarrierSet::store_in_heap_at_ptr(DecoratorSet decorators, Basic
 void* CallRuntimeBarrierSet::load_in_heap_at_ptr(DecoratorSet decorators, BasicType type) {
   assert(decorators & OURPERSIST_IS_VOLATILE_MASK, "");
   assert(decorators & OURPERSIST_IS_STATIC_MASK, "");
+  // NOTE: Check of durable-root not required in read-barrier. It only increases the binary size.
+  assert(!(decorators & OURPERSIST_DURABLE_ANNOTATION_MASK), "");
 
   DecoratorSet cmp_ds = decorators | OURPERSIST_BS_ASM;
 

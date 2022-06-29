@@ -141,12 +141,26 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
 
 #ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
     // True
+#ifdef ASSERT
+    assert(decorators & OURPERSIST_DURABLE_ANNOTATION_MASK, "must be set");
+    if (decorators & OURPERSIST_NOT_DURABLE_ANNOTATION) {
+      __ should_not_reach_here();
+    }
+#endif // ASSERT
+
     NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, tmp1, tmp2, tmp3, noreg);
     __ jmp(done_check_annotaion);
 #endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
 
 #ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
     // False
+#ifdef ASSERT
+    assert(decorators & OURPERSIST_DURABLE_ANNOTATION_MASK, "must be set");
+    if (decorators & OURPERSIST_DURABLE_ANNOTATION) {
+      __ should_not_reach_here();
+    }
+#endif // ASSERT
+
     __ jmp(done_check_annotaion);
 #endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
 
@@ -468,7 +482,7 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_store_at(MacroAssembl
   __ jcc(Assembler::zero, dram_only);
 
 #ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
-    __ should_not_reach_here();
+  __ should_not_reach_here();
 #endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
 
   // Store in NVM.
@@ -518,12 +532,26 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
 
 #ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
     // True
+#ifdef ASSERT
+    assert(decorators & OURPERSIST_DURABLE_ANNOTATION_MASK, "must be set");
+    if (decorators & OURPERSIST_NOT_DURABLE_ANNOTATION) {
+      __ should_not_reach_here();
+    }
+#endif // ASSERT
+
     NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(masm, val, tmp1, tmp2, tmp3, noreg);
     __ jmp(done_check_annotaion);
 #endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
 
 #ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
     // False
+#ifdef ASSERT
+    assert(decorators & OURPERSIST_DURABLE_ANNOTATION_MASK, "must be set");
+    if (decorators & OURPERSIST_DURABLE_ANNOTATION) {
+      __ should_not_reach_here();
+    }
+#endif // ASSERT
+
     __ jmp(done_check_annotaion);
 #endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
 

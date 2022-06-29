@@ -1719,13 +1719,28 @@ void ClassFileParser::parse_fields(const ClassFileStream* const cfs,
       }
     }
 
-    // Counter
-#ifdef NVM_COUNTER
-    Thread::current()->nvm_counter()->inc_fields();
-    if (access_flags.is_volatile()) {
-      Thread::current()->nvm_counter()->inc_volatile_fields();
+#ifdef OUR_PERSIST
+    if (is_static && is_reference_type(type)) {
+#ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
+      // True: all roots are durable
+      field->set_durableroot(true);
+#endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
+
+#ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
+      // False: all roots are not durable
+      // nothing to do
+#endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
+
+#if !defined(OURPERSIST_DURABLEROOTS_ALL_TRUE) && !defined(OURPERSIST_DURABLEROOTS_ALL_FALSE)
+      // Default: check if this field is a durableroot
+      AnnotationCollector::ID droot_anno = AnnotationCollector::_ourpersist_durableroot_annotaion;
+      if (parsed_annotations.has_annotation(droot_anno)) {
+        field->set_durableroot(true);
+      }
+#endif // !OURPERSIST_DURABLEROOTS_ALL_TRUE && !OURPERSIST_DURABLEROOTS_ALL_FALSE
+
     }
-#endif // NVM_COUNTER
+#endif // OUR_PERSIST
   }
 
   int index = length;
@@ -2182,12 +2197,6 @@ void ClassFileParser::FieldAnnotationCollector::apply_to(FieldInfo* f) {
     f->set_contended_group(contended_group());
   if (is_stable())
     f->set_stable(true);
-
-#ifdef OUR_PERSIST
-  if (has_annotation(_ourpersist_durableroot_annotaion)) {
-    f->set_durableroot(true);
-  }
-#endif // OUR_PERSIST
 }
 
 ClassFileParser::FieldAnnotationCollector::~FieldAnnotationCollector() {

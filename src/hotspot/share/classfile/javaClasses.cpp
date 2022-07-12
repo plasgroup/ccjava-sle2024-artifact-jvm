@@ -1052,6 +1052,14 @@ void java_lang_Class::create_mirror(Klass* k, Handle class_loader,
       // concurrently doesn't expect a k to have a null java_mirror.
       release_set_array_klass(comp_mirror(), k);
     }
+
+#ifdef OUR_PERSIST
+#ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
+    if (OurPersist::enable()) {
+      OurPersist::mirror_create(k, mirror_oop);
+    }
+#endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
+#endif // OUR_PERSIST
   } else {
     assert(fixup_mirror_list() != NULL, "fixup_mirror_list not initialized");
     fixup_mirror_list()->push(k);

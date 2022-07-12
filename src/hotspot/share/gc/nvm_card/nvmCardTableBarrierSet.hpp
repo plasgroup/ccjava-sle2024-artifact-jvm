@@ -18,11 +18,6 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
  public:
   NVMCardTableBarrierSet(CardTable* card_table);
 
- private:
-  // TODO: rename
-  // return is_set_durableroot_annotation
-  inline static bool static_object_etc(oop obj, ptrdiff_t offset, oop value);
-
  public:
   template <DecoratorSet decorators, typename BarrierSetT = NVMCardTableBarrierSet>
   class AccessBarrier: public BarrierSet::AccessBarrier<decorators, BarrierSetT> {
@@ -33,20 +28,16 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
    public:
     static void oop_store_in_heap_raw(oop base, ptrdiff_t offset, oop value) {
-      // Check annotation
-      bool is_set_durableroot_annotation =
-        NVMCardTableBarrierSet::static_object_etc(base, offset, value);
-
       // Skip
-      if (!OurPersist::is_target(base->klass())) {
-        // Store in DRAM.
-        Raw::oop_store_in_heap_at(base, offset, value);
-        return;
-      }
+      //if (!OurPersist::is_target(base->klass())) {
+      //  // Store in DRAM.
+      //  Raw::oop_store_in_heap_at(base, offset, value);
+      //  return;
+      //}
 
 #ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
-      if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
+      if (OurPersist::is_volatile(base, offset, decorators)) {
         // Counter
         NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
                           base, offset, 1 /* volatile */, 1 /* oop */, 0 /* non-atomic */);)
@@ -54,7 +45,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         nvmHeader::lock(base);
 
         void* before_fwd = base->nvm_header().fwd();
-        if (before_fwd != NULL) {
+        if (OurPersist::is_wupd(before_fwd, base, offset, decorators, true)) {
           assert(nvmHeader::is_fwd(before_fwd), "");
 
           if (value != NULL) {
@@ -90,7 +81,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       OrderAccess::fence();
       void* before_fwd = base->nvm_header().fwd();
 
-      if (before_fwd != NULL) {
+      if (OurPersist::is_wupd(before_fwd, base, offset, decorators, true)) {
         assert(nvmHeader::is_fwd(before_fwd), "");
         if (value != NULL) {
           OurPersist::ensure_recoverable(value);
@@ -128,7 +119,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
       // Skip
-      if (offset == oopDesc::mark_offset_in_bytes() || !OurPersist::is_target(base->klass())) {
+      if (offset == oopDesc::mark_offset_in_bytes()) {
+        // || !OurPersist::is_target(base->klass())) {
         // Store in DRAM.
         Parent::store_in_heap_at(base, offset, value);
         return;
@@ -136,7 +128,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
 #ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
-      if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
+      if (OurPersist::is_volatile(base, offset, decorators)) {
         assert(offset != oopDesc::mark_offset_in_bytes(), "");
 
         // Counter
@@ -146,7 +138,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         nvmHeader::lock(base);
 
         void* before_fwd = base->nvm_header().fwd();
-        if (before_fwd != NULL) {
+        if (OurPersist::is_wupd(before_fwd, base, offset, decorators, false)) {
           // Store in NVM.
 #ifndef NO_WUPD
           Raw::store_in_heap_at(oop(before_fwd), offset, value);
@@ -198,10 +190,10 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
       // Skip
-      if (!OurPersist::is_target(base->klass())) {
-        // Store in DRAM.
-        return Parent::atomic_xchg_in_heap_at(base, offset, new_value);
-      }
+      //if (!OurPersist::is_target(base->klass())) {
+      //  // Store in DRAM.
+      //  return Parent::atomic_xchg_in_heap_at(base, offset, new_value);
+      //}
 
       // Counter
       NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
@@ -211,7 +203,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       T result = Parent::template load_in_heap_at<T>(base, offset);
 
       void* before_fwd = base->nvm_header().fwd();
-      if (before_fwd != NULL) {
+      if (OurPersist::is_wupd(before_fwd, base, offset, decorators, false)) {
         // Store in NVM.
 #ifndef NO_WUPD
         Raw::store_in_heap_at(oop(before_fwd), offset, new_value);
@@ -238,7 +230,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
       // Skip
-      if (offset == oopDesc::mark_offset_in_bytes() || !OurPersist::is_target(base->klass())) {
+      if (offset == oopDesc::mark_offset_in_bytes()) {
+        // || !OurPersist::is_target(base->klass())) {
         // Store in DRAM.
         return Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
       }
@@ -329,20 +322,16 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         return;
       }
 
-      // Check annotation
-      bool is_set_durableroot_annotation =
-        NVMCardTableBarrierSet::static_object_etc(base, offset, value);
-
       // Skip
-      if (!OurPersist::is_target(base->klass())) {
-        // Store in DRAM.
-        Parent::oop_store_in_heap_at(base, offset, value);
-        return;
-      }
+      //if (!OurPersist::is_target(base->klass())) {
+      //  // Store in DRAM.
+      //  Parent::oop_store_in_heap_at(base, offset, value);
+      //  return;
+      //}
 
 #ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
-      if (OurPersist::is_volatile_and_non_mirror(base, offset, decorators)) {
+      if (OurPersist::is_volatile(base, offset, decorators)) {
 
         // Counter
         NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
@@ -350,7 +339,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         nvmHeader::lock(base);
 
         void* before_fwd = base->nvm_header().fwd();
-        if (before_fwd != NULL) {
+        if (OurPersist::is_wupd(before_fwd, base, offset, decorators, true)) {
           assert(nvmHeader::is_fwd(before_fwd), "");
 
           if (value != NULL) {
@@ -387,7 +376,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
       OrderAccess::fence();
       void* before_fwd = base->nvm_header().fwd();
-      if (before_fwd != NULL) {
+      if (OurPersist::is_wupd(before_fwd, base, offset, decorators, true)) {
         assert(nvmHeader::is_fwd(before_fwd), "");
         if (value != NULL) {
           OurPersist::ensure_recoverable(value);
@@ -416,15 +405,11 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
-      // Check annotation
-      bool is_set_durableroot_annotation =
-        NVMCardTableBarrierSet::static_object_etc(base, offset, new_value);
-
       // Skip
-      if (!OurPersist::is_target(base->klass())) {
-        // Store in DRAM.
-        return Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
-      }
+      //if (!OurPersist::is_target(base->klass())) {
+      //  // Store in DRAM.
+      //  return Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
+      //}
 
       // Counter
       NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
@@ -435,7 +420,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
       void* before_fwd = base->nvm_header().fwd();
 
-      if (before_fwd != NULL) {
+      if (OurPersist::is_wupd(before_fwd, base, offset, decorators, true)) {
         assert(nvmHeader::is_fwd(before_fwd), "");
 
         if (new_value != NULL) {
@@ -471,15 +456,11 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
-      // Check annotation
-      bool is_set_durableroot_annotation =
-        NVMCardTableBarrierSet::static_object_etc(base, offset, new_value);
-
       // Skip
-      if (!OurPersist::is_target(base->klass())) {
-        // Store in DRAM.
-        return Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
-      }
+      //if (!OurPersist::is_target(base->klass())) {
+      //  // Store in DRAM.
+      //  return Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+      //}
 
       // Counter
       NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
@@ -491,7 +472,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       bool swap = result == compare_value;
       if (swap) {
         void* before_fwd = base->nvm_header().fwd();
-        if (before_fwd != NULL) {
+        if (OurPersist::is_wupd(before_fwd, base, offset, decorators, true)) {
           if (new_value != NULL) {
             OurPersist::ensure_recoverable(new_value);
           }

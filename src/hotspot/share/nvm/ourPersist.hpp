@@ -48,12 +48,14 @@ class OurPersist : AllStatic {
   inline static bool enable();
   inline static bool is_target(Klass* klass);
   inline static bool is_static_field(oop obj, ptrdiff_t offset);
+  inline static bool is_volatile(oop obj, ptrdiff_t offset, DecoratorSet ds);
+  inline static bool is_durableroot(oop klass_obj, ptrdiff_t offset, DecoratorSet ds);
+  inline static bool is_wupd(void* fwd, oop obj, ptrdiff_t offset, DecoratorSet ds, bool is_oop);
   inline static Thread* responsible_thread(void* nvm_obj);
   static Thread* responsible_thread_noinline(void* nvm_obj);
-  inline static bool is_set_durableroot_annotation(oop klass_obj, ptrdiff_t offset);
-  inline static bool is_volatile_and_non_mirror(oop obj, ptrdiff_t offset, DecoratorSet ds);
 
   static void ensure_recoverable(oop obj);
+  static void mirror_create(Klass* klass, oop mirror);
 };
 
 #endif // NVM_OURPERSIST_HPP

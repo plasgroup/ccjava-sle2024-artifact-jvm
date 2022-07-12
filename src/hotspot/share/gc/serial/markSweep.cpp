@@ -151,7 +151,7 @@ template <class T> inline void MarkSweep::follow_root(T* p) {
 #ifdef ASSERT
       assert(!obj->nvm_header().is_locked(), "");
 #ifdef CMP_OBJ
-      NVMDebug::cmp_dram_and_nvm_obj_during_gc(obj);
+      assert(NVMDebug::cmp_dram_and_nvm_obj_during_gc(obj), "");
 #endif // CMP_OBJ
 #endif // ASSERT
 #endif // OUR_PERSIST

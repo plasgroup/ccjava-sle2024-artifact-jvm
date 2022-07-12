@@ -28,13 +28,6 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
    public:
     static void oop_store_in_heap_raw(oop base, ptrdiff_t offset, oop value) {
-      // Skip
-      //if (!OurPersist::is_target(base->klass())) {
-      //  // Store in DRAM.
-      //  Raw::oop_store_in_heap_at(base, offset, value);
-      //  return;
-      //}
-
 #ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
       if (OurPersist::is_volatile(base, offset, decorators)) {
@@ -113,15 +106,10 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
     template <typename T>
     static void store_in_heap_at(oop base, ptrdiff_t offset, T value) {
-      // Original
-      // Parent::store_in_heap_at(base, offset, value);
-
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
       // Skip
       if (offset == oopDesc::mark_offset_in_bytes()) {
-        // || !OurPersist::is_target(base->klass())) {
-        // Store in DRAM.
         Parent::store_in_heap_at(base, offset, value);
         return;
       }
@@ -179,21 +167,11 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
     template <typename T>
     static T atomic_xchg_in_heap_at(oop base, ptrdiff_t offset, T new_value) {
-      // Original
-      // T result = Parent::atomic_xchg_in_heap_at(base, offset, new_value);
-
-// DEBUG: ATOMIC
 #ifdef OURPERSIST_IGNORE_ATOMIC
       return Parent::atomic_xchg_in_heap_at(base, offset, new_value);
 #endif // OURPERSIST_IGNORE_ATOMIC
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
-
-      // Skip
-      //if (!OurPersist::is_target(base->klass())) {
-      //  // Store in DRAM.
-      //  return Parent::atomic_xchg_in_heap_at(base, offset, new_value);
-      //}
 
       // Counter
       NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
@@ -219,10 +197,6 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
     template <typename T>
     static T atomic_cmpxchg_in_heap_at(oop base, ptrdiff_t offset, T compare_value, T new_value) {
-      // Original
-      // T result = Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
-
-// DEBUG: ATOMIC
 #ifdef OURPERSIST_IGNORE_ATOMIC
       return Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
 #endif // OURPERSIST_IGNORE_ATOMIC
@@ -231,8 +205,6 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
       // Skip
       if (offset == oopDesc::mark_offset_in_bytes()) {
-        // || !OurPersist::is_target(base->klass())) {
-        // Store in DRAM.
         return Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
       }
 
@@ -322,13 +294,6 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         return;
       }
 
-      // Skip
-      //if (!OurPersist::is_target(base->klass())) {
-      //  // Store in DRAM.
-      //  Parent::oop_store_in_heap_at(base, offset, value);
-      //  return;
-      //}
-
 #ifndef OURPERSIST_IGNORE_VOLATILE
       // Volatile
       if (OurPersist::is_volatile(base, offset, decorators)) {
@@ -395,21 +360,11 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
     }
 
     static oop oop_atomic_xchg_in_heap_at(oop base, ptrdiff_t offset, oop new_value) {
-      // Original
-      // oop result = Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
-
-// DEBUG: ATOMIC
 #ifdef OURPERSIST_IGNORE_ATOMIC
       return Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
 #endif // OURPERSIST_IGNORE_ATOMIC
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
-
-      // Skip
-      //if (!OurPersist::is_target(base->klass())) {
-      //  // Store in DRAM.
-      //  return Parent::oop_atomic_xchg_in_heap_at(base, offset, new_value);
-      //}
 
       // Counter
       NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,
@@ -446,21 +401,11 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
     }
 
     static oop oop_atomic_cmpxchg_in_heap_at(oop base, ptrdiff_t offset, oop compare_value, oop new_value) {
-      // Original
-      // oop result = Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
-
-// DEBUG: ATOMIC
 #ifdef OURPERSIST_IGNORE_ATOMIC
       return Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
 #endif // OURPERSIST_IGNORE_ATOMIC
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
-
-      // Skip
-      //if (!OurPersist::is_target(base->klass())) {
-      //  // Store in DRAM.
-      //  return Parent::oop_atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
-      //}
 
       // Counter
       NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_access_runtime(1 /* store */,

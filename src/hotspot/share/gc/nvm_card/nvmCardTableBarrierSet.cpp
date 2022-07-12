@@ -1,10 +1,10 @@
 #ifdef OUR_PERSIST
 
-#include "precompiled.hpp"
 #include "gc/nvm_card/nvmCardTableBarrierSet.hpp"
 #include "gc/nvm_card/nvmCardTableBarrierSetAssembler.hpp"
 #include "gc/shared/cardTable.hpp"
 #include "gc/shared/cardTableBarrierSet.hpp"
+#include "precompiled.hpp"
 #ifdef COMPILER1
 #include "gc/shared/c1/cardTableBarrierSetC1.hpp"
 #endif

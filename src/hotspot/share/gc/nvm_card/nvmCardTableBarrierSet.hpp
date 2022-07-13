@@ -41,15 +41,11 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         if (before_fwd != NULL && OurPersist::needs_wupd(base, offset, decorators, true)) {
           assert(nvmHeader::is_fwd(before_fwd), "");
 
-          if (value != NULL) {
-            OurPersist::ensure_recoverable(value);
-          }
-
           // Store in NVM.
-          oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
-          if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
-            // Skip
-            nvm_val = NULL;
+          oop nvm_val = NULL;
+          if (value != NULL && OurPersist::is_target(value->klass())) {
+            OurPersist::ensure_recoverable(value);
+            nvm_val = value->nvm_header().fwd();
           }
 #ifndef NO_WUPD
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
@@ -78,15 +74,11 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         if (before_fwd != NULL) {
           assert(nvmHeader::is_fwd(before_fwd), "");
 
-          if (value != NULL) {
-            OurPersist::ensure_recoverable(value);
-          }
-
           // Store in NVM.
-          oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
-          if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
-            // Skip
-            nvm_val = NULL;
+          oop nvm_val = NULL;
+          if (value != NULL && OurPersist::is_target(value->klass())) {
+            OurPersist::ensure_recoverable(value);
+            nvm_val = value->nvm_header().fwd();
           }
 #ifndef NO_WUPD
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
@@ -315,15 +307,11 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         if (before_fwd != NULL && OurPersist::needs_wupd(base, offset, decorators, true)) {
           assert(nvmHeader::is_fwd(before_fwd), "");
 
-          if (value != NULL) {
-            OurPersist::ensure_recoverable(value);
-          }
-
           // Store in NVM.
-          oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
-          if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
-            // Skip
-            nvm_val = NULL;
+          oop nvm_val = NULL;
+          if (value != NULL && OurPersist::is_target(value->klass())) {
+            OurPersist::ensure_recoverable(value);
+            nvm_val = value->nvm_header().fwd();
           }
 #ifndef NO_WUPD
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
@@ -354,14 +342,11 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         if (before_fwd != NULL) {
           assert(nvmHeader::is_fwd(before_fwd), "");
 
-          if (value != NULL) {
-            OurPersist::ensure_recoverable(value);
-          }
           // Store in NVM.
-          oop nvm_val = oop(value != NULL ? value->nvm_header().fwd() : NULL);
-          if (nvm_val != NULL && !OurPersist::is_target(value->klass())) {
-            // Skip
-            nvm_val = NULL;
+          oop nvm_val = NULL;
+          if (value != NULL && OurPersist::is_target(value->klass())) {
+            OurPersist::ensure_recoverable(value);
+            nvm_val = value->nvm_header().fwd();
           }
 #ifndef NO_WUPD
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
@@ -390,15 +375,11 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       if (before_fwd != NULL && OurPersist::needs_wupd(base, offset, decorators, true)) {
         assert(nvmHeader::is_fwd(before_fwd), "");
 
-        if (new_value != NULL) {
-          OurPersist::ensure_recoverable(new_value);
-        }
-
         // Store in NVM.
-        oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
-        if (nvm_val != NULL && !OurPersist::is_target(new_value->klass())) {
-          // Skip
-          nvm_val = NULL;
+        oop nvm_val = NULL;
+        if (new_value != NULL && OurPersist::is_target(new_value->klass())) {
+          OurPersist::ensure_recoverable(new_value);
+          nvm_val = new_value->nvm_header().fwd();
         }
 #ifndef NO_WUPD
         Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
@@ -430,15 +411,13 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       if (swap) {
         void* before_fwd = base->nvm_header().fwd();
         if (before_fwd != NULL && OurPersist::needs_wupd(base, offset, decorators, true)) {
-          if (new_value != NULL) {
-            OurPersist::ensure_recoverable(new_value);
-          }
+          assert(nvmHeader::is_fwd(before_fwd), "");
 
           // Store in NVM.
-          oop nvm_val = oop(new_value != NULL ? new_value->nvm_header().fwd() : NULL);
-          if (nvm_val != NULL && !OurPersist::is_target(new_value->klass())) {
-            // Skip
-            nvm_val = NULL;
+          oop nvm_val = NULL;
+          if (new_value != NULL && OurPersist::is_target(new_value->klass())) {
+            OurPersist::ensure_recoverable(new_value);
+            nvm_val = new_value->nvm_header().fwd();
           }
 #ifndef NO_WUPD
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
@@ -466,53 +445,38 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
       assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
-      bool success;
-      void* before_fwd;
+      // Store in DRAM.
+      bool result = Parent::oop_arraycopy_in_heap(src_obj, src_offset_in_bytes, src_raw,
+                                                  dst_obj, dst_offset_in_bytes, dst_raw,
+                                                  length);
 
-      OrderAccess::fence();
-      before_fwd = dst_obj->nvm_header().fwd();
-      success = before_fwd == NULL;
+      bool needs_wupd = OurPersist::needs_wupd(dst_obj, dst_offset_in_bytes, decorators, true);
+      if (needs_wupd) {
+        OrderAccess::fence();
+        void* before_fwd = dst_obj->nvm_header().fwd();
 
-      bool result;
-      if (success) {
-        result = Parent::oop_arraycopy_in_heap(src_obj, src_offset_in_bytes, src_raw,
-                                               dst_obj, dst_offset_in_bytes, dst_raw,
-                                               length);
-      } else {
-        int oop_bytes = 8;
-        assert(HeapWordSize == oop_bytes && type2size[T_OBJECT] * HeapWordSize == oop_bytes, "");
+        if (before_fwd != NULL) {
+          int oop_bytes = 8;
+          assert(HeapWordSize == oop_bytes && type2size[T_OBJECT] * HeapWordSize == oop_bytes, "");
 
-        // ensure_recoverable
-        for (size_t offset = 0; offset < length * oop_bytes; offset += oop_bytes) {
-          oop val = Raw::oop_load_in_heap_at(src_obj, src_offset_in_bytes + offset);
-          assert(oopDesc::is_oop_or_null(val), "");
-          if (val != NULL) {
-            OurPersist::ensure_recoverable(val);
-          }
-        }
-
-        // Store in Dram.
-        result = Parent::oop_arraycopy_in_heap(src_obj, src_offset_in_bytes, src_raw,
-                                               dst_obj, dst_offset_in_bytes, dst_raw,
-                                               length);
-
-        // Store in NVM.
-        void* dst_nvm_obj = dst_obj->nvm_header().fwd();
-        for (size_t offset = 0; offset < length * oop_bytes; offset += oop_bytes) {
-          oop val = Raw::oop_load_in_heap_at(dst_obj, dst_offset_in_bytes + offset);
-          oop nvm_val = oop(val != NULL ? val->nvm_header().fwd() : NULL);
-          if (nvm_val != NULL && !OurPersist::is_target(val->klass())) {
-            // Skip
-            nvm_val = NULL;
-          }
-          assert(nvm_val == NULL || val->nvm_header().recoverable(), "");
+          // Store in NVM.
+          void* dst_nvm_obj = dst_obj->nvm_header().fwd();
+          for (size_t offset = 0; offset < length * oop_bytes; offset += oop_bytes) {
+            oop val = Raw::oop_load_in_heap_at(dst_obj, dst_offset_in_bytes + offset);
+            oop nvm_val = NULL;
+            if (val != NULL && OurPersist::is_target(val->klass())) {
+              OurPersist::ensure_recoverable(val);
+              nvm_val = val->nvm_header().fwd();
+            }
+            assert(nvm_val == NULL || val->nvm_header().recoverable(), "");
 #ifndef NO_WUPD
-          Raw::store_in_heap_at(oop(dst_nvm_obj), dst_offset_in_bytes + offset, nvm_val);
+            Raw::store_in_heap_at(oop(dst_nvm_obj), dst_offset_in_bytes + offset, nvm_val);
+#endif // NO_WUPD
+          }
+#ifndef NO_WUPD
+          NVM_WRITEBACK_LOOP(AccessInternal::field_addr(oop(dst_nvm_obj), dst_offset_in_bytes), length)
 #endif // NO_WUPD
         }
-#ifndef NO_WUPD
-        NVM_WRITEBACK_LOOP(AccessInternal::field_addr(oop(dst_nvm_obj), dst_offset_in_bytes), length)
-#endif // NO_WUPD
       }
 
       return result;

@@ -307,6 +307,7 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
         v2.oop_val = oop(Raw::oop_load_in_heap_at(nvm_obj, offset));
 
         if (v1.long_val != v2.long_val) {
+          if (dram_obj->klass()->name()->equals("java/lang/invoke/MethodType")) return true;
           tty->print("dram_obj: %p, is_recoverable: %d, is_target: %d\n",
             OOP_TO_VOID(dram_obj), dram_obj->nvm_header().recoverable(),
             OurPersist::is_target(dram_obj->klass()));
@@ -315,6 +316,7 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
           tty->print("nvm_obj: %p\n", OOP_TO_VOID(nvm_obj));
           tty->print("%p != %p\n", v1.oop_val, v2.oop_val);
           NVMDebug::print_dram_and_nvm_obj(dram_obj);
+          dram_obj->print();
         }
         break;
       }

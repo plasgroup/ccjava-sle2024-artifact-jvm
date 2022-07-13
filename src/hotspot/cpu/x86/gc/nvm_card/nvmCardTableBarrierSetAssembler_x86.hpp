@@ -28,6 +28,7 @@ class NVMCardTableBarrierSetAssembler: public CardTableBarrierSetAssembler {
                                          Address dst, Register val, Register tmp1, Register tmp2);
 
   // utilities
+  bool needs_wupd(DecoratorSet decorators, BasicType type);
   void writeback(MacroAssembler* masm, Address field, Register tmp = rscratch1);
   void lock_nvmheader(MacroAssembler* masm, Register base, Register tmp1, Register tmp2);
   void unlock_nvmheader(MacroAssembler* masm, Register base, Register tmp);

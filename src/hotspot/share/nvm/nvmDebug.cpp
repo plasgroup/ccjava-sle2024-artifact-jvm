@@ -297,7 +297,7 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
         // Is the value not the target?
         skip = skip || dram_v != NULL && !OurPersist::is_target(dram_v->klass());
         // Is the field not the target?
-        skip = skip || !OurPersist::is_wupd(dram_obj->nvm_header().fwd(), dram_obj, offset, DECORATORS_NONE, true);
+        skip = skip || !OurPersist::needs_wupd(dram_obj, offset, DECORATORS_NONE, true);
         if (skip) {
           assert(Raw::oop_load_in_heap_at(nvm_obj, offset) == NULL, "should be NULL");
           return true;

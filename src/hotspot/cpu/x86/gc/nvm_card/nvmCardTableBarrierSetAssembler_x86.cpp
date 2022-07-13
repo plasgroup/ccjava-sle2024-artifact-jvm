@@ -99,24 +99,27 @@ void NVMCardTableBarrierSetAssembler::interpreter_store_at(MacroAssembler* masm,
   // Store in DRAM.
   Parent::store_at(masm, decorators, type, dst, val, noreg, noreg);
 
-  // fence
-  __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
-  // tmp1 = obj->nvm_header().fwd()
-  NVMCardTableBarrierSetAssembler::load_nvm_fwd(masm, tmp1, dst.base());
+  bool needs_wupd = NVMCardTableBarrierSetAssembler::needs_wupd(decorators, type);
+  if (needs_wupd) {
+    // fence
+    __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
+    // tmp1 = obj->nvm_header().fwd()
+    NVMCardTableBarrierSetAssembler::load_nvm_fwd(masm, tmp1, dst.base());
 
-  // Check nvm header.
-  __ jcc(Assembler::zero, done);
+    // Check nvm header.
+    __ jcc(Assembler::zero, done);
 #ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
-  __ should_not_reach_here();
+    __ should_not_reach_here();
 #endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
 
-  // Store in NVM.
-  const Address nvm_field(tmp1, dst.index(), dst.scale(), dst.disp());
+    // Store in NVM.
+    const Address nvm_field(tmp1, dst.index(), dst.scale(), dst.disp());
 #ifndef NO_WUPD
-  Raw::store_at(masm, decorators, type, nvm_field, val, noreg, noreg);
-  // Write back.
-  NVMCardTableBarrierSetAssembler::writeback(masm, nvm_field, tmp2);
+    Raw::store_at(masm, decorators, type, nvm_field, val, noreg, noreg);
+    // Write back.
+    NVMCardTableBarrierSetAssembler::writeback(masm, nvm_field, tmp2);
 #endif // NO_WUPD
+  }
 
   __ bind(done);
 }
@@ -144,15 +147,12 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
     tmp4 = _tmp2;
   }
 
-  // NOTE: bool wupd = non_static_or_durable && (obj.fwd != NULL);
-  bool non_static_or_durable =
-    (decorators & OURPERSIST_IS_NOT_STATIC) || (decorators & OURPERSIST_DURABLE_ANNOTATION);
-
   // Store in DRAM.
   __ movptr(tmp2, dst.base()); // save dst.base()
   Parent::store_at(masm, decorators, type, dst, val, tmp3, noreg); // dst.base() are broken
 
-  if (non_static_or_durable) {
+  bool needs_wupd = NVMCardTableBarrierSetAssembler::needs_wupd(decorators, type);
+  if (needs_wupd) {
     // fence
     __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
     // tmp1 = obj->nvm_header().fwd()
@@ -219,25 +219,28 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_store_at(MacroAssembl
   // lock
   NVMCardTableBarrierSetAssembler::lock_nvmheader(masm, dst.base(), tmp1, tmp2);
 
-  // tmp1 = obj->nvm_header().fwd()
-  NVMCardTableBarrierSetAssembler::load_nvm_fwd(masm, tmp1, dst.base());
+  bool needs_wupd = NVMCardTableBarrierSetAssembler::needs_wupd(decorators, type);
+  if (needs_wupd) {
+    // tmp1 = obj->nvm_header().fwd()
+    NVMCardTableBarrierSetAssembler::load_nvm_fwd(masm, tmp1, dst.base());
 
-  // Check nvm header.
-  __ jcc(Assembler::zero, dram_only);
+    // Check nvm header.
+    __ jcc(Assembler::zero, dram_only);
 
 #ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
-  __ should_not_reach_here();
+    __ should_not_reach_here();
 #endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
 
-  // Store in NVM.
-  const Address nvm_field(tmp1, dst.index(), dst.scale(), dst.disp());
+    // Store in NVM.
+    const Address nvm_field(tmp1, dst.index(), dst.scale(), dst.disp());
 #ifndef NO_WUPD
-  Raw::store_at(masm, decorators, type, nvm_field, val, noreg, noreg);
-  // Write back.
-  NVMCardTableBarrierSetAssembler::writeback(masm, nvm_field, tmp2);
+    Raw::store_at(masm, decorators, type, nvm_field, val, noreg, noreg);
+    // Write back.
+    NVMCardTableBarrierSetAssembler::writeback(masm, nvm_field, tmp2);
 #endif // NO_WUPD
 
-  __ bind(dram_only);
+    __ bind(dram_only);
+  }
   // Store in DRAM.
   Parent::store_at(masm, decorators, type, dst, val, noreg, noreg);
 
@@ -268,16 +271,11 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
     tmp4 = _tmp2;
   }
 
-  // NOTE: bool wupd = non_static_or_durable && (obj.fwd != NULL);
-  bool non_static_or_durable =
-    (decorators & OURPERSIST_IS_NOT_STATIC) || (decorators & OURPERSIST_DURABLE_ANNOTATION);
+  // lock
+  NVMCardTableBarrierSetAssembler::lock_nvmheader(masm, dst.base(), tmp1, tmp2);
 
-  if (non_static_or_durable) {
-    // lock
-    NVMCardTableBarrierSetAssembler::lock_nvmheader(masm, dst.base(), tmp1, tmp2);
-  }
-
-  if (non_static_or_durable) {
+  bool needs_wupd = NVMCardTableBarrierSetAssembler::needs_wupd(decorators, type);
+  if (needs_wupd) {
     // fence
     __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
     // tmp1 = obj->nvm_header().fwd()
@@ -337,13 +335,38 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
   __ movptr(tmp1, dst.base()); // for unlock
   Parent::store_at(masm, decorators, type, dst, val, tmp3, noreg);
 
-  if (non_static_or_durable) {
-    // unlock
-    NVMCardTableBarrierSetAssembler::unlock_nvmheader(masm, tmp1, tmp2);
-  }
+  // unlock
+  NVMCardTableBarrierSetAssembler::unlock_nvmheader(masm, tmp1, tmp2);
 }
 
 // utilities
+// NOTE: The same logic code exists in ourPersist.inline.hpp.
+//       If you want to change the logic, you need to rewrite both codes.
+bool NVMCardTableBarrierSetAssembler::needs_wupd(DecoratorSet decorators, BasicType type) {
+  bool is_static = (decorators & OURPERSIST_IS_STATIC) != 0;
+  bool is_durable = (decorators & OURPERSIST_DURABLE_ANNOTATION) != 0;
+  bool is_reference = is_reference_type(type);
+
+  assert(decorators & OURPERSIST_IS_STATIC_MASK, "");
+  assert(is_static != ((decorators & OURPERSIST_IS_NOT_STATIC) != 0), "");
+  assert(decorators & OURPERSIST_DURABLE_ANNOTATION_MASK, "");
+  assert(is_durable != ((decorators & OURPERSIST_NOT_DURABLE_ANNOTATION) != 0), "");
+
+  if (!is_reference) {
+    return !is_static;
+  }
+
+  if (!is_static) {
+    return true;
+  }
+
+  if (is_durable) {
+    return true;
+  }
+
+  return false;
+}
+
 void NVMCardTableBarrierSetAssembler::writeback(MacroAssembler* masm, Address field, Register tmp) {
 #ifdef ENABLE_NVM_WRITEBACK
 #ifdef USE_CLWB

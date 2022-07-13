@@ -50,7 +50,7 @@ class OurPersist : AllStatic {
   inline static bool is_static_field(oop obj, ptrdiff_t offset);
   inline static bool is_volatile(oop obj, ptrdiff_t offset, DecoratorSet ds);
   inline static bool is_durableroot(oop klass_obj, ptrdiff_t offset, DecoratorSet ds);
-  inline static bool is_wupd(void* fwd, oop obj, ptrdiff_t offset, DecoratorSet ds, bool is_oop);
+  inline static bool needs_wupd(oop obj, ptrdiff_t offset, DecoratorSet ds, bool is_oop);
   inline static Thread* responsible_thread(void* nvm_obj);
   static Thread* responsible_thread_noinline(void* nvm_obj);
 

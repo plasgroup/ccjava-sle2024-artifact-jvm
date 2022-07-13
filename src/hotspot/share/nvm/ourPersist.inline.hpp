@@ -121,13 +121,27 @@ inline bool OurPersist::is_durableroot(oop klass_obj, ptrdiff_t offset, Decorato
   return is_durableroot;
 }
 
-inline bool OurPersist::is_wupd(void* fwd, oop obj, ptrdiff_t offset, DecoratorSet ds, bool is_oop) {
-  if (fwd == NULL) return false;
-  if (!is_oop) return true;
-  //tty->print_cr("is_wupd"); tty->flush();
-  if (!OurPersist::is_static_field(obj, offset)) return true;
-  //tty->print_cr("is static"); tty->flush();
-  if(OurPersist::is_durableroot(obj, offset, ds)) return true;
+// NOTE: We assume the durableroot annotation and is-static flag is not changed
+//       after the class is loaded, so the result of this function is immutable.
+//       Therefore, calling this function before the fence is not a problem.
+// NOTE: The same logic code exists in nvmCardTableBarrierSetAssembler_x86.cpp.
+//       If you want to change the logic, you need to rewrite both codes.
+inline bool OurPersist::needs_wupd(oop obj, ptrdiff_t offset, DecoratorSet ds, bool is_oop) {
+  bool is_static = OurPersist::is_static_field(obj, offset);
+
+  if (!is_oop) {
+    return !is_static;
+  }
+
+  if (!is_static) {
+    return true;
+  }
+
+  bool is_durable = OurPersist::is_durableroot(obj, offset, ds);
+  if(is_durable) {
+    return true;
+  }
+
   return false;
 }
 
@@ -323,7 +337,7 @@ inline bool OurPersist::cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, Ba
         // Is the value not the target?
         skip = skip || dram_v != NULL && !OurPersist::is_target(dram_v->klass());
         // Is the field not the target?
-        skip = skip || !OurPersist::is_wupd(dram->nvm_header().fwd(), dram, offset, DECORATORS_NONE, true);
+        skip = skip || !OurPersist::needs_wupd(dram, offset, DECORATORS_NONE, true);
         if (skip) {
           assert(Raw::oop_load_in_heap_at(nvm, offset) == NULL, "should be NULL");
           return true;

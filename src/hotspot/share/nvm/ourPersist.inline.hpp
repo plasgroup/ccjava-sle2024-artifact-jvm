@@ -8,7 +8,8 @@
 #include "oops/instanceMirrorKlass.hpp"
 #include "oops/klass.hpp"
 #include "oops/oop.inline.hpp"
-#include "runtime/fieldDescriptor.hpp"
+#include "runtime/fieldDescriptor.inline.hpp"
+#include "utilities/globalDefinitions.hpp"
 
 inline bool OurPersist::enable() {
   // init
@@ -74,6 +75,76 @@ inline bool OurPersist::is_static_field(oop obj, ptrdiff_t offset) {
   return true;
 }
 
+inline bool OurPersist::is_volatile(oop obj, ptrdiff_t offset, DecoratorSet ds) {
+  if (ds & OURPERSIST_IS_NOT_VOLATILE) return false;
+  if (ds & OURPERSIST_IS_VOLATILE)     return true;
+
+  assert(oopDesc::is_oop(obj), "");
+
+  Klass* k = obj->klass();
+  if (k->is_array_klass()) return false;
+  assert(k->is_instance_klass(), "");
+
+  bool is_static = OurPersist::is_static_field(obj, offset);
+  InstanceKlass* ik = InstanceKlass::cast(k);
+
+  fieldDescriptor fd;
+  ik->find_field_from_offset(offset, is_static /* is_static */, &fd);
+  bool is_volatile = fd.is_volatile();
+
+  return is_volatile;
+}
+
+// TODO: Use decorator set
+inline bool OurPersist::is_durableroot(oop klass_obj, ptrdiff_t offset, DecoratorSet ds) {
+  assert(klass_obj != NULL, "");
+  assert(klass_obj->klass()->is_instance_klass(), "");
+  assert(((InstanceKlass*)klass_obj->klass())->is_mirror_instance_klass(), "");
+
+  Klass* k = java_lang_Class::as_Klass(klass_obj);
+  assert(k != NULL, "");
+  assert(k->is_instance_klass(), "");
+  InstanceKlass* ik = InstanceKlass::cast(k);
+
+  fieldDescriptor fd;
+  bool success = ik->find_field_from_offset(offset, true /* is_static */, &fd);
+  assert(success, "");
+  bool is_durableroot = fd.is_durableroot();
+
+#ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
+  assert(is_durableroot, "must be durableroot");
+#endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
+#ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
+  assert(!is_durableroot, "must not be durableroot");
+#endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
+
+  return is_durableroot;
+}
+
+// NOTE: We assume the durableroot annotation and is-static flag is not changed
+//       after the class is loaded, so the result of this function is immutable.
+//       Therefore, calling this function before the fence is not a problem.
+// NOTE: The same logic code exists in nvmCardTableBarrierSetAssembler_x86.cpp.
+//       If you want to change the logic, you need to rewrite both codes.
+inline bool OurPersist::needs_wupd(oop obj, ptrdiff_t offset, DecoratorSet ds, bool is_oop) {
+  bool is_static = OurPersist::is_static_field(obj, offset);
+
+  if (!is_oop) {
+    return !is_static;
+  }
+
+  if (!is_static) {
+    return true;
+  }
+
+  bool is_durable = OurPersist::is_durableroot(obj, offset, ds);
+  if(is_durable) {
+    return true;
+  }
+
+  return false;
+}
+
 inline void OurPersist::set_responsible_thread(void* nvm_obj, Thread* cur_thread) {
   assert(nvmHeader::is_fwd(nvm_obj), "");
   assert(cur_thread != NULL, "");
@@ -120,27 +191,6 @@ inline void* OurPersist::allocate_nvm(int word_size, Thread* thr) {
 
   OurPersist::set_responsible_thread(mem, thr);
   return mem;
-}
-
-inline bool OurPersist::is_volatile_and_non_mirror(oop obj, ptrdiff_t offset, DecoratorSet ds) {
-  if (ds & OURPERSIST_IS_NOT_VOLATILE) return false;
-  if (ds & OURPERSIST_IS_VOLATILE)     return true;
-  if (ds & OURPERSIST_IS_STATIC)       return false;
-
-  assert(oopDesc::is_oop(obj), "");
-
-  Klass* k = obj->klass();
-  if (k->is_array_klass()) return false;
-  assert(k->is_instance_klass(), "");
-
-  InstanceKlass* ik = (InstanceKlass*)k;
-  if (ik->is_mirror_instance_klass()) return false;
-
-  fieldDescriptor fd;
-  ik->find_field_from_offset(offset, false /* is_static */, &fd);
-  bool is_volatile = fd.is_volatile();
-
-  return is_volatile;
 }
 
 inline void OurPersist::copy_dram_to_nvm(oop from, oop to, ptrdiff_t offset, BasicType type, bool is_array) {
@@ -280,32 +330,27 @@ inline bool OurPersist::cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, Ba
     case T_ARRAY:
       {
         oop dram_v = Parent::oop_load_in_heap_at(dram, offset);
+
+        // NOTE: The same logic code exists in nvmDebug.cpp.
+        //       If you want to change the logic, you need to rewrite both codes.
+        bool skip = false;
+        // Is the value not the target?
+        skip = skip || dram_v != NULL && !OurPersist::is_target(dram_v->klass());
+        // Is the field not the target?
+        skip = skip || !OurPersist::needs_wupd(dram, offset, DECORATORS_NONE, true);
+        if (skip) {
+          assert(Raw::oop_load_in_heap_at(nvm, offset) == NULL, "should be NULL");
+          return true;
+        }
+
         v1.oop_val = oop(dram_v != NULL ? dram_v->nvm_header().fwd() : NULL);
-        v2.oop_val = Raw::oop_load_in_heap_at(nvm, offset);
+        v2.oop_val = oop(Raw::oop_load_in_heap_at(nvm, offset));
         break;
       }
     default:
       report_vm_error(__FILE__, __LINE__, "Illegal field type.");
   }
   return v1.long_val == v2.long_val;
-}
-
-inline bool OurPersist::is_set_durableroot_annotation(oop klass_obj, ptrdiff_t offset) {
-  assert(klass_obj != NULL, "");
-  assert(klass_obj->klass()->is_instance_klass(), "");
-  assert(((InstanceKlass*)klass_obj->klass())->is_mirror_instance_klass(), "");
-
-#ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
-  return true;
-#endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
-
-#ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
-  return false;
-#endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
-
-  // Unimplements
-  Unimplemented();
-  return false;
 }
 
 inline Thread* OurPersist::responsible_thread(void* nvm_obj) {

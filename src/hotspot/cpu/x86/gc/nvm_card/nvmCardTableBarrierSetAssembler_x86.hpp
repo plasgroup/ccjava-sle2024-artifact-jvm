@@ -7,7 +7,7 @@
 #include "gc/shared/cardTableBarrierSetAssembler.hpp"
 
 class NVMCardTableBarrierSetAssembler: public CardTableBarrierSetAssembler {
-public:
+ public:
   typedef CardTableBarrierSetAssembler Parent;
   typedef BarrierSetAssembler Raw;
 
@@ -28,6 +28,7 @@ public:
                                          Address dst, Register val, Register tmp1, Register tmp2);
 
   // utilities
+  bool needs_wupd(DecoratorSet decorators, BasicType type);
   void writeback(MacroAssembler* masm, Address field, Register tmp = rscratch1);
   void lock_nvmheader(MacroAssembler* masm, Register base, Register tmp1, Register tmp2);
   void unlock_nvmheader(MacroAssembler* masm, Register base, Register tmp);
@@ -52,6 +53,7 @@ public:
                        Register dst, Address src, Register tmp1, Register tmp_thread);
   void runtime_ensure_recoverable(MacroAssembler* masm, Register val,
                                   Register tmp1, Register tmp2, Register tmp3, Register tmp4);
+  // NOTE: set EFLAGS
   void runtime_is_target(MacroAssembler* masm, Register dst, Register obj,
                          Register tmp1, Register tmp2, Register tmp3, Register tmp4);
 };

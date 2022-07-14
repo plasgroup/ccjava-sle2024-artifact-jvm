@@ -290,8 +290,22 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
     case T_ARRAY:
       {
         oop dram_v = Parent::oop_load_in_heap_at(dram_obj, offset);
+
+        // NOTE: The same logic code exists in ourPersist.inline.hpp.
+        //       If you want to change the logic, you need to rewrite both codes.
+        bool skip = false;
+        // Is the value not the target?
+        skip = skip || dram_v != NULL && !OurPersist::is_target(dram_v->klass());
+        // Is the field not the target?
+        skip = skip || !OurPersist::needs_wupd(dram_obj, offset, DECORATORS_NONE, true);
+        if (skip) {
+          assert(Raw::oop_load_in_heap_at(nvm_obj, offset) == NULL, "should be NULL");
+          return true;
+        }
+
         v1.oop_val = oop(dram_v != NULL ? dram_v->nvm_header().fwd() : NULL);
-        v2.oop_val = Raw::oop_load_in_heap_at(nvm_obj, offset);
+        v2.oop_val = oop(Raw::oop_load_in_heap_at(nvm_obj, offset));
+
         if (v1.long_val != v2.long_val) {
           tty->print("dram_obj: %p, is_recoverable: %d, is_target: %d\n",
             OOP_TO_VOID(dram_obj), dram_obj->nvm_header().recoverable(),
@@ -300,8 +314,8 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
             OOP_TO_VOID(dram_v), dram_v->nvm_header().recoverable(), OurPersist::is_target(dram_v->klass()));
           tty->print("nvm_obj: %p\n", OOP_TO_VOID(nvm_obj));
           tty->print("%p != %p\n", v1.oop_val, v2.oop_val);
-
           NVMDebug::print_dram_and_nvm_obj(dram_obj);
+          dram_obj->print();
         }
         break;
       }

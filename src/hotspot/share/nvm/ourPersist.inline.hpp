@@ -54,9 +54,9 @@ inline bool OurPersist::is_target_fast(Klass* klass) {
   if (klass_id == InstanceMirrorKlassID) {
     return false;
   }
-  if (klass_id == InstanceRefKlassID) {
-    return false;
-  }
+  //if (klass_id == InstanceRefKlassID) {
+  //  return false;
+  //}
   if (klass_id == InstanceClassLoaderKlassID) {
     return false;
   }

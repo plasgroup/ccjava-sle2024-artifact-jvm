@@ -17,6 +17,7 @@ class CallRuntimeBarrierSet : AllStatic {
   static void* load_in_heap_at_ptr(DecoratorSet decorators, BasicType type);
   static void* ensure_recoverable_ptr();
   static void* is_target_ptr();
+  static void* needs_wupd_ptr(DecoratorSet decorators, bool is_oop);
 
   // Type conversion between oopDesc* and oop.
  private:
@@ -47,6 +48,11 @@ class CallRuntimeBarrierSet : AllStatic {
 
   inline static bool call_runtime_is_target(oopDesc* obj) {
     return OurPersist::is_target(obj->klass());
+  };
+
+  template <DecoratorSet ds, bool is_oop>
+  inline static bool call_runtime_needs_wupd(oopDesc* obj, ptrdiff_t off) {
+    return OurPersist::needs_wupd(obj, off, ds, is_oop);
   };
 };
 

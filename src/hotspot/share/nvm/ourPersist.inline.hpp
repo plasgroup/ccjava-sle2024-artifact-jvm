@@ -127,17 +127,26 @@ inline bool OurPersist::is_durableroot(oop klass_obj, ptrdiff_t offset, Decorato
 // NOTE: The same logic code exists in nvmCardTableBarrierSetAssembler_x86.cpp.
 //       If you want to change the logic, you need to rewrite both codes.
 inline bool OurPersist::needs_wupd(oop obj, ptrdiff_t offset, DecoratorSet ds, bool is_oop) {
-  bool is_static = OurPersist::is_static_field(obj, offset);
+  //assert(offset >= oopDesc::header_size() * HeapWordSize, "");
+  // TODO: Using the decorator set.
+  assert(obj != NULL, "");
+  assert(oopDesc::is_oop(obj), "obj: %p", OOP_TO_VOID(obj));
+  assert(obj->klass() != NULL, "");
 
+  bool is_static = OurPersist::is_static_field(obj, offset);
+  bool is_mirror = obj->klass()->id() == InstanceMirrorKlassID;
+
+  // Primitive
   if (!is_oop) {
-    return !is_static;
+    return !is_mirror;
   }
 
-  if (!is_static) {
+  // Reference
+  if (!is_mirror) {
     return true;
   }
 
-  bool is_durable = OurPersist::is_durableroot(obj, offset, ds);
+  bool is_durable = is_static && OurPersist::is_durableroot(obj, offset, ds);
   if(is_durable) {
     return true;
   }
@@ -357,15 +366,6 @@ inline Thread* OurPersist::responsible_thread(void* nvm_obj) {
   assert(nvmHeader::is_fwd(nvm_obj), "nvm_obj: %p", nvm_obj);
 
   return (Thread*)oop(nvm_obj)->nvm_header().fwd();
-}
-
-inline bool OurPersist::shade(oop obj, Thread* cur_thread) {
-  void* nvm_obj = OurPersist::allocate_nvm(obj->size(), cur_thread);
-  bool success = nvmHeader::cas_fwd(obj, nvm_obj);
-  if (!success) {
-    // TODO: nvm release
-  }
-  return success;
 }
 
 #endif // NVM_OURPERSIST_INLINE_HPP

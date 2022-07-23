@@ -56,6 +56,10 @@ class NVMCardTableBarrierSetAssembler: public CardTableBarrierSetAssembler {
   // NOTE: set EFLAGS
   void runtime_is_target(MacroAssembler* masm, Register dst, Register obj,
                          Register tmp1, Register tmp2, Register tmp3, Register tmp4);
+  // NOTE: set EFLAGS
+  void runtime_needs_wupd(MacroAssembler* masm, Register dst, Address obj,
+                          DecoratorSet ds, bool is_oop,
+                          Register tmp1, Register tmp2, Register tmp3, Register tmp4);
 };
 
 #endif // CPU_X86_GC_NVMCARD_NVMCARDTABLEBARRIERSETASSEMBLER_X86_HPP

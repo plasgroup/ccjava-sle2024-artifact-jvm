@@ -16,11 +16,12 @@ class OurPersist : AllStatic {
   static unsigned long _copy_object_thread_count;
 
   enum {
-    our_persist_not_set,
-    our_persist_enable,
-    our_persist_disable
+    our_persist_unknown,
+    our_persist_true,
+    our_persist_false
   };
   static int _enable;
+  static int _started;
 
  private:
   inline static void set_responsible_thread(void* nvm_ptr, Thread* cur_thread);
@@ -32,12 +33,12 @@ class OurPersist : AllStatic {
 
   inline static void* allocate_nvm(int size, Thread* thr = NULL);
 
-  inline static bool shade(oop obj, Thread* cur_thread);
   static void copy_object(oop obj);
   static void copy_object_copy_step(oop obj, void* nvm_obj, Klass* klass,
                                     NVMWorkListStack* worklist, NVMBarrierSync* barrier_sync,
                                     Thread* cur_thread);
   static bool copy_object_verify_step(oop obj, void* nvm_obj, Klass* klass);
+  static bool shade(oop obj, Thread* cur_thread);
 
 #ifdef ASSERT
   inline static bool is_target_slow(Klass* klass);
@@ -46,6 +47,8 @@ class OurPersist : AllStatic {
 
  public:
   inline static bool enable();
+  inline static bool started();
+  inline static void set_started();
   inline static bool is_target(Klass* klass);
   inline static bool is_static_field(oop obj, ptrdiff_t offset);
   inline static bool is_volatile(oop obj, ptrdiff_t offset, DecoratorSet ds);

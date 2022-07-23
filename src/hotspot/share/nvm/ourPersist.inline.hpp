@@ -13,9 +13,9 @@
 
 inline bool OurPersist::enable() {
   // init
-  if (OurPersist::_enable == our_persist_not_set) {
+  if (OurPersist::_enable == our_persist_unknown) {
     bool enable_slow = Arguments::is_interpreter_only() && !UseCompressedOops;
-    OurPersist::_enable = enable_slow ? our_persist_enable : our_persist_disable;
+    OurPersist::_enable = enable_slow ? our_persist_true : our_persist_false;
     if (OurPersist::_enable) {
       tty->print("OurPersist is enabled.\n");
     } else {
@@ -23,9 +23,18 @@ inline bool OurPersist::enable() {
     }
   }
 
-  bool res = OurPersist::_enable == our_persist_enable;
-  assert(OurPersist::_enable != our_persist_not_set, "");
+  bool res = OurPersist::_enable == our_persist_true;
+  assert(OurPersist::_enable != our_persist_unknown, "");
   return res;
+}
+
+inline bool OurPersist::started() {
+  return OurPersist::_started == our_persist_true;
+}
+
+inline void OurPersist::set_started() {
+  assert(Thread::current()->is_VM_thread(), "must be VM thread");
+  OurPersist::_started = our_persist_true;
 }
 
 inline bool OurPersist::is_target(Klass* klass) {

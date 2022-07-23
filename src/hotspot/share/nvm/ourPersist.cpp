@@ -24,7 +24,12 @@
 #include "nvm/nvmDebug.hpp"
 #endif // ASSERT
 
-int OurPersist::_enable = our_persist_not_set;
+int OurPersist::_enable = our_persist_unknown;
+#ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
+int OurPersist::_started = our_persist_true;
+#else // OURPERSIST_DURABLEROOTS_ALL_TRUE
+int OurPersist::_started = our_persist_unknown;
+#endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
 
 Thread* OurPersist::responsible_thread_noinline(void* nvm_obj) {
   return OurPersist::responsible_thread(nvm_obj);

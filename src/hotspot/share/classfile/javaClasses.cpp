@@ -77,6 +77,9 @@
 #if INCLUDE_JVMCI
 #include "jvmci/jvmciJavaClasses.hpp"
 #endif
+#ifdef OUR_PERSIST
+#include "nvm/oops/nvmMirrorOop.hpp"
+#endif // OUR_PERSIST
 
 #define INJECTED_FIELD_COMPUTE_OFFSET(klass, name, signature, may_be_java)    \
   klass::_##name##_offset = JavaClasses::compute_injected_offset(JavaClasses::klass##_##name##_enum);
@@ -975,6 +978,8 @@ void java_lang_Class::allocate_fixup_lists() {
   set_fixup_module_field_list(module_list);
 }
 
+// DEBUG:
+#include "nvm/recovery/nvmRecovery.hpp"
 void java_lang_Class::create_mirror(Klass* k, Handle class_loader,
                                     Handle module, Handle protection_domain,
                                     Handle classData, TRAPS) {
@@ -1054,11 +1059,11 @@ void java_lang_Class::create_mirror(Klass* k, Handle class_loader,
     }
 
 #ifdef OUR_PERSIST
-#ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
-    if (OurPersist::enable()) {
-      OurPersist::mirror_create(k, mirror_oop);
+    // DEBUG:
+    Atomic::inc(&NVMRecovery::create_mirror_count);
+    if (OurPersist::enable() && OurPersist::started()) {
+      nvmMirrorOopDesc::mirror_create(k, mirror_oop);
     }
-#endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
 #endif // OUR_PERSIST
   } else {
     assert(fixup_mirror_list() != NULL, "fixup_mirror_list not initialized");

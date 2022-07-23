@@ -120,12 +120,22 @@ JVM_ENTRY(static jint, OurPersist_Get_User_Class_Loaders(JNIEnv *env, jobject cl
   return NVMRecovery::get_loader(ary_obj, THREAD);
 JVM_END
 
+
+JVM_ENTRY(static void, OurPersist_Init(JNIEnv *env, jobject clazz, jobject ary_clds))
+  VM_OurPersistRecoveryInit opr(ary_clds);
+  VMThread::execute(&opr);
+  tty->print_cr("OurPersist_Init");
+  return;
+JVM_END
+
 #define LANG "Ljava/lang/"
 #define OBJ LANG "Object;"
 #define CC (char*)  /*cast a literal from (const char*)*/
 #define FN_PTR(f) CAST_FROM_FN_PTR(void*, &f)
 
 static JNINativeMethod ourpersist_methods[] = {
+    {CC "init", CC "([Ljava/lang/ClassLoader;)V", FN_PTR(OurPersist_Init)},
+
     {CC "createDramCopyTest", CC "([" OBJ ")V", FN_PTR(OurPersist_createDramCopyTest)},
     {CC "test2", CC "(J)" OBJ "", FN_PTR(OurPersist_Test2)},
     {CC "test", CC "(" OBJ "J)" OBJ "", FN_PTR(OurPersist_Test)},

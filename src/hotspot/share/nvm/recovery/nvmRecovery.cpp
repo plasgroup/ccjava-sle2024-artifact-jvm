@@ -30,6 +30,9 @@
 
 #include "runtime/jniHandles.inline.hpp"
 
+// DEBUG:
+int NVMRecovery::create_mirror_count = 0;
+
 class CLDClosureTest : public CLDClosure {
  public:
   Klass* _klass;
@@ -375,6 +378,117 @@ void NVMRecovery::collect_class_loader_during_gc() {
 void VM_OurPersistRecovery::doit() {
   assert(SafepointSynchronize::is_at_safepoint(), "");
   //NVMRecovery::main();
+}
+
+class OurPersistRecoveryCollectBootStrapCLD: public CLDClosure {
+ private:
+  int _cldsi;
+  int _cldsi_max;
+  ClassLoaderData** _clds;
+  bool _error;
+ public:
+  OurPersistRecoveryCollectBootStrapCLD(int cldsi_max, ClassLoaderData** clds) {
+    assert(cldsi_max > 0 && clds != NULL, "");
+    _cldsi = 0;
+    _cldsi_max = cldsi_max;
+    _clds = clds;
+    _error = false;
+  }
+  int cldsi() { return _cldsi; }
+  bool error() { return _error; }
+  void do_cld(ClassLoaderData* cld) {
+    //tty->print_cr("CLDClosureTest000 name: %s, loader: %p", cld->loader_name(), cld);
+    //if (cld->is_the_null_class_loader_data()) tty->print_cr("null loader.");
+    //if (cld->is_boot_class_loader_data()) tty->print_cr("boot loader.");
+    //if (cld->is_builtin_class_loader_data()) tty->print_cr("buildin loader.");
+    if (cld->is_boot_class_loader_data()) {
+      if (_cldsi == _cldsi_max) {
+        _error = true;
+        return;
+      }
+      _clds[_cldsi++] = cld;
+    }
+  }
+};
+
+class OurPersistInitKlassClosure : public KlassClosure {
+ private:
+  int _count;
+ public:
+  OurPersistInitKlassClosure() {
+    _count = 0;
+  };
+  int count() { return _count; }
+
+  void do_klass(Klass* k) {
+    _count++;
+    //tty->print_cr("do_klass %s", k->external_name());
+  }
+};
+
+void VM_OurPersistRecoveryInit::doit() {
+  OurPersistInitKlassClosure orp;
+  //ClassLoaderData::the_null_class_loader_data()->classes_do(&orp);
+  ClassLoaderDataGraph::classes_do(&orp);
+  //Universe::basic_type_classes_do(&orp);
+
+
+
+
+  OurPersistInitKlassClosure orp2;
+
+  oop obj = JNIHandles::resolve(_ary_clds);
+  if (obj == NULL) {
+    //THROW_MSG(SymbolTable::new_symbol("ourpersist/RecoveryException"), "obj == NULL");
+  }
+  if (!obj->is_objArray()) {
+    //THROW_MSG(SymbolTable::new_symbol("ourpersist/RecoveryException"), "!obj->is_objArray()");
+  }
+  objArrayOop obj_ary = objArrayOop(obj);
+  int i = 0;
+  for (; i < obj_ary->length(); i++) {
+    oop elem = obj_ary->obj_at(i);
+    if (elem == NULL) continue;
+
+    Klass* k = elem->klass();
+    if (!k->is_instance_klass()) {
+      //THROW_MSG(SymbolTable::new_symbol("ourpersist/RecoveryException"), "Contains non-instance klass");
+    }
+    InstanceKlass* ik = InstanceKlass::cast(k);
+    if (!ik->is_class_loader_instance_klass()) {
+      //THROW_MSG(SymbolTable::new_symbol("ourpersist/RecoveryException"), "Contains non-class loader klass");
+    }
+    InstanceClassLoaderKlass* iclk = (InstanceClassLoaderKlass*)ik;
+
+    ClassLoaderData* cld = java_lang_ClassLoader::loader_data_acquire(elem);
+    while (elem != NULL && cld != NULL) {
+      if (cld->is_boot_class_loader_data()) break;
+      tty->print_cr("argument cld %s", cld->loader_name());
+      cld->classes_do(&orp2);
+      elem = java_lang_ClassLoader::parent(elem);
+      if (elem != NULL) cld = java_lang_ClassLoader::loader_data_acquire(elem);
+    }
+  }
+  // bootstrap class loader?
+  //ClassLoaderData::the_null_class_loader_data()->classes_do(&orp2);
+
+  ClassLoaderData* bootstrap_loaders[128];
+  int bootstrap_loaders_size = sizeof(bootstrap_loaders) / sizeof(bootstrap_loaders[0]);
+  OurPersistRecoveryCollectBootStrapCLD cldct(bootstrap_loaders_size, bootstrap_loaders);
+  ClassLoaderDataGraph::cld_do(&cldct);
+  assert(cldct.error() == false, "error");
+  for (int i = 0; i < cldct.cldsi(); i++) {
+    //tty->print_cr("bootstrap cld %s", bootstrap_loaders[i]->loader_name());
+    bootstrap_loaders[i]->classes_do(&orp2);
+  }
+
+
+  tty->print_cr("[create_mirror] klass count: %d", NVMRecovery::create_mirror_count);
+  tty->print_cr("[ClassLoaderDataGraph] klass count: %d", orp.count());
+  tty->print_cr("[Argument] klass count: %d", orp2.count());
+
+  assert(SafepointSynchronize::is_at_safepoint(), "");
+  OurPersist::set_started();
 }
 
 #endif // OUR_PERSIST

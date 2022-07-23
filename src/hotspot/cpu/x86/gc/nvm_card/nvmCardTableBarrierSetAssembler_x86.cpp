@@ -99,7 +99,12 @@ void NVMCardTableBarrierSetAssembler::interpreter_store_at(MacroAssembler* masm,
   // Store in DRAM.
   Parent::store_at(masm, decorators, type, dst, val, noreg, noreg);
 
-  bool needs_wupd = NVMCardTableBarrierSetAssembler::needs_wupd(decorators, type);
+  // DEBUG:
+  //bool needs_wupd = NVMCardTableBarrierSetAssembler::needs_wupd(decorators, type);
+  bool needs_wupd = true;
+  NVMCardTableBarrierSetAssembler::runtime_needs_wupd(masm, tmp1, dst, decorators, false,
+                                                      noreg, noreg, noreg, noreg);
+  __ jcc(Assembler::zero, done);
   if (needs_wupd) {
     // fence
     __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
@@ -151,7 +156,13 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
   __ movptr(tmp2, dst.base()); // save dst.base()
   Parent::store_at(masm, decorators, type, dst, val, tmp3, noreg); // dst.base() are broken
 
-  bool needs_wupd = NVMCardTableBarrierSetAssembler::needs_wupd(decorators, type);
+  // DEBUG:
+  //bool needs_wupd = NVMCardTableBarrierSetAssembler::needs_wupd(decorators, type);
+  bool needs_wupd = true;
+  Address tmp2_dst(tmp2, dst.index(), dst.scale(), dst.disp());
+  NVMCardTableBarrierSetAssembler::runtime_needs_wupd(masm, tmp1, tmp2_dst, decorators, true,
+                                                      noreg, noreg, noreg, noreg);
+  __ jcc(Assembler::zero, done);
   if (needs_wupd) {
     // fence
     __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
@@ -219,7 +230,12 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_store_at(MacroAssembl
   // lock
   NVMCardTableBarrierSetAssembler::lock_nvmheader(masm, dst.base(), tmp1, tmp2);
 
-  bool needs_wupd = NVMCardTableBarrierSetAssembler::needs_wupd(decorators, type);
+  // DEBUG:
+  //bool needs_wupd = NVMCardTableBarrierSetAssembler::needs_wupd(decorators, type);
+  bool needs_wupd = true;
+  NVMCardTableBarrierSetAssembler::runtime_needs_wupd(masm, tmp1, dst, decorators, false,
+                                                      noreg, noreg, noreg, noreg);
+  __ jcc(Assembler::zero, dram_only);
   if (needs_wupd) {
     // tmp1 = obj->nvm_header().fwd()
     NVMCardTableBarrierSetAssembler::load_nvm_fwd(masm, tmp1, dst.base());
@@ -274,7 +290,12 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
   // lock
   NVMCardTableBarrierSetAssembler::lock_nvmheader(masm, dst.base(), tmp1, tmp2);
 
-  bool needs_wupd = NVMCardTableBarrierSetAssembler::needs_wupd(decorators, type);
+  // DEBUG:
+  //bool needs_wupd = NVMCardTableBarrierSetAssembler::needs_wupd(decorators, type);
+  bool needs_wupd = true;
+  NVMCardTableBarrierSetAssembler::runtime_needs_wupd(masm, tmp1, dst, decorators, true,
+                                                      noreg, noreg, noreg, noreg);
+  __ jcc(Assembler::zero, dram_only);
   if (needs_wupd) {
     // fence
     __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
@@ -797,6 +818,31 @@ void NVMCardTableBarrierSetAssembler::runtime_is_target(MacroAssembler* masm, Re
   // call
   address is_target_func = CAST_FROM_FN_PTR(address, CallRuntimeBarrierSet::is_target_ptr());
   __ call_VM_leaf(is_target_func, obj);
+  __ mov(dst, rax);
+
+  // pop all
+  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, false, false, false, tmp1, tmp2, tmp3, tmp4, dst);
+
+  // mask result
+  __ andl(dst, 0b1);
+  // WARNING: Don't do anything after andptr instruction.
+  // The status register is used in the following instructions.
+}
+
+void NVMCardTableBarrierSetAssembler::runtime_needs_wupd(MacroAssembler* masm, Register dst,
+                                                         Address obj, DecoratorSet ds, bool is_oop,
+                                                         Register tmp1, Register tmp2,
+                                                         Register tmp3, Register tmp4) {
+  assert_different_registers(dst, obj.base(), obj.index(), noreg);
+
+  // push all
+  NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, true, false, false, tmp1, tmp2, tmp3, tmp4, dst);
+
+  // call
+  const Address offset(noreg, obj.index(), obj.scale(), obj.disp());
+  __ lea(dst, offset);
+  address needs_wupd_func = CAST_FROM_FN_PTR(address, CallRuntimeBarrierSet::needs_wupd_ptr(ds, is_oop));
+  __ call_VM_leaf(needs_wupd_func, obj.base(), dst);
   __ mov(dst, rax);
 
   // pop all

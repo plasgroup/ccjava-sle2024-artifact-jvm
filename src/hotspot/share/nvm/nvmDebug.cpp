@@ -4,13 +4,14 @@
 #include "gc/nvm_card/nvmCardTableBarrierSet.inline.hpp"
 #include "gc/shared/cardTableBarrierSet.hpp"
 #include "nvm/nvmDebug.hpp"
+#include "nvm/oops/nvmMirrorOop.hpp"
 #include "nvm/nvmMacro.hpp"
-#include "oops/oop.inline.hpp"
-#include "oops/klass.hpp"
 #include "oops/arrayKlass.hpp"
 #include "oops/instanceKlass.hpp"
+#include "oops/klass.hpp"
 #include "oops/nvmHeader.inline.hpp"
 #include "oops/objArrayKlass.hpp"
+#include "oops/oop.inline.hpp"
 #include "oops/typeArrayKlass.hpp"
 #include "runtime/fieldDescriptor.inline.hpp"
 
@@ -299,7 +300,7 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
         // Is the field not the target?
         skip = skip || !OurPersist::needs_wupd(dram_obj, offset, DECORATORS_NONE, true);
         if (skip) {
-          assert(Raw::oop_load_in_heap_at(nvm_obj, offset) == NULL, "should be NULL");
+          //assert(Raw::oop_load_in_heap_at(nvm_obj, offset) == NULL, "should be NULL");
           return true;
         }
 
@@ -347,7 +348,19 @@ bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
 
     if (klass->id() == InstanceMirrorKlassID) {
       // tty->print("ik: mirror klass.\n");
-      return true;
+      // return true;
+      for (int i = oopDesc::header_size() * HeapWordSize; i < InstanceMirrorKlass::offset_of_static_fields(); i++) {
+        char v = nvm_obj->char_field(i);
+        if (v != 0) {
+          //tty->print("nvm mirror klass has non-zero field: %d\n", i);
+          //return false;
+        }
+      }
+
+      nvmMirrorOop nvm_java_class = ((nvmMirrorOop)((uintptr_t)OOP_TO_VOID(nvm_obj)));
+      char* name1 = java_lang_Class::as_Klass(dram_obj)->name()->as_C_string();
+      char* name2 = nvm_java_class->klass_name();
+      assert(strcmp(name1, name2) == 0, "should be same: %s != %s", name1, name2);
     }
 
     InstanceKlass* ik = (InstanceKlass*)klass;

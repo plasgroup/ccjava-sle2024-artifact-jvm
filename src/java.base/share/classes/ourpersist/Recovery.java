@@ -95,6 +95,8 @@ public class Recovery {
     super();
   }
 
+  public static native void init(ClassLoader[] classLoaders);
+
   // test
   public static int test = 0;
   private static final Recovery theRecovery = new Recovery();

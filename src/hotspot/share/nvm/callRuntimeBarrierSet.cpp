@@ -116,4 +116,15 @@ void* CallRuntimeBarrierSet::is_target_ptr() {
   return (void*)(bool(*)(oopDesc*))CallRuntimeBarrierSet::call_runtime_is_target;
 }
 
+void* CallRuntimeBarrierSet::needs_wupd_ptr(DecoratorSet ds, bool is_oop) {
+  // TODO: Using the decorator set.
+  if (is_oop) {
+  return (void*)(bool(*)(oopDesc*, ptrdiff_t))
+          CallRuntimeBarrierSet::call_runtime_needs_wupd<(DECORATORS_NONE), (true)>;
+  } else {
+  return (void*)(bool(*)(oopDesc*, ptrdiff_t))
+          CallRuntimeBarrierSet::call_runtime_needs_wupd<(DECORATORS_NONE), (false)>;
+  }
+}
+
 #endif // OUR_PERSIST

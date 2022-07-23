@@ -113,6 +113,7 @@
   template(JFROldObject)                          \
   template(JvmtiPostObjectFree)                   \
   OUR_PERSIST_ONLY(template(OurPersistRecovery))  \
+  OUR_PERSIST_ONLY(template(OurPersistRecoveryInit))  \
   OUR_PERSIST_ONLY(template(OurPersistRecoveryGetLoader))
 
 class VM_Operation : public StackObj {

@@ -10,6 +10,9 @@
 
 class NVMRecovery : AllStatic {
  public:
+  // DEBUG:
+  static int create_mirror_count;
+
   static int flag;
   static void main();
   static void test();
@@ -25,6 +28,17 @@ class VM_OurPersistRecovery: public VM_Operation {
  public:
   VM_OurPersistRecovery() {}
   VMOp_Type type() const { return VMOp_OurPersistRecovery; }
+  void doit();
+};
+
+class VM_OurPersistRecoveryInit: public VM_Operation {
+ private:
+  jobject _ary_clds;
+ public:
+  VM_OurPersistRecoveryInit(jobject ary_clds) {
+    _ary_clds = ary_clds;
+  }
+  VMOp_Type type() const { return VMOp_OurPersistRecoveryInit; }
   void doit();
 };
 

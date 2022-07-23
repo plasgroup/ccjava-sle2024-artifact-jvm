@@ -294,87 +294,26 @@ void OurPersist::copy_object(oop obj) {
   nvmHeader::unlock(obj);
 }
 
-void OurPersist::mirror_create(Klass* klass, oop mirror) {
-  const DecoratorSet ds = MO_UNORDERED | AS_NORMAL | IN_HEAP;
-  typedef BarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet> Raw;
-
-  assert(OurPersist::enable(), "should be enabled");
-  assert(klass != NULL && mirror != NULL, "");
-  assert(klass->java_mirror() != NULL, "");
-  assert(klass->java_mirror()->nvm_header().to_pointer() == NULL, "");
-
-  // Persistence of the mirror object
-  void* nvm_mirror = NVMAllocator::allocate(mirror->size());
-  nvmHeader::set_header(oop(nvm_mirror), nvmHeader::zero());
-  oop(nvm_mirror)->set_mark(markWord::zero());
-  memset(nvm_mirror, 0, mirror->size() * HeapWordSize); // TODO: when debug mode only?
-  nvmHeader::set_fwd(mirror, nvm_mirror);
-
-  if (klass->is_instance_klass()) {
-    InstanceKlass* ik = InstanceKlass::cast(klass);
-    for (JavaFieldStream fs(ik); !fs.done(); fs.next()) {
-      fieldDescriptor& fd = fs.field_descriptor();
-      if (!fd.is_durableroot()) continue;
-      assert(fd.is_static() && is_reference_type(fd.field_type()), "");
-      assert(!fd.is_static() || (int)fd.offset() >= InstanceMirrorKlass::offset_of_static_fields(), "");
-
-      oop v = Raw::oop_load_in_heap_at(mirror, fd.offset());
-      //if (fd.has_initial_value()) continue;
-      if (v != NULL) {
-        OurPersist::ensure_recoverable(v);
-        Raw::oop_store_in_heap_at(oop(nvm_mirror), fd.offset(), oop(v->nvm_header().fwd()));
-        if (v->klass()->name()->equals("java/lang/String")) continue;
-        klass->print();
-        mirror->print();
-        v->print();
-      }
-      assert(v == NULL, "v: %p, off: %d", OOP_TO_VOID(v), fd.offset());
-
-      assert(NVMDebug::cmp_dram_and_nvm_val(mirror, oop(nvm_mirror), fd.offset(),
-                                            fd.field_type(), fd.access_flags()), "check nvm heap");
-    }
+#include "nvm/oops/nvmMirrorOop.hpp"
+bool OurPersist::shade(oop obj, Thread* cur_thread) {
+  void* nvm_obj = OurPersist::allocate_nvm(obj->size(), cur_thread);
+  void** klass_raw_mem = (void**)((char*)nvm_obj + oopDesc::klass_offset_in_bytes());
+  *klass_raw_mem = obj->klass()->java_mirror()->nvm_header().fwd();
+  bool success = nvmHeader::cas_fwd(obj, nvm_obj);
+  if (!success) {
+    // TODO: nvm release
   }
-
-  // Update the durableroot list
-/*
-  void* head = OurPersist::durableroot_list_head();
-  void* tail = OurPersist::durableroot_list_tail();
-  if (head == NULL) {
-    assert(tail == NULL, "");
-
-    OurPersist::set_durableroot_list_head(nvm_mirror);
-  } else {
-    assert(nvmHeader::is_fwd(nvmHeader::from_pointer(head).fwd()), "");
-    assert(nvmHeader::is_fwd(nvmHeader::from_pointer(tail).fwd()), "");
-
-    nvmHeader::set_fwd(oop(tail), nvm_mirror);
+  // DEBUG:
+  if (success) {
+    ResourceMark rm;
+    void* a = (char*)nvm_obj + oopDesc::klass_offset_in_bytes();
+    nvmMirrorOop* b = (nvmMirrorOop*)a;
+    nvmMirrorOop c = *b;
+    tty->print_cr("shade: %s == %s",
+      obj->klass()->name()->as_C_string(),
+      c->klass_name());
   }
-  OurPersist::set_durableroot_list_tail(nvm_mirror);
-*/
-
-/*
-  // Initialize durableroot fields to NULL and set the non-durableroot flag
-  // (all bits to 1) for reference types only
-  if (klass->is_instance_klass()) {
-    InstanceKlass* ik = InstanceKlass::cast(klass);
-    for (JavaFieldStream fs(ik); !fs.done(); fs.next()) {
-      fieldDescriptor& fd = fs.field_descriptor();
-      if (!fd.is_static()) continue;
-      if (!is_reference_type(fd.field_type())) continue;
-
-      void* init_value = fd.is_durableroot() ? NULL : (void*)~uintptr_t(0);
-      Raw::oop_store_in_heap_at(oop(nvm_mirror), fd.offset(), oop(init_value));
-    }
-  } else {
-#ifdef ASSERT
-    int word_size = klass->java_mirror()->size();
-    int byte_size = word_size * HeapWordSize;
-    int off = InstanceMirrorKlass::offset_of_static_fields();
-    //tty->print_cr(" byte_size: %d, off: %d", byte_size, off);
-    assert(byte_size == off, "");
-#endif // ASSERT
-  }
-*/
+  return success;
 }
 
 #endif // OUR_PERSIST

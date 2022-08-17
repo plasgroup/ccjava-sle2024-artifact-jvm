@@ -400,6 +400,12 @@ bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
     BasicType array_type = ((ArrayKlass*)oak)->element_type();
     int array_length = oao->length();
 
+    int nvm_array_length = objArrayOop(nvm_obj)->length();
+    if (nvm_array_length != array_length) {
+      tty->print("array length doesn't match: %d != %d\n", nvm_array_length, array_length);
+      return false;
+    }
+
     for (int i = 0; i < array_length; i++) {
       ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
       has_same_field = NVMDebug::cmp_dram_and_nvm_val(dram_obj, nvm_obj, field_offset, T_OBJECT, AccessFlags());
@@ -419,6 +425,12 @@ bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
     typeArrayOop tao = (typeArrayOop)dram_obj;
     BasicType array_type = ((ArrayKlass*)tak)->element_type();
     int array_length = tao->length();
+
+    int nvm_array_length = typeArrayOop(nvm_obj)->length();
+    if (nvm_array_length != array_length) {
+      tty->print("array length doesn't match: %d != %d\n", nvm_array_length, array_length);
+      return false;
+    }
 
     for (int i = 0; i < array_length; i++) {
       ptrdiff_t field_offset = arrayOopDesc::base_offset_in_bytes(array_type) + type2aelembytes(array_type) * i;

@@ -6,6 +6,7 @@
 #include "nvm/nvmBarrierSync.inline.hpp"
 #include "nvm/nvmMacro.hpp"
 #include "nvm/nvmWorkListStack.hpp"
+#include "nvm/oops/nvmMirrorOop.hpp"
 #include "nvm/ourPersist.inline.hpp"
 #include "oops/arrayKlass.hpp"
 #include "oops/fieldStreams.inline.hpp"
@@ -149,6 +150,8 @@ void OurPersist::copy_object_copy_step(oop obj, void* nvm_obj, Klass* klass,
     BasicType array_type = ((ArrayKlass*)ak)->element_type();
     int array_length = ao->length();
 
+    objArrayOop(nvm_obj)->set_length(array_length);
+
     for (int i = 0; i < array_length; i++) {
       ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
       const DecoratorSet ds = MO_UNORDERED | AS_NORMAL | IN_HEAP | IS_ARRAY;
@@ -181,6 +184,8 @@ void OurPersist::copy_object_copy_step(oop obj, void* nvm_obj, Klass* klass,
     typeArrayOop ao = (typeArrayOop)obj;
     BasicType array_type = ((ArrayKlass*)ak)->element_type();
     int array_length = ao->length();
+
+    typeArrayOop(nvm_obj)->set_length(array_length);
 
     for (int i = 0; i < array_length; i++) {
       ptrdiff_t field_offset = arrayOopDesc::base_offset_in_bytes(array_type) + type2aelembytes(array_type) * i;
@@ -228,6 +233,8 @@ bool OurPersist::copy_object_verify_step(oop obj, void* nvm_obj, Klass* klass) {
     BasicType array_type = ((ArrayKlass*)ak)->element_type();
     int array_length = ao->length();
 
+    assert(objArrayOop(nvm_obj)->length() == array_length, "length mismatch");
+
     for (int i = 0; i < array_length; i++) {
       ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
       bool same = OurPersist::cmp_dram_and_nvm(obj, (oop)nvm_obj, field_offset, T_OBJECT, false);
@@ -240,6 +247,8 @@ bool OurPersist::copy_object_verify_step(oop obj, void* nvm_obj, Klass* klass) {
     typeArrayOop ao = (typeArrayOop)obj;
     BasicType array_type = ((ArrayKlass*)ak)->element_type();
     int array_length = ao->length();
+
+    assert(typeArrayOop(nvm_obj)->length() == array_length, "length mismatch");
 
     for (int i = 0; i < array_length; i++) {
       ptrdiff_t field_offset = arrayOopDesc::base_offset_in_bytes(array_type) + type2aelembytes(array_type) * i;
@@ -294,7 +303,6 @@ void OurPersist::copy_object(oop obj) {
   nvmHeader::unlock(obj);
 }
 
-#include "nvm/oops/nvmMirrorOop.hpp"
 bool OurPersist::shade(oop obj, Thread* cur_thread) {
   void* nvm_obj = OurPersist::allocate_nvm(obj->size(), cur_thread);
   void** klass_raw_mem = (void**)((char*)nvm_obj + oopDesc::klass_offset_in_bytes());
@@ -302,16 +310,6 @@ bool OurPersist::shade(oop obj, Thread* cur_thread) {
   bool success = nvmHeader::cas_fwd(obj, nvm_obj);
   if (!success) {
     // TODO: nvm release
-  }
-  // DEBUG:
-  if (success) {
-    ResourceMark rm;
-    void* a = (char*)nvm_obj + oopDesc::klass_offset_in_bytes();
-    nvmMirrorOop* b = (nvmMirrorOop*)a;
-    nvmMirrorOop c = *b;
-    tty->print_cr("shade: %s == %s",
-      obj->klass()->name()->as_C_string(),
-      c->klass_name());
   }
   return success;
 }

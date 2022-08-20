@@ -88,11 +88,6 @@ class GCCause : public AllStatic {
     _z_proactive,
     _z_high_usage,
 
-#ifdef OUR_PERSIST
-    /* OurPersist */
-    _ourpersist_collect_class_loader,
-#endif // OUR_PERSIST
-
     _last_gc_cause
   };
 

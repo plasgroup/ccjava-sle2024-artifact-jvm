@@ -99,12 +99,6 @@ void GenMarkSweep::invoke_at_safepoint(ReferenceProcessor* rp, bool clear_all_so
 
   mark_sweep_phase1(clear_all_softrefs);
 
-#ifdef OUR_PERSIST
-  if (gch->gc_cause() == GCCause::_ourpersist_collect_class_loader) {
-    NVMRecovery::collect_class_loader_during_gc();
-  }
-#endif // OUR_PERSIST
-
 #ifdef NVM_COUNTER
   NVMCounter::count_object_snapshot_during_gc();
 #endif // NVM_COUNTER

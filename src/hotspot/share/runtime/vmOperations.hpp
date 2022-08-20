@@ -112,9 +112,8 @@
   template(GTestExecuteAtSafepoint)               \
   template(JFROldObject)                          \
   template(JvmtiPostObjectFree)                   \
-  OUR_PERSIST_ONLY(template(OurPersistRecovery))  \
-  OUR_PERSIST_ONLY(template(OurPersistRecoveryInit))  \
-  OUR_PERSIST_ONLY(template(OurPersistRecoveryGetLoader))
+  OUR_PERSIST_ONLY(template(OurPersistRecoveryInit)) \
+  OUR_PERSIST_ONLY(template(OurPersistRecoveryDramCopy))
 
 class VM_Operation : public StackObj {
  public:

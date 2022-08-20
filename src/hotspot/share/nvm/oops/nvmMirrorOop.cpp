@@ -113,32 +113,10 @@ void nvmMirrorOopDesc::add_class_list(nvmMirrorOopDesc* target) {
   pthread_mutex_unlock(&class_list_mtx);
 }
 
-void nvmMirrorOopDesc::mirror_create(Klass* klass, oop mirror) {
-  const DecoratorSet ds = MO_UNORDERED | AS_NORMAL | IN_HEAP;
-  typedef BarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet> Raw;
-
-  assert(OurPersist::enable(), "should be enabled");
+nvmMirrorOopDesc* nvmMirrorOopDesc::create_mirror(Klass* klass, oop mirror) {
   assert(klass != NULL && mirror != NULL, "");
   assert(klass->java_mirror() != NULL, "");
   assert(klass->java_mirror()->nvm_header().to_pointer() == NULL, "");
-
-  //tty->print_cr("offset_of_free_space: %d", nvmMirrorOopDesc::offset_of_free_space());
-  //tty->print_cr("length_of_free_space: %d", nvmMirrorOopDesc::length_of_free_space());
-  //tty->print_cr("offset_of_klass_name: %d", nvmMirrorOopDesc::offset_of_klass_name());
-  //tty->print_cr("length_of_klass_name: %d", nvmMirrorOopDesc::length_of_klass_name());
-
-  // DEBUG:
-  if (class_list_head == NULL && true) {
-    NVMAllocator::init();
-    nvmMirrorOopDesc* cur = (nvmMirrorOopDesc*)0x700000000000;
-    int* ptr = (int*)cur;
-    tty->print_cr("test: %d", *ptr);
-    while (cur != NULL) {
-      tty->print_cr("%s", cur->klass_name());
-      cur = cur->class_list_next();
-    }
-    //assert(false, "end");
-  }
 
   // Persistence of the mirror object
   void* nvm_mirror = NVMAllocator::allocate(mirror->size());
@@ -146,6 +124,7 @@ void nvmMirrorOopDesc::mirror_create(Klass* klass, oop mirror) {
   oop(nvm_mirror)->set_mark(markWord::zero());
   memset(nvm_mirror, 0, mirror->size() * HeapWordSize); // TODO: when debug mode only?
 
+  // Copy the fields of the mirror object
   if (klass->is_instance_klass()) {
     InstanceKlass* ik = InstanceKlass::cast(klass);
     for (JavaFieldStream fs(ik); !fs.done(); fs.next()) {
@@ -153,79 +132,48 @@ void nvmMirrorOopDesc::mirror_create(Klass* klass, oop mirror) {
       if (!fd.is_durableroot()) continue;
       assert(fd.is_static() && is_reference_type(fd.field_type()), "");
       assert(!fd.is_static() || (int)fd.offset() >= InstanceMirrorKlass::offset_of_static_fields(), "");
-
+/*
       oop v = Raw::oop_load_in_heap_at(mirror, fd.offset());
       //if (fd.has_initial_value()) continue;
       if (v != NULL) {
         OurPersist::ensure_recoverable(v);
         Raw::oop_store_in_heap_at(oop(nvm_mirror), fd.offset(), oop(v->nvm_header().fwd()));
-        if (v->klass()->name()->equals("java/lang/String")) continue;
-        klass->print();
-        mirror->print();
-        v->print();
       }
-      assert(v == NULL, "v: %p, off: %d", OOP_TO_VOID(v), fd.offset());
-
       assert(NVMDebug::cmp_dram_and_nvm_val(mirror, oop(nvm_mirror), fd.offset(),
                                             fd.field_type(), fd.access_flags()), "check nvm heap");
+*/
     }
   }
 
+  // Set the name of klass
+#ifdef ASSERT
   for (int i = oopDesc::header_size() * HeapWordSize; i < InstanceMirrorKlass::offset_of_static_fields(); i++) {
     char v = oop(nvm_mirror)->char_field(i);
-    //assert(v == 0, "nvm mirror klass has non-zero field: %d\n", i);
+    assert(v == 0, "nvm mirror klass has non-zero field: %d\n", i);
   }
-
+#endif // ASSERT
   nvmMirrorOopDesc* nvm_java_class = ((nvmMirrorOopDesc*)((uintptr_t)nvm_mirror));
   nvm_java_class->set_klass_name(klass->name()->as_C_string());
-  NVM_WRITEBACK_LOOP(nvm_java_class, mirror->size());
-  nvmMirrorOopDesc::add_class_list(nvm_java_class);
+#ifdef ASSERT
   {
     char* name1 = klass->name()->as_C_string();
     char* name2 = nvm_java_class->klass_name();
     assert(strcmp(name1, name2) == 0, "should be same: %s != %s", name1, name2);
   }
-
-  nvmHeader::set_fwd(mirror, nvm_mirror);
-
-  // Update the durableroot list
-/*
-  void* head = OurPersist::durableroot_list_head();
-  void* tail = OurPersist::durableroot_list_tail();
-  if (head == NULL) {
-    assert(tail == NULL, "");
-
-    OurPersist::set_durableroot_list_head(nvm_mirror);
-  } else {
-    assert(nvmHeader::is_fwd(nvmHeader::from_pointer(head).fwd()), "");
-    assert(nvmHeader::is_fwd(nvmHeader::from_pointer(tail).fwd()), "");
-
-    nvmHeader::set_fwd(oop(tail), nvm_mirror);
-  }
-  OurPersist::set_durableroot_list_tail(nvm_mirror);
-*/
-
-/*
-  // Initialize durableroot fields to NULL and set the non-durableroot flag
-  // (all bits to 1) for reference types only
-  if (klass->is_instance_klass()) {
-    InstanceKlass* ik = InstanceKlass::cast(klass);
-    for (JavaFieldStream fs(ik); !fs.done(); fs.next()) {
-      fieldDescriptor& fd = fs.field_descriptor();
-      if (!fd.is_static()) continue;
-      if (!is_reference_type(fd.field_type())) continue;
-
-      void* init_value = fd.is_durableroot() ? NULL : (void*)~uintptr_t(0);
-      Raw::oop_store_in_heap_at(oop(nvm_mirror), fd.offset(), oop(init_value));
-    }
-  } else {
-#ifdef ASSERT
-    int word_size = klass->java_mirror()->size();
-    int byte_size = word_size * HeapWordSize;
-    int off = InstanceMirrorKlass::offset_of_static_fields();
-    //tty->print_cr(" byte_size: %d, off: %d", byte_size, off);
-    assert(byte_size == off, "");
 #endif // ASSERT
-  }
-*/
+
+  // writeback
+  NVM_WRITEBACK_LOOP(nvm_java_class, mirror->size());
+
+  // Set the list of classes in the nvm
+  // NOTE: Includes lock operation (fence effect)
+  nvmMirrorOopDesc::add_class_list(nvm_java_class);
+
+  return (nvmMirrorOopDesc*)nvm_mirror;
+}
+
+nvmMirrorOopDesc* nvmMirrorOopDesc::create_and_set_mirror(Klass* klass, oop mirror) {
+  nvmMirrorOopDesc* nvm_mirror = nvmMirrorOopDesc::create_mirror(klass, mirror);
+  nvmHeader::set_fwd(mirror, nvm_mirror);
+  return nvm_mirror;
 }

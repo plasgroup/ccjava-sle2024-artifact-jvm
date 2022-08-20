@@ -38,7 +38,8 @@ class nvmMirrorOopDesc : public nvmOopDesc {
   char* klass_name();
   nvmMirrorOopDesc* class_list_next();
 
-  static void mirror_create(Klass* klass, oop mirror);
+  static nvmMirrorOopDesc* create_mirror(Klass* klass, oop mirror);
+  static nvmMirrorOopDesc* create_and_set_mirror(Klass* klass, oop mirror);
 };
 
 #endif // NVM_OOPS_NVMMIRROROOPDESC_HPP

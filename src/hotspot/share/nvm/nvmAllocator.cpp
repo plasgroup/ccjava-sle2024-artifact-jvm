@@ -17,6 +17,10 @@ NonVolatileChunkLarge* NVMAllocator::first_free_nvcl = (NonVolatileChunkLarge*) 
 pthread_mutex_t NVMAllocator::allocate_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 void NVMAllocator::init() {
+  if (nvm_head != NULL) {
+    return;
+  }
+
 #ifdef USE_NVM
   const char* nvm_path = XSTR(NVM_FILE_PATH); // NVM
 #else  // USE_NVM

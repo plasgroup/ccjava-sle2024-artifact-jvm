@@ -1,40 +1,64 @@
 #ifdef OUR_PERSIST
 
+#include "classfile/vmSymbols.hpp"
 #include "jni.h"
 #include "jvm.h"
+#include "nvm/ourPersist.inline.hpp"
 #include "nvm/recovery/nvmRecovery.hpp"
 #include "nvm/recovery/ourPersistJNI.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
+#include "utilities/exceptions.hpp"
 
 JVM_ENTRY(static jboolean, OurPersist_exists(JNIEnv *env, jclass clazz, jstring nvm_file_path))
+  if (!OurPersist::enable()) {
+    THROW_MSG_0(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
+  }
   return NVMRecovery::exists(env, clazz, nvm_file_path, THREAD);
 JVM_END
 
 JVM_ENTRY(static void, OurPersist_initInternal(JNIEnv *env, jclass clazz, jstring nvm_file_path))
+  if (!OurPersist::enable()) {
+    THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
+  }
   NVMRecovery::initInternal(env, clazz, nvm_file_path, THREAD);
 JVM_END
 
 JVM_ENTRY(static void, OurPersist_createNvmFile(JNIEnv *env, jclass clazz, jstring nvm_file_path))
+  if (!OurPersist::enable()) {
+    THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
+  }
   NVMRecovery::createNvmFile(env, clazz, nvm_file_path, THREAD);
 JVM_END
 
 JVM_ENTRY(static jobjectArray, OurPersist_nvmCopyClassNames(JNIEnv *env, jclass clazz, jstring nvm_file_path))
+  if (!OurPersist::enable()) {
+    THROW_MSG_NULL(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
+  }
   return NVMRecovery::nvmCopyClassNames(env, clazz, nvm_file_path, THREAD);
 JVM_END
 
 JVM_ENTRY(static void, OurPersist_createDramCopy(JNIEnv *env, jclass clazz,
                                                  jobjectArray dram_copy_list, jobjectArray classes,
                                                  jstring nvm_file_path))
+  if (!OurPersist::enable()) {
+    THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
+  }
   NVMRecovery::createDramCopy(env, clazz, dram_copy_list, classes, nvm_file_path, THREAD);
 JVM_END
 
 JVM_ENTRY(static void, OurPersist_recoveryDramCopy(JNIEnv *env, jclass clazz,
                                                    jobjectArray dram_copy_list, jobjectArray classes,
                                                    jstring nvm_file_path))
+  if (!OurPersist::enable()) {
+    THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
+  }
   NVMRecovery::recoveryDramCopy(env, clazz, dram_copy_list, classes, nvm_file_path, THREAD);
 JVM_END
 
 JVM_ENTRY(static void, OurPersist_killMe(JNIEnv *env, jclass clazz))
+  if (!OurPersist::enable()) {
+    THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
+  }
   NVMRecovery::killMe(env, clazz, THREAD);
 JVM_END
 

@@ -1,6 +1,7 @@
-#include "nvm/oops/nvmMirrorOop.hpp"
+#ifdef OUR_PERSIST
 
 #include "nvm/nvmDebug.hpp"
+#include "nvm/oops/nvmMirrorOop.hpp"
 #include "oops/fieldStreams.inline.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/klass.hpp"
@@ -177,3 +178,5 @@ nvmMirrorOopDesc* nvmMirrorOopDesc::create_and_set_mirror(Klass* klass, oop mirr
   nvmHeader::set_fwd(mirror, nvm_mirror);
   return nvm_mirror;
 }
+
+#endif // OUR_PERSIST

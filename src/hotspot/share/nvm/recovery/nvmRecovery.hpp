@@ -10,20 +10,21 @@
 #include "classfile/symbolTable.hpp"
 
 class NVMRecovery : AllStatic {
+ friend class OurPersistJNI;
  private:
   static Symbol* _ourpersist_recovery_exception;
-
-  static Symbol* ourpersist_recovery_exception() {
-    assert(Thread::current() != NULL, "must be");
-    if (_ourpersist_recovery_exception == NULL) {
-      _ourpersist_recovery_exception = SymbolTable::new_symbol("OurPersistRecoveryException");
-    }
-    return _ourpersist_recovery_exception;
-  }
 
  public:
   // DEBUG:
   static int create_mirror_count;
+
+  static Symbol* ourpersist_recovery_exception() {
+    assert(Thread::current() != NULL, "must be");
+    if (_ourpersist_recovery_exception == NULL) {
+      _ourpersist_recovery_exception = SymbolTable::new_symbol("ourpersist/RecoveryException");
+    }
+    return _ourpersist_recovery_exception;
+  }
 
   static jboolean exists(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS);
   static void initInternal(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS);
@@ -38,13 +39,13 @@ class NVMRecovery : AllStatic {
 
 class VM_OurPersistRecoveryInit: public VM_Operation {
  private:
-  JNIEnv *_env;
+  JNIEnv* _env;
   jclass _clazz;
   jstring _nvm_file_path;
   jboolean _result;
 
  public:
-  VM_OurPersistRecoveryInit(JNIEnv *env, jclass clazz, jstring nvm_file_path):
+  VM_OurPersistRecoveryInit(JNIEnv* env, jclass clazz, jstring nvm_file_path):
     _env(env), _clazz(clazz), _nvm_file_path(nvm_file_path), _result(JNI_FALSE) {}
   VMOp_Type type() const { return VMOp_OurPersistRecoveryInit; }
   jboolean result() { return _result; }
@@ -53,7 +54,7 @@ class VM_OurPersistRecoveryInit: public VM_Operation {
 
 class VM_OurPersistRecoveryDramCopy: public VM_Operation {
  private:
-  JNIEnv *_env;
+  JNIEnv* _env;
   jclass _clazz;
   jobjectArray _dram_copy_list;
   jobjectArray _classes;
@@ -61,7 +62,7 @@ class VM_OurPersistRecoveryDramCopy: public VM_Operation {
   jboolean _result;
 
  public:
-  VM_OurPersistRecoveryDramCopy(JNIEnv *env, jclass clazz, jobjectArray dram_copy_list,
+  VM_OurPersistRecoveryDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_copy_list,
                                 jobjectArray classes, jstring nvm_file_path) :
                                   _env(env), _clazz(clazz), _dram_copy_list(dram_copy_list),
                                   _classes(classes), _nvm_file_path(nvm_file_path), _result(JNI_FALSE) {}

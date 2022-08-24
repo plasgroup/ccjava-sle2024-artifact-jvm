@@ -16,7 +16,7 @@ inline bool OurPersist::enable() {
   if (OurPersist::_enable == our_persist_unknown) {
     bool enable_slow = Arguments::is_interpreter_only() && !UseCompressedOops;
     OurPersist::_enable = enable_slow ? our_persist_true : our_persist_false;
-    if (OurPersist::_enable) {
+    if (enable_slow) {
       tty->print("OurPersist is enabled.\n");
     } else {
       tty->print("OurPersist is disabled.\n");

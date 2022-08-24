@@ -54,23 +54,33 @@ public class Recovery {
     initInternal(nvmFilePath);
   }
 
-  public static void recovery(ClassLoader[] classLoaders, String nvmFilePath) {
+  private static Class<?> loadClass(ClassLoader[] classLoaders, String className) {
+    for (ClassLoader classLoader : classLoaders) {
+      try {
+        return Class.forName(className, true, classLoader);
+      } catch (ClassNotFoundException e) {}
+    }
+    return null;
+  }
+
+  public static void recovery(ClassLoader[] classLoaders, String nvmFilePath) throws Exception {
     String[] classNames = nvmCopyClassNames(nvmFilePath);
 
     Class<?>[] classes = new Class<?>[classNames.length];
     for (int i = 0; i < classNames.length; i++) {
-      String className = classNames[i];
-      for (ClassLoader cld : classLoaders) {
-        try {
-          classes[i] = cld.loadClass(className);
-          break;
-        } catch (ClassNotFoundException e) {}
+      String className = classNames[i].replaceAll("/", ".");
+
+      classes[i] = loadClass(classLoaders, className);
+      if (classes[i] == null) {
+        throw new RecoveryNotFindClassException("class not found: " + className);
       }
     }
 
+/*
     Object[] dramCopyList = new Object[128];
     createDramCopy(dramCopyList, classes, nvmFilePath);
 
     recoveryDramCopy(dramCopyList, classes, nvmFilePath);
+*/
   }
 }

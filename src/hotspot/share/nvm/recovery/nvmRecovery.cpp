@@ -32,7 +32,7 @@ Symbol* NVMRecovery::_ourpersist_recovery_exception = NULL;
 int NVMRecovery::create_mirror_count = 0;
 
 // TODO: implement
-jboolean NVMRecovery::exists(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS) {
+jboolean NVMRecovery::exists(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
 /*
   const char *nvm_file_path_cstr = env->GetStringUTFChars(nvm_file_path, NULL);
   if (nvm_file_path_cstr == NULL) {
@@ -45,7 +45,7 @@ jboolean NVMRecovery::exists(JNIEnv *env, jclass clazz, jstring nvm_file_path, T
   return JNI_TRUE;
 }
 
-void NVMRecovery::initInternal(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS) {
+void NVMRecovery::initInternal(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
   VM_OurPersistRecoveryInit op(env, clazz, nvm_file_path);
   VMThread::execute(&op);
   if (op.result() == JNI_FALSE) {
@@ -54,21 +54,45 @@ void NVMRecovery::initInternal(JNIEnv *env, jclass clazz, jstring nvm_file_path,
 }
 
 // TODO: implement
-void NVMRecovery::createNvmFile(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS) {
+void NVMRecovery::createNvmFile(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
   THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "NVMRecovery::createNvmFile not implemented");
 }
 
-// TODO: implement
-jobjectArray NVMRecovery::nvmCopyClassNames(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS) {
-  THROW_MSG_NULL(NVMRecovery::ourpersist_recovery_exception(), "NVMRecovery::nvmCopyClassNames not implemented");
-  return NULL;
+jobjectArray NVMRecovery::nvmCopyClassNames(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
+  NVMAllocator::init();
+  nvmMirrorOopDesc* head = (nvmMirrorOopDesc*)0x700000000000;
+
+  nvmMirrorOopDesc* cur = head;
+  int count = 0;
+  while (cur != NULL) {
+    count++;
+    cur = cur->class_list_next();
+  }
+
+  Klass* ak = Universe::objectArrayKlassObj();
+  objArrayOop alloc_ary = ObjArrayKlass::cast(ak)->allocate(count, CHECK_NULL);
+  objArrayHandle arr(THREAD, alloc_ary);
+
+  cur = head;
+  for (int i = 0; i < count; i++) {
+    const char* str = cur->klass_name();
+    Handle name = java_lang_String::create_from_str(str, THREAD);
+    arr()->obj_at_put(i, name());
+    cur = cur->class_list_next();
+  }
+
+  jobjectArray res = jobjectArray(JNIHandles::make_local(arr()));
+  return res;
 }
 
 // TODO: implement
-void NVMRecovery::createDramCopy(JNIEnv *env, jclass clazz, jobjectArray dram_copy_list,
-                             jobjectArray classes, jstring nvm_file_path, TRAPS) {
+void NVMRecovery::createDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_copy_list,
+                                 jobjectArray classes, jstring nvm_file_path, TRAPS) {
   THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "NVMRecovery::createDramCopy not implemented");
 
+  // DEBUG:
+  // Symbol* sym = SymbolTable::new_symbol(str);
+  // Klass* k = SystemDictionary::resolve_or_null(sym, CHECK_NULL);
   //Klass* a = Universe::intArrayKlassObj();
   //assert(a != NULL && a->is_typeArray_klass(), "sanity check");
   //TypeArrayKlass* tak = TypeArrayKlass::cast(a);
@@ -78,8 +102,8 @@ void NVMRecovery::createDramCopy(JNIEnv *env, jclass clazz, jobjectArray dram_co
 }
 
 // TODO: implement
-void NVMRecovery::recoveryDramCopy(JNIEnv *env, jclass clazz, jobjectArray dram_copy_list,
-                             jobjectArray classes, jstring nvm_file_path, TRAPS) {
+void NVMRecovery::recoveryDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_copy_list,
+                                   jobjectArray classes, jstring nvm_file_path, TRAPS) {
   THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "NVMRecovery::recoveryDramCopy not implemented");
 }
 
@@ -139,9 +163,7 @@ class OurPersistSetNvmMirrors : public KlassClosure {
 };
 
 void VM_OurPersistRecoveryInit::doit() {
-  tty->print_cr("STW begin");
-  //const char* path = _env->GetStringUTFChars(_nvm_file_path, NULL);
-  //if (path == NULL) return;
+  tty->print_cr("VM_OurPersistRecoveryInit");
 
   OurPersistSetNvmMirrors klass_closure(0, NULL);
   ClassLoaderDataGraph::classes_do(&klass_closure);
@@ -150,12 +172,10 @@ void VM_OurPersistRecoveryInit::doit() {
   OurPersist::set_started();
 
   _result = JNI_TRUE;
-  tty->print_cr("STW end");
 }
 
 void VM_OurPersistRecoveryDramCopy::doit() {
-  tty->print_cr("STW begin");
-  tty->print_cr("STW end");
+  tty->print_cr("VM_OurPersistRecoveryDramCopy");
 }
 
 #endif // OUR_PERSIST

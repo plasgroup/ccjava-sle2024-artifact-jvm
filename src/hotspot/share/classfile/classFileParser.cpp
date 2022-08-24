@@ -1723,12 +1723,16 @@ void ClassFileParser::parse_fields(const ClassFileStream* const cfs,
     if (is_static && is_reference_type(type)) {
 #ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
       // True: all roots are durable
-      field->set_durableroot(true);
+      if (!_is_hidden) {
+        field->set_durableroot(true);
+      } else {
+        field->set_durableroot(false);
+      }
 #endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
 
 #ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
       // False: all roots are not durable
-      // nothing to do
+      field->set_durableroot(false);
 #endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
 
 #if !defined(OURPERSIST_DURABLEROOTS_ALL_TRUE) && !defined(OURPERSIST_DURABLEROOTS_ALL_FALSE)
@@ -1736,9 +1740,12 @@ void ClassFileParser::parse_fields(const ClassFileStream* const cfs,
       AnnotationCollector::ID droot_anno = AnnotationCollector::_ourpersist_durableroot_annotaion;
       if (parsed_annotations.has_annotation(droot_anno)) {
         field->set_durableroot(true);
+      } else {
+        field->set_durableroot(false);
       }
 #endif // !OURPERSIST_DURABLEROOTS_ALL_TRUE && !OURPERSIST_DURABLEROOTS_ALL_FALSE
-
+    } else {
+      field->set_durableroot(false);
     }
 #endif // OUR_PERSIST
   }

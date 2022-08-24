@@ -3386,11 +3386,6 @@ void TemplateTable::putfield_or_static_helper(int byte_no, bool is_static, Rewri
       // Store into the field
       assert(ds & OURPERSIST_IS_STATIC, "");
       assert(ds & OURPERSIST_NOT_DURABLE_ANNOTATION, "");
-#ifdef ASSERT
-#ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
-      __ should_not_reach_here();
-#endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
-#endif // ASSERT
       do_oop_store(_masm, field, rax, ds);
       __ jmp(Done);
       __ bind(durableroot);

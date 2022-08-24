@@ -70,6 +70,10 @@ inline bool OurPersist::is_target_fast(Klass* klass) {
     return false;
   }
 
+  if (klass->is_hidden()) {
+    return false;
+  }
+
   return true;
 }
 
@@ -121,7 +125,7 @@ inline bool OurPersist::is_durableroot(oop klass_obj, ptrdiff_t offset, Decorato
   bool is_durableroot = fd.is_durableroot();
 
 #ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
-  assert(is_durableroot, "must be durableroot");
+  assert(k->is_hidden() || is_durableroot, "must be durableroot");
 #endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
 #ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
   assert(!is_durableroot, "must not be durableroot");

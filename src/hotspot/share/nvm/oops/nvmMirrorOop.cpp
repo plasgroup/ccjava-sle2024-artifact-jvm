@@ -119,6 +119,11 @@ nvmMirrorOopDesc* nvmMirrorOopDesc::create_mirror(Klass* klass, oop mirror) {
   assert(klass->java_mirror() != NULL, "");
   assert(klass->java_mirror()->nvm_header().to_pointer() == NULL, "");
 
+  // NOTE: Skip a hidden class
+  if (klass->is_hidden()) {
+    return NULL;
+  }
+
   // Persistence of the mirror object
   void* nvm_mirror = NVMAllocator::allocate(mirror->size());
   nvmHeader::set_header(oop(nvm_mirror), nvmHeader::zero());

@@ -30,9 +30,6 @@ void NVMCardTableBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSe
 
 #ifdef ASSERT
   if (is_reference_type(type) && (decorators & OURPERSIST_IS_STATIC)) {
-#ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
-    if (decorators & OURPERSIST_NOT_DURABLE_ANNOTATION) __ should_not_reach_here();
-#endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
 #ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
     if (decorators & OURPERSIST_DURABLE_ANNOTATION) __ should_not_reach_here();
 #endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
@@ -168,16 +165,6 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
     __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
     // tmp1 = obj->nvm_header().fwd()
     NVMCardTableBarrierSetAssembler::load_nvm_fwd(masm, tmp1, tmp2);
-#ifdef ASSERT
-#ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
-    if ((decorators & OURPERSIST_IS_STATIC)) {
-      Label assert_droot_all_true;
-      __ jcc(Assembler::notZero, assert_droot_all_true);
-      __ should_not_reach_here();
-      __ bind(assert_droot_all_true);
-    }
-#endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
-#endif // ASSERT
     __ jcc(Assembler::zero, done);
     // tmp1 = forwarding pointer
 
@@ -301,16 +288,6 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
     __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
     // tmp1 = obj->nvm_header().fwd()
     NVMCardTableBarrierSetAssembler::load_nvm_fwd(masm, tmp1, dst.base());
-#ifdef ASSERT
-#ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
-    if ((decorators & OURPERSIST_IS_STATIC)) {
-      Label assert_droot_all_true;
-      __ jcc(Assembler::notZero, assert_droot_all_true);
-      __ should_not_reach_here();
-      __ bind(assert_droot_all_true);
-    }
-#endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
-#endif // ASSERT
     __ jcc(Assembler::zero, dram_only);
     // tmp1 = forwarding pointer
 
@@ -528,14 +505,12 @@ void NVMCardTableBarrierSetAssembler::is_target(MacroAssembler* masm, Register d
 #endif // ASSERT
 
   // tmp = klass->id()
-//*
   __ cmp32(tmp, InstanceMirrorKlassID);
   __ jcc(Assembler::equal, is_not_target);
   __ cmp32(tmp, InstanceClassLoaderKlassID);
   __ jcc(Assembler::equal, is_not_target);
   //__ cmp32(tmp, InstanceRefKlassID);
   //__ jcc(Assembler::equal, is_not_target);
-//*/
 /*
   assert(InstanceRefKlassID         == 1, "");
   assert(InstanceMirrorKlassID      == 2, "");
@@ -544,6 +519,10 @@ void NVMCardTableBarrierSetAssembler::is_target(MacroAssembler* masm, Register d
   __ cmpl(tmp, 2);
   __ jcc(Assembler::belowEqual, is_not_target);
 */
+
+  __ movl(tmp, Address(dst, Klass::access_flags_offset()));
+  __ testl(tmp, JVM_ACC_IS_HIDDEN_CLASS);
+  __ jcc(Assembler::notZero, is_not_target);
 
   // is target
   __ bind(is_target);

@@ -105,6 +105,10 @@ class OurPersistSetNvmMirrors : public KlassClosure {
   void do_klass(Klass* k) {
     assert(k != NULL, "");
 
+    if (k->is_hidden()) {
+      return;
+    }
+
     oop mirror = k->java_mirror();
     assert(mirror != NULL, "");
 

@@ -6,6 +6,7 @@
 #include "oops/accessDecorators.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/arguments.hpp"
+#include "nvm/oops/nvmOop.hpp"
 
 class NVMWorkListStack;
 class NVMBarrierSync;
@@ -24,20 +25,19 @@ class OurPersist : AllStatic {
   static int _started;
 
  private:
-  inline static void set_responsible_thread(void* nvm_ptr, Thread* cur_thread);
   inline static void clear_responsible_thread(Thread* cur_thread);
-  inline static void add_dependent_obj_list(void* nvm_obj, Thread* cur_thread);
+  inline static void add_dependent_obj_list(nvmOop nvm_obj, Thread* cur_thread);
 
   inline static void copy_dram_to_nvm(oop from, oop to, ptrdiff_t offset, BasicType type, bool is_array = false);
   inline static bool cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, BasicType type, bool is_array = false);
 
-  inline static void* allocate_nvm(int size, Thread* thr = NULL);
+  inline static nvmOop allocate_nvm(int size, Thread* thr = NULL);
 
   static void copy_object(oop obj);
-  static void copy_object_copy_step(oop obj, void* nvm_obj, Klass* klass,
+  static void copy_object_copy_step(oop obj, nvmOop nvm_obj, Klass* klass,
                                     NVMWorkListStack* worklist, NVMBarrierSync* barrier_sync,
                                     Thread* cur_thread);
-  static bool copy_object_verify_step(oop obj, void* nvm_obj, Klass* klass);
+  static bool copy_object_verify_step(oop obj, nvmOop nvm_obj, Klass* klass);
   static bool shade(oop obj, Thread* cur_thread);
 
 #ifdef ASSERT
@@ -54,8 +54,6 @@ class OurPersist : AllStatic {
   inline static bool is_volatile(oop obj, ptrdiff_t offset, DecoratorSet ds);
   inline static bool is_durableroot(oop klass_obj, ptrdiff_t offset, DecoratorSet ds);
   inline static bool needs_wupd(oop obj, ptrdiff_t offset, DecoratorSet ds, bool is_oop);
-  inline static Thread* responsible_thread(void* nvm_obj);
-  static Thread* responsible_thread_noinline(void* nvm_obj);
 
   static void ensure_recoverable(oop obj);
   static void mirror_create(Klass* klass, oop mirror);

@@ -124,12 +124,12 @@ inline void NVMBarrierSync::init() {
   _ref_count = 0;
 }
 
-inline void NVMBarrierSync::add(oop obj, void* nvm_obj, Thread* cur_thread) {
+inline void NVMBarrierSync::add(oop obj, nvmOop nvm_obj, Thread* cur_thread) {
   assert(obj != NULL, "");
   assert(obj->nvm_header().fwd() == nvm_obj, "");
   assert(nvmHeader::is_fwd(nvm_obj), "");
 
-  Thread* dependant_thread = OurPersist::responsible_thread(nvm_obj);
+  Thread* dependant_thread = nvm_obj->responsible_thread();
   if (dependant_thread == NULL || dependant_thread == cur_thread) {
     return;
   }

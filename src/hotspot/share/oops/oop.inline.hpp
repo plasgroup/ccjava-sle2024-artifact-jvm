@@ -33,7 +33,7 @@
 #include "oops/compressedOops.inline.hpp"
 #include "oops/markWord.inline.hpp"
 #ifdef OUR_PERSIST
-#include "oops/nvmHeader.inline.hpp"
+#include "oops/nvmHeader.hpp"
 #endif // OUR_PERSIST
 #include "oops/oop.hpp"
 #include "runtime/atomic.hpp"

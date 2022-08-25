@@ -4,9 +4,8 @@
 #define SHARE_OOPS_NVMHEADER_HPP
 
 #include "nvm/nvmMacro.hpp"
-#include "nvm/ourPersist.hpp"
 #include "oops/oopsHierarchy.hpp"
-#include "runtime/atomic.hpp"
+#include "nvm/oops/nvmOop.hpp"
 
 //
 // Bit-format of an object header (most significant first, big endian layout below):
@@ -67,9 +66,9 @@ class nvmHeader {
 
   static nvmHeader zero() { return nvmHeader(uintptr_t(0)); }
 
-  void* fwd() {
+  nvmOop fwd() {
     uintptr_t _fwd = _value & fwd_mask_in_place;
-    return (void*)_fwd;
+    return (nvmOop)_fwd;
   }
 
   uintptr_t flags() {
@@ -78,37 +77,38 @@ class nvmHeader {
   }
 
   bool recoverable() {
-    void* nvm_obj = fwd();
+    nvmOop nvm_obj = fwd();
     if (nvm_obj == NULL) {
       return false;
     }
-    return OurPersist::responsible_thread_noinline(nvm_obj) == NULL;
+    return nvm_obj->responsible_thread() == NULL;
   }
 
   // Checker
-  static bool is_null(void* _fwd);
-  static bool is_fwd(void* _fwd);
+  static bool is_null(nvmOop _fwd);
+  static bool is_fwd(nvmOop _fwd);
   bool is_locked() {
     return (flags() & lock_mask) != 0;
   }
 
   // Setter
   // WARNING: All setters are static functions.
-private:
-  inline static nvmHeader lock_unlock_base(oop obj, uintptr_t mask, bool is_lock);
-  inline static void* cas_fwd(oop obj, void* compare_fwd, void* after_fwd);
-public:
+ private:
+  static nvmHeader lock_unlock_base(oop obj, uintptr_t mask, bool is_lock);
+  static nvmOop cas_fwd(oop obj, nvmOop compare_fwd, nvmOop after_fwd);
+ public:
   inline static void set_header(HeapWord* mem, nvmHeader h);
   inline static void set_header(oop obj, nvmHeader h);
+  // NOTE: for nvmCardTableBarrierSet.hpp
+  static void set_header_no_inline(oop obj, nvmHeader h);
+  inline static void set_fwd(oop obj, nvmOop ptr);
 
-  inline static bool cas_fwd(oop obj, void* after_fwd);
-  // NOTE: for OurPersist::set_responsible_thread and OurPersist::clear_responsible_thread
-  inline static void set_fwd(oop obj, void* ptr);
+  static bool cas_fwd(oop obj, nvmOop after_fwd);
   // NOTE: unused
-  inline static bool cas_fwd_and_lock_when_swapped(oop obj, void* after_fwd);
+  static bool cas_fwd_and_lock_when_swapped(oop obj, nvmOop after_fwd);
 
-  inline static nvmHeader lock(oop obj);
-  inline static void unlock(oop obj);
+  static nvmHeader lock(oop obj);
+  static void unlock(oop obj);
 };
 
 #endif // SHARE_OOPS_NVMHEADER_HPP

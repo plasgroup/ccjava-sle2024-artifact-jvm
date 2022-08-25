@@ -3,8 +3,9 @@
 #ifndef NVM_OURPERSIST_INLINE_HPP
 #define NVM_OURPERSIST_INLINE_HPP
 
-#include "nvm/ourPersist.hpp"
 #include "nvm/nvmAllocator.hpp"
+#include "nvm/nvmMacro.hpp"
+#include "nvm/ourPersist.hpp"
 #include "oops/instanceMirrorKlass.hpp"
 #include "oops/klass.hpp"
 #include "oops/oop.inline.hpp"
@@ -167,31 +168,21 @@ inline bool OurPersist::needs_wupd(oop obj, ptrdiff_t offset, DecoratorSet ds, b
   return false;
 }
 
-inline void OurPersist::set_responsible_thread(void* nvm_obj, Thread* cur_thread) {
-  assert(nvmHeader::is_fwd(nvm_obj), "");
-  assert(cur_thread != NULL, "");
-
-  oop(nvm_obj)->set_mark(markWord::zero());
-
-  nvmHeader::set_fwd(oop(nvm_obj), (void*)cur_thread);
-}
-
 inline void OurPersist::clear_responsible_thread(Thread* cur_thread) {
   assert(cur_thread != NULL, "cur_thread: %p", cur_thread);
 
-  void* dependent_obj = cur_thread->dependent_obj_list_head();
+  nvmOop dependent_obj = cur_thread->dependent_obj_list_head();
 
   while (dependent_obj != NULL) {
-    oop cur_obj = oop(dependent_obj);
-    nvmHeader::set_fwd(cur_obj, NULL);
-    dependent_obj = cur_obj->mark().to_pointer();
+    dependent_obj->set_dependent_object_next(NULL);
+    dependent_obj = dependent_obj->dependent_object_next();
   }
 
   cur_thread->set_dependent_obj_list_head(NULL);
   cur_thread->set_dependent_obj_list_tail(NULL);
 }
 
-inline void OurPersist::add_dependent_obj_list(void* nvm_obj, Thread* cur_thread) {
+inline void OurPersist::add_dependent_obj_list(nvmOop nvm_obj, Thread* cur_thread) {
   if (cur_thread->dependent_obj_list_head() == NULL) {
     cur_thread->set_dependent_obj_list_head(nvm_obj);
   } else {
@@ -200,7 +191,7 @@ inline void OurPersist::add_dependent_obj_list(void* nvm_obj, Thread* cur_thread
   cur_thread->set_dependent_obj_list_tail(nvm_obj);
 }
 
-inline void* OurPersist::allocate_nvm(int word_size, Thread* thr) {
+inline nvmOop OurPersist::allocate_nvm(int word_size, Thread* thr) {
   NVM_COUNTER_ONLY(thr->nvm_counter()->inc_alloc_nvm(word_size);)
 
   void* mem = NVMAllocator::allocate(word_size);
@@ -211,8 +202,11 @@ inline void* OurPersist::allocate_nvm(int word_size, Thread* thr) {
   }
   assert(thr != NULL, "");
 
-  OurPersist::set_responsible_thread(mem, thr);
-  return mem;
+  nvmOop nvm_obj = (nvmOop)mem;
+  nvm_obj->set_responsible_thread(thr);
+  nvm_obj->set_dependent_object_next(NULL);
+
+  return nvm_obj;
 }
 
 inline void OurPersist::copy_dram_to_nvm(oop from, oop to, ptrdiff_t offset, BasicType type, bool is_array) {
@@ -294,7 +288,7 @@ inline bool OurPersist::cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, Ba
     jlong long_val;
     jshort short_val;
     jboolean bool_val;
-    oopDesc* oop_val;
+    void* oop_val;
   } v1, v2;
   v1.long_val = 0L;
   v2.long_val = 0L;
@@ -373,12 +367,6 @@ inline bool OurPersist::cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, Ba
       report_vm_error(__FILE__, __LINE__, "Illegal field type.");
   }
   return v1.long_val == v2.long_val;
-}
-
-inline Thread* OurPersist::responsible_thread(void* nvm_obj) {
-  assert(nvmHeader::is_fwd(nvm_obj), "nvm_obj: %p", nvm_obj);
-
-  return (Thread*)oop(nvm_obj)->nvm_header().fwd();
 }
 
 #endif // NVM_OURPERSIST_INLINE_HPP

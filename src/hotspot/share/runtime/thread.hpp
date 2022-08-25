@@ -55,8 +55,9 @@
 #include "jfr/support/jfrThreadExtension.hpp"
 #endif
 #ifdef OUR_PERSIST
-#include "nvm/nvmWorkListStack.hpp"
 #include "nvm/nvmBarrierSync.hpp"
+#include "nvm/nvmWorkListStack.hpp"
+#include "oops/nvmHeader.hpp"
 #ifdef USE_NVTLAB
 #include "nvm/nonVolatileThreadLocalAllocBuffer.hpp"
 #endif // USE_NVTLAB
@@ -157,8 +158,8 @@ class Thread: public ThreadShadow {
  private:
   NVMWorkListStack* _nvm_work_list;
   NVMBarrierSync*   _nvm_barrier_sync;
-  void* _dependent_obj_list_head;
-  void* _dependent_obj_list_tail;
+  nvmOop _dependent_obj_list_head;
+  nvmOop _dependent_obj_list_tail;
 #ifdef USE_NVTLAB_BUMP
   void* _nvtlab_bump_head;
   int   _nvtlab_bump_size;
@@ -167,8 +168,8 @@ class Thread: public ThreadShadow {
  public:
   NVMWorkListStack* nvm_work_list()  { return _nvm_work_list; }
   NVMBarrierSync* nvm_barrier_sync() { return _nvm_barrier_sync; }
-  void* dependent_obj_list_head() { return _dependent_obj_list_head; }
-  void* dependent_obj_list_tail() { return _dependent_obj_list_tail; }
+  nvmOop dependent_obj_list_head() { return _dependent_obj_list_head; }
+  nvmOop dependent_obj_list_tail() { return _dependent_obj_list_tail; }
 #ifdef USE_NVTLAB_BUMP
   void* nvtlab_bump_head() { return _nvtlab_bump_head; }
   int   nvtlab_bump_size() { return _nvtlab_bump_size; }
@@ -181,8 +182,8 @@ class Thread: public ThreadShadow {
   void set_nvm_barrier_sync(NVMBarrierSync* val) { _nvm_barrier_sync = val; }
 
  public:
-  void set_dependent_obj_list_head(void* val) { _dependent_obj_list_head = val; }
-  void set_dependent_obj_list_tail(void* val) { _dependent_obj_list_tail = val; }
+  void set_dependent_obj_list_head(nvmOop val) { _dependent_obj_list_head = val; }
+  void set_dependent_obj_list_tail(nvmOop val) { _dependent_obj_list_tail = val; }
 #endif // OUR_PERSIST
 
 #ifdef NVM_COUNTER

@@ -7,6 +7,7 @@
 #include "nvm/nvmMacro.hpp"
 #include "nvm/nvmWorkListStack.hpp"
 #include "nvm/oops/nvmMirrorOop.hpp"
+#include "nvm/oops/nvmOop.hpp"
 #include "nvm/ourPersist.inline.hpp"
 #include "oops/arrayKlass.hpp"
 #include "oops/fieldStreams.inline.hpp"
@@ -32,10 +33,6 @@ int OurPersist::_started = our_persist_true;
 int OurPersist::_started = our_persist_unknown;
 #endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
 
-Thread* OurPersist::responsible_thread_noinline(void* nvm_obj) {
-  return OurPersist::responsible_thread(nvm_obj);
-}
-
 void OurPersist::ensure_recoverable(oop obj) {
 #ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
   ShouldNotReachHere();
@@ -58,7 +55,7 @@ void OurPersist::ensure_recoverable(oop obj) {
   barrier_sync->init();
 
   bool success = OurPersist::shade(obj, cur_thread);
-  void* nvm_obj = obj->nvm_header().fwd();
+  nvmOop nvm_obj = obj->nvm_header().fwd();
   if (!success) {
     barrier_sync->add(obj, nvm_obj, cur_thread);
     barrier_sync->sync();
@@ -67,7 +64,7 @@ void OurPersist::ensure_recoverable(oop obj) {
 
   assert(nvm_obj == obj->nvm_header().fwd(),
          "nvm_obj: %p, fwd: %p", nvm_obj, obj->nvm_header().fwd());
-  assert(responsible_thread(obj->nvm_header().fwd()) == Thread::current(),
+  assert(nvm_obj->responsible_thread() == Thread::current(),
          "fwd: %p", obj->nvm_header().fwd());
   worklist->add(obj);
 
@@ -75,7 +72,7 @@ void OurPersist::ensure_recoverable(oop obj) {
 
   while (worklist->empty() == false) {
     oop cur_obj = worklist->remove();
-    void* cur_nvm_obj = cur_obj->nvm_header().fwd();
+    nvmOop cur_nvm_obj = cur_obj->nvm_header().fwd();
 
     NVM_COUNTER_ONLY(cur_thread->nvm_counter()->inc_persistent_obj(cur_obj->size());)
 
@@ -90,7 +87,7 @@ void OurPersist::ensure_recoverable(oop obj) {
   OurPersist::clear_responsible_thread(cur_thread);
 }
 
-void OurPersist::copy_object_copy_step(oop obj, void* nvm_obj, Klass* klass,
+void OurPersist::copy_object_copy_step(oop obj, nvmOop nvm_obj, Klass* klass,
                                        NVMWorkListStack* worklist, NVMBarrierSync* barrier_sync,
                                        Thread* cur_thread) {
   // begin "for f in obj.fields"
@@ -115,7 +112,7 @@ void OurPersist::copy_object_copy_step(oop obj, void* nvm_obj, Klass* klass,
           typedef CardTableBarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet> Parent;
           typedef BarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet> Raw;
           oop v = Parent::oop_load_in_heap_at(obj, field_offset);
-          void* nvm_v = NULL;
+          nvmOop nvm_v = NULL;
 
           if (v != NULL && OurPersist::is_target(v->klass())) {
             if (v->nvm_header().recoverable()) {
@@ -125,9 +122,7 @@ void OurPersist::copy_object_copy_step(oop obj, void* nvm_obj, Klass* klass,
               nvm_v = v->nvm_header().fwd();
               assert(nvmHeader::is_fwd(nvm_v), "nvm_v: %p", nvm_v);
               if (success) {
-                assert(responsible_thread(v->nvm_header().fwd()) == Thread::current(),
-                       "fwd: %p", v->nvm_header().fwd());
-
+                assert(nvm_v->responsible_thread() == Thread::current(), "fwd: %p", nvm_v);
                 worklist->add(v);
               } else {
                 barrier_sync->add(v, nvm_v, cur_thread);
@@ -159,7 +154,7 @@ void OurPersist::copy_object_copy_step(oop obj, void* nvm_obj, Klass* klass,
       typedef BarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet> Raw;
       oop v = Parent::oop_load_in_heap_at(obj, field_offset);
 
-      void* nvm_v = NULL;
+      nvmOop nvm_v = NULL;
       if (v != NULL && OurPersist::is_target(v->klass())) {
         if (v->nvm_header().recoverable()) {
           nvm_v = v->nvm_header().fwd();
@@ -168,9 +163,7 @@ void OurPersist::copy_object_copy_step(oop obj, void* nvm_obj, Klass* klass,
           nvm_v = v->nvm_header().fwd();
           assert(nvmHeader::is_fwd(nvm_v), "nvm_v: %p", nvm_v);
           if (success) {
-            assert(responsible_thread(v->nvm_header().fwd()) == Thread::current(),
-                   "fwd: %p", v->nvm_header().fwd());
-
+            assert(nvm_v->responsible_thread() == Thread::current(), "fwd: %p", nvm_v);
             worklist->add(v);
           } else {
             barrier_sync->add(v, nvm_v, cur_thread);
@@ -197,7 +190,7 @@ void OurPersist::copy_object_copy_step(oop obj, void* nvm_obj, Klass* klass,
   // end "for f in obj.fields"
 }
 
-bool OurPersist::copy_object_verify_step(oop obj, void* nvm_obj, Klass* klass) {
+bool OurPersist::copy_object_verify_step(oop obj, nvmOop nvm_obj, Klass* klass) {
   // begin "for f in obj.fields"
   if (klass->is_instance_klass()) {
     Klass* cur_k = klass;
@@ -267,11 +260,11 @@ bool OurPersist::copy_object_verify_step(oop obj, void* nvm_obj, Klass* klass) {
 void OurPersist::copy_object(oop obj) {
   assert(obj != NULL, "obj: %p", OOP_TO_VOID(obj));
   assert(obj->nvm_header().fwd() != NULL, "fwd: %p", obj->nvm_header().fwd());
-  assert(responsible_thread(obj->nvm_header().fwd()) == Thread::current(),
+  assert(obj->nvm_header().fwd()->responsible_thread() == Thread::current(),
          "fwd: %p", obj->nvm_header().fwd());
 
   Klass* klass = obj->klass();
-  void* nvm_obj = obj->nvm_header().fwd();
+  nvmOop nvm_obj = obj->nvm_header().fwd();
   size_t obj_size = obj->size() * HeapWordSize;
 
   Thread* cur_thread = Thread::current();
@@ -304,9 +297,9 @@ void OurPersist::copy_object(oop obj) {
 }
 
 bool OurPersist::shade(oop obj, Thread* cur_thread) {
-  void* nvm_obj = OurPersist::allocate_nvm(obj->size(), cur_thread);
-  void** klass_raw_mem = (void**)((char*)nvm_obj + oopDesc::klass_offset_in_bytes());
-  *klass_raw_mem = obj->klass()->java_mirror()->nvm_header().fwd();
+  nvmOop nvm_obj = OurPersist::allocate_nvm(obj->size(), cur_thread);
+  nvmMirrorOop nvm_mirror = nvmMirrorOop(obj->klass()->java_mirror()->nvm_header().fwd());
+  nvm_obj->set_klass(nvm_mirror);
   bool success = nvmHeader::cas_fwd(obj, nvm_obj);
   if (!success) {
     // TODO: nvm release

@@ -93,7 +93,7 @@ void NVMDebug::print_dram_and_nvm_val(oop dram_obj, ptrdiff_t offset, BasicType 
   v2.long_val = 0L;
   v3.long_val = 0L;
 
-  void* nvm_fwd = dram_obj->nvm_header().fwd();
+  nvmOop nvm_fwd = dram_obj->nvm_header().fwd();
   oop nvm_obj = nvmHeader::is_fwd(nvm_fwd) ? oop(nvm_fwd) : NULL;
 
   switch(type) {
@@ -216,7 +216,7 @@ void NVMDebug::print_dram_and_nvm_obj(oop dram_obj) {
   }
 }
 
-bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
+bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, nvmOop nvm_obj, ptrdiff_t offset,
                                     BasicType type, AccessFlags field_flags) {
   const DecoratorSet ds = MO_UNORDERED | AS_NORMAL | IN_HEAP;
   typedef CardTableBarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet> Parent;
@@ -242,49 +242,49 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
     case T_BYTE:
       {
         v1.byte_val = Parent::load_in_heap_at<jbyte>(dram_obj, offset);
-        v2.byte_val = Raw::load_in_heap_at<jbyte>(nvm_obj, offset);
+        v2.byte_val = Raw::load_in_heap_at<jbyte>((oop)nvm_obj, offset);
         break;
       }
     case T_CHAR:
       {
         v1.char_val = Parent::load_in_heap_at<jchar>(dram_obj, offset);
-        v2.char_val = Raw::load_in_heap_at<jchar>(nvm_obj, offset);
+        v2.char_val = Raw::load_in_heap_at<jchar>((oop)nvm_obj, offset);
         break;
       }
     case T_DOUBLE:
       {
         v1.double_val = Parent::load_in_heap_at<jdouble>(dram_obj, offset);
-        v2.double_val = Raw::load_in_heap_at<jdouble>(nvm_obj, offset);
+        v2.double_val = Raw::load_in_heap_at<jdouble>((oop)nvm_obj, offset);
         break;
       }
     case T_FLOAT:
       {
         v1.float_val = Parent::load_in_heap_at<jfloat>(dram_obj, offset);
-        v2.float_val = Raw::load_in_heap_at<jfloat>(nvm_obj, offset);
+        v2.float_val = Raw::load_in_heap_at<jfloat>((oop)nvm_obj, offset);
         break;
       }
     case T_INT:
       {
         v1.int_val = Parent::load_in_heap_at<jint>(dram_obj, offset);
-        v2.int_val = Raw::load_in_heap_at<jint>(nvm_obj, offset);
+        v2.int_val = Raw::load_in_heap_at<jint>((oop)nvm_obj, offset);
         break;
       }
     case T_LONG:
       {
         v1.long_val = Parent::load_in_heap_at<jlong>(dram_obj, offset);
-        v2.long_val = Raw::load_in_heap_at<jlong>(nvm_obj, offset);
+        v2.long_val = Raw::load_in_heap_at<jlong>((oop)nvm_obj, offset);
         break;
       }
     case T_SHORT:
       {
         v1.short_val = Parent::load_in_heap_at<jshort>(dram_obj, offset);
-        v2.short_val = Raw::load_in_heap_at<jshort>(nvm_obj, offset);
+        v2.short_val = Raw::load_in_heap_at<jshort>((oop)nvm_obj, offset);
         break;
       }
     case T_BOOLEAN:
       {
         v1.bool_val = Parent::load_in_heap_at<jboolean>(dram_obj, offset) & 0x1;
-        v2.bool_val = Raw::load_in_heap_at<jboolean>(nvm_obj, offset) & 0x1;
+        v2.bool_val = Raw::load_in_heap_at<jboolean>((oop)nvm_obj, offset) & 0x1;
         break;
       }
     case T_OBJECT:
@@ -305,7 +305,7 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
         }
 
         v1.oop_val = oop(dram_v != NULL ? dram_v->nvm_header().fwd() : NULL);
-        v2.oop_val = oop(Raw::oop_load_in_heap_at(nvm_obj, offset));
+        v2.oop_val = oop(Raw::oop_load_in_heap_at((oop)nvm_obj, offset));
 
         if (v1.long_val != v2.long_val) {
           tty->print("dram_obj: %p, is_recoverable: %d, is_target: %d\n",
@@ -329,7 +329,7 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, oop nvm_obj, ptrdiff_t offset,
 bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
   assert(!dram_obj->nvm_header().is_locked(), "");
 
-  oop nvm_obj = oop(dram_obj->nvm_header().fwd());
+  nvmOop nvm_obj = dram_obj->nvm_header().fwd();
   if (nvm_obj == NULL) {
     // tty->print("doesn't have nvm copy.\n");
     return true;
@@ -350,7 +350,7 @@ bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
       // tty->print("ik: mirror klass.\n");
       // return true;
       for (int i = oopDesc::header_size() * HeapWordSize; i < InstanceMirrorKlass::offset_of_static_fields(); i++) {
-        char v = nvm_obj->char_field(i);
+        char v = oop(nvm_obj)->char_field(i);
         if (v != 0) {
           //tty->print("nvm mirror klass has non-zero field: %d\n", i);
           //return false;

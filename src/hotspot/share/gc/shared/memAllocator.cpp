@@ -30,6 +30,7 @@
 #include "memory/universe.hpp"
 #include "nvm/nvmCounter.hpp"
 #include "oops/arrayOop.hpp"
+#include "oops/nvmHeader.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "precompiled.hpp"
 #include "prims/jvmtiExport.hpp"

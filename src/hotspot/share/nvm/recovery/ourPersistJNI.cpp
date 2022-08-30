@@ -62,6 +62,13 @@ JVM_ENTRY(static void, OurPersist_killMe(JNIEnv *env, jclass clazz))
   NVMRecovery::killMe(env, clazz, THREAD);
 JVM_END
 
+JVM_ENTRY(static jstring, OurPersist_mode(JNIEnv *env, jclass clazz))
+  if (!OurPersist::enable()) {
+    THROW_MSG_NULL(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
+  }
+  return NVMRecovery::mode(env, clazz, THREAD);
+JVM_END
+
 #define LANG "Ljava/lang/"
 #define OBJ LANG "Object;"
 #define STRING LANG "String;"
@@ -80,6 +87,7 @@ static JNINativeMethod ourpersist_methods[] = {
   {CC "recoveryDramCopy", CC "([" OBJ "[" CLASS "" STRING ")V", FN_PTR(OurPersist_recoveryDramCopy)},
 
   {CC "killMe", CC "()V", FN_PTR(OurPersist_killMe)},
+  {CC "mode", CC "()" STRING "", FN_PTR(OurPersist_mode)},
 };
 
 #undef LANG

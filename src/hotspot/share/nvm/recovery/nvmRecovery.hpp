@@ -35,6 +35,7 @@ class NVMRecovery : AllStatic {
   static void recoveryDramCopy(JNIEnv *env, jclass clazz, jobjectArray dram_copy_list,
                              jobjectArray classes, jstring nvm_file_path, TRAPS);
   static void killMe(JNIEnv *env, jclass clazz, TRAPS);
+  static jstring mode(JNIEnv *env, jclass clazz, TRAPS);
 };
 
 class VM_OurPersistRecoveryInit: public VM_Operation {

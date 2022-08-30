@@ -42,6 +42,7 @@ public class Recovery {
   private static native void recoveryDramCopy(Object[] dramCopyList, Class<?>[] classes, String nvmFilePath);
 
   public static native void killMe();
+  public static native String mode();
 
   public static void init(String nvmFilePath) {
     if (nvmFilePath == null) {

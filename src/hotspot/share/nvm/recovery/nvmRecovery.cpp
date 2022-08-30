@@ -9,13 +9,17 @@
 #include "classfile/vmSymbols.hpp"
 #include "jvmci/compilerRuntime.hpp"
 #include "nvm/oops/nvmMirrorOop.hpp"
+#include "nvm/ourPersist.inline.hpp"
 #include "nvm/recovery/nvmRecovery.hpp"
+#include "nvm/recovery/nvmRecoveryWorkListStack.hpp"
 #include "oops/arrayOop.inline.hpp"
 #include "oops/instanceKlass.inline.hpp"
+#include "oops/instanceMirrorKlass.hpp"
 #include "oops/instanceOop.hpp"
 #include "oops/klass.inline.hpp"
 #include "oops/markWord.hpp"
 #include "oops/method.hpp"
+#include "oops/nvmHeader.inline.hpp"
 #include "oops/objArrayKlass.hpp"
 #include "oops/objArrayOop.inline.hpp"
 #include "oops/oop.inline.hpp"
@@ -108,8 +112,20 @@ void NVMRecovery::recoveryDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_
 }
 
 void NVMRecovery::killMe(JNIEnv *env, jclass clazz, TRAPS) {
-  //os::signal_raise(SIGTRAP);
   os::signal_raise(SIGKILL);
+}
+
+jstring NVMRecovery::mode(JNIEnv* env, jclass clazz, TRAPS) {
+  const char* mode = "DEFAULT";
+#ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
+  mode = "OURPERSIST_DURABLEROOTS_ALL_TRUE";
+#endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
+#ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
+  mode = "OURPERSIST_DURABLEROOTS_ALL_FALSE";
+#endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
+
+  Handle str = java_lang_String::create_from_str(mode, CHECK_NULL);
+  return jstring(JNIHandles::make_local(str()));
 }
 
 class OurPersistSetNvmMirrors : public KlassClosure {

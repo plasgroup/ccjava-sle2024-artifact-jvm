@@ -89,26 +89,241 @@ jobjectArray NVMRecovery::nvmCopyClassNames(JNIEnv* env, jclass clazz, jstring n
   return res;
 }
 
-// TODO: implement
-void NVMRecovery::createDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_copy_list,
-                                 jobjectArray classes, jstring nvm_file_path, TRAPS) {
-  THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "NVMRecovery::createDramCopy not implemented");
+oop resolve_class_oop(objArrayOop classes, const char* name) {
+  int len = classes->length();
+  for (int i = 0; i < len; i++) {
+    oop obj = classes->obj_at(i);
+    Klass* k = java_lang_Class::as_Klass(obj);
+    const char* str = k->name()->as_C_string();
+    if (strcmp(str, name) == 0) {
+      return obj;
+    }
+  }
 
   // DEBUG:
-  // Symbol* sym = SymbolTable::new_symbol(str);
-  // Klass* k = SystemDictionary::resolve_or_null(sym, CHECK_NULL);
-  //Klass* a = Universe::intArrayKlassObj();
-  //assert(a != NULL && a->is_typeArray_klass(), "sanity check");
-  //TypeArrayKlass* tak = TypeArrayKlass::cast(a);
-  //typeArrayOop tao = tak->allocate(10, THREAD);
-  //assert(tao != NULL, "sanity check");
-  //jobjectArray res = jobjectArray(JNIHandles::make_local(tao));
+  //Symbol* sym = SymbolTable::new_symbol(name);
+  // FIXME: thread --> CHECK_NULL
+  //Klass* k = SystemDictionary::resolve_or_null(sym, Thread::current());
+  //if (k == NULL) {
+  //  return NULL;
+  //}
+  //return k->java_mirror();
+
+  return NULL;
+}
+
+jclass resolve_class(jobjectArray classes, const char* name) {
+  objArrayOop ary = objArrayOop(JNIHandles::resolve(classes));
+  oop res = resolve_class_oop(ary, name);
+  if (res == NULL) {
+    return NULL;
+  }
+  return (jclass)JNIHandles::make_local(res);;
+}
+
+void NVMRecovery::createDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_copy_list,
+                                 jobjectArray classes, jstring nvm_file_path, TRAPS) {
+  // FIXME:
+  //NVMRecoveryWorkListStack worklist;
+  NVMRecoveryWorkListStack* worklist = new NVMRecoveryWorkListStack();
+
+  // Collect all nvm mirrors
+  NVMAllocator::init();
+  nvmMirrorOopDesc* head = (nvmMirrorOopDesc*)0x700000000000;
+  nvmMirrorOopDesc* cur = head;
+  while (cur != NULL) {
+    const char* name = cur->klass_name();
+    jclass jc = resolve_class(classes, name);
+    assert(jc != NULL, "class not found, name: %s", name);
+    Klass* klass = java_lang_Class::as_Klass(JNIHandles::resolve(jc));
+    assert(klass != NULL, "klass is null");
+
+    // DEBUG:
+    tty->print_cr("-- obj -- cur: %p", cur);
+
+    if (klass->is_instance_klass()) {
+      Klass* cur_k = klass;
+      while (cur_k != NULL) {
+        InstanceKlass* ik = InstanceKlass::cast(cur_k);
+        int cnt = ik->java_fields_count();
+
+        // DEBUG:
+        tty->print_cr("-- klass -- name: %s", cur_k->name()->as_C_string());
+
+        for (int i = 0; i < cnt; i++) {
+          AccessFlags field_flags = accessFlags_from(ik->field_access_flags(i));
+          Symbol* field_sig = ik->field_signature(i);
+          field_sig->type();
+          BasicType field_type = Signature::basic_type(field_sig);
+          int field_offset = ik->field_offset(i);
+          if (!field_flags.is_durableroot()) {
+            continue;
+          }
+          assert(is_reference_type(field_type), "field is not reference");
+          assert(field_flags.is_static(), "field is not static");
+
+          nvmOop nvm_v = nvmOopDesc::load_at<nvmOop>(cur, field_offset);
+          if (nvm_v == NULL) {
+            continue;
+          }
+          // DEBUG:
+          tty->print_cr("nvm_copy: %p, offset: %d, %s.%s: %p",
+            cur, field_offset, ik->name()->as_C_string(), ik->field_name(i)->as_C_string(), nvm_v);
+          if (!nvm_v->mark()) {
+            nvm_v->set_mark();
+            worklist->add(nvm_v);
+          }
+        }
+        // DEBUG:
+        //cur_k = cur_k->super();
+        cur_k = NULL;
+      }
+    }
+
+    cur = cur->class_list_next();
+  }
+
+  // Get dram_copy_list length
+  int list_length;
+  {
+    oop dram_copy_list_oop = JNIHandles::resolve(dram_copy_list);
+    if (dram_copy_list_oop == NULL) {
+      THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "dram_copy_list is null");
+    }
+    list_length = objArrayOop(dram_copy_list_oop)->length();
+  }
+  int list_count = 0;
+
+  // Collect reachable objects
+  while (worklist->empty() == false) {
+    nvmOop obj = worklist->remove();
+    const char* name = obj->klass()->klass_name();
+    jclass jc = resolve_class(classes, name);
+    Klass* klass = java_lang_Class::as_Klass(JNIHandles::resolve(jc));
+
+    tty->print_cr("NVMRecovery::createDramCopy: %s", name); // DEBUG:
+
+    // Create a new object in DRAM and add it to dram_copy_list
+    {
+      // Check empty slot
+      if (list_count == list_length - 1) {
+        Klass* k = Universe::objectArrayKlassObj();
+        assert(k != NULL && k->is_objArray_klass(), "sanity check");
+        ObjArrayKlass* oak = ObjArrayKlass::cast(k);
+        objArrayOop next = oak->allocate(list_length, THREAD);
+        if (next == NULL) {
+          THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "Out of memory");
+        }
+
+        objArrayOop prev = objArrayOop(JNIHandles::resolve(dram_copy_list));
+        prev->obj_at_put(list_count, next);
+        dram_copy_list = jobjectArray(JNIHandles::make_local(next));
+        list_count = 0;
+      }
+
+      // Allocate dram copy
+      oop dram_copy;
+      if (klass->is_instance_klass()) {
+        InstanceKlass* ik = InstanceKlass::cast(klass);
+        dram_copy = ik->allocate_instance(THREAD);
+      } else if (klass->is_objArray_klass()) {
+        ObjArrayKlass* oak = ObjArrayKlass::cast(klass);
+        int array_length = objArrayOop(obj)->length();
+        objArrayOop new_obj = oak->allocate(array_length, THREAD);
+        new_obj->set_length(array_length);
+        dram_copy = new_obj;
+      } else if (klass->is_typeArray_klass()) {
+        TypeArrayKlass* tak = TypeArrayKlass::cast(klass);
+        int array_length = typeArrayOop(obj)->length();
+        typeArrayOop new_obj = tak->allocate(array_length, THREAD);
+        new_obj->set_length(array_length);
+        dram_copy = new_obj;
+      } else {
+        THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "Unknown klass type");
+      }
+      if (dram_copy == NULL) {
+        THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "Out of memory");
+      }
+
+      // Set forwardinng pointer to nvm copy
+      nvmHeader::set_fwd(dram_copy, obj);
+
+      // Add to dram_copy_list
+      oop obj_oop = JNIHandles::resolve(dram_copy_list);
+      assert(obj_oop != NULL, "dram_copy_list is null");
+      objArrayOop obj_ary = objArrayOop(obj_oop);
+      obj_ary->obj_at_put(list_count, dram_copy);
+      list_count++;
+    }
+
+    // begin "for f in obj.fields"
+    if (klass->is_instance_klass()) {
+      Klass* cur_k = klass;
+      while (cur_k != NULL) {
+        InstanceKlass* ik = (InstanceKlass*)cur_k;
+        int cnt = ik->java_fields_count();
+
+        for (int i = 0; i < cnt; i++) {
+          AccessFlags field_flags = accessFlags_from(ik->field_access_flags(i));
+          Symbol* field_sig = ik->field_signature(i);
+          BasicType field_type = Signature::basic_type(field_sig);
+          int field_offset = ik->field_offset(i);
+
+          if (field_flags.is_static()) {
+            continue;
+          }
+          if (is_java_primitive(field_type)) {
+            continue;
+          }
+
+          nvmOop nvm_v = nvmOopDesc::load_at<nvmOop>(obj, field_offset);
+          if (nvm_v == NULL) {
+            continue;
+          }
+          if (!nvm_v->mark()) {
+            nvm_v->set_mark();
+            worklist->add(nvm_v);
+          }
+        }
+        cur_k = cur_k->super();
+      }
+    } else if (klass->is_objArray_klass()) {
+      ObjArrayKlass* ak = (ObjArrayKlass*)klass;
+      BasicType array_type = ((ArrayKlass*)ak)->element_type();
+
+      objArrayOop ao = (objArrayOop)obj;
+      int array_length = ao->length();
+
+      for (int i = 0; i < array_length; i++) {
+        ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
+
+        nvmOop nvm_v = nvmOopDesc::load_at<nvmOop>(obj, field_offset);
+        if (nvm_v == NULL) {
+          continue;
+        }
+        if (!nvm_v->mark()) {
+          nvm_v->set_mark();
+          worklist->add(nvm_v);
+        }
+      }
+    } else if (klass->is_typeArray_klass()) {
+      // nothing to do
+    } else {
+      report_vm_error(__FILE__, __LINE__, "Illegal field type.");
+    }
+    // end "for f in obj.fields"
+  }
 }
 
 // TODO: implement
 void NVMRecovery::recoveryDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_copy_list,
                                    jobjectArray classes, jstring nvm_file_path, TRAPS) {
-  THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "NVMRecovery::recoveryDramCopy not implemented");
+  VM_OurPersistRecoveryDramCopy op(env, clazz, dram_copy_list, classes, nvm_file_path);
+  VMThread::execute(&op);
+
+  if (op.result() == JNI_FALSE) {
+    THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "NVMRecovery::recoveryDramCopy failed");
+  }
 }
 
 void NVMRecovery::killMe(JNIEnv *env, jclass clazz, TRAPS) {

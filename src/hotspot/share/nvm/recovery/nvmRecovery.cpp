@@ -34,22 +34,53 @@
 Symbol* NVMRecovery::_ourpersist_recovery_exception = NULL;
 // DEBUG:
 int NVMRecovery::create_mirror_count = 0;
+#define NVM_FILE_PATH_MAX_SIZE 1024
+bool NVMRecovery::_init_nvm = false;
+char NVMRecovery::_nvm_path[NVM_FILE_PATH_MAX_SIZE] = {0};
+
+void NVMRecovery::check_nvm_loaded(jstring nvm_file_path, TRAPS) {
+  const char* nvm_file_path_cstr =
+    java_lang_String::as_utf8_string(JNIHandles::resolve(nvm_file_path));
+  if (!NVMRecovery::_init_nvm) {
+    THROW_MSG(ourpersist_recovery_exception(), "NVM file has not been initialized");
+  }
+  if (strcmp(NVMRecovery::_nvm_path, nvm_file_path_cstr) != 0) {
+    THROW_MSG(ourpersist_recovery_exception(),
+      "This implementation does not support multiple NVM files");
+  }
+}
+
+void NVMRecovery::initNvmFile(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
+  if (NVMRecovery::_init_nvm) {
+    THROW_MSG(ourpersist_recovery_exception(), "NVM file has been initialized");
+  }
+  const char* nvm_file_path_cstr =
+    java_lang_String::as_utf8_string(JNIHandles::resolve(nvm_file_path));
+  if (strlen(nvm_file_path_cstr) >= NVM_FILE_PATH_MAX_SIZE) {
+    THROW_MSG(ourpersist_recovery_exception(), "NVM file path is too long");
+  }
+
+  NVMAllocator::init(nvm_file_path_cstr);
+
+  NVMRecovery::_init_nvm = true;
+  strcpy(NVMRecovery::_nvm_path, nvm_file_path_cstr);
+
+  NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK);
+  if (HAS_PENDING_EXCEPTION) return;
+}
 
 // TODO: implement
 jboolean NVMRecovery::exists(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
-/*
-  const char *nvm_file_path_cstr = env->GetStringUTFChars(nvm_file_path, NULL);
-  if (nvm_file_path_cstr == NULL) {
-    return JNI_FALSE;
-  }
-  // DEBUG:
-  tty->print_cr("NVMRecovery::exists: %s", nvm_file_path_cstr);
-*/
-  //tty->print_cr("thread state: %d", THREAD->as_Java_thread()->thread_state());
+  NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK_0);
+  if (HAS_PENDING_EXCEPTION) return JNI_FALSE;
+
   return JNI_TRUE;
 }
 
 void NVMRecovery::initInternal(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
+  NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK);
+  if (HAS_PENDING_EXCEPTION) return;
+
   VM_OurPersistRecoveryInit op(env, clazz, nvm_file_path);
   VMThread::execute(&op);
   if (op.result() == JNI_FALSE) {
@@ -57,13 +88,10 @@ void NVMRecovery::initInternal(JNIEnv* env, jclass clazz, jstring nvm_file_path,
   }
 }
 
-// TODO: implement
-void NVMRecovery::createNvmFile(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
-  THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "NVMRecovery::createNvmFile not implemented");
-}
-
 jobjectArray NVMRecovery::nvmCopyClassNames(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
-  NVMAllocator::init();
+  NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK_NULL);
+  if (HAS_PENDING_EXCEPTION) return NULL;
+
   nvmMirrorOopDesc* head = (nvmMirrorOopDesc*)0x700000000000;
 
   nvmMirrorOopDesc* cur = head;
@@ -123,12 +151,13 @@ jclass resolve_class(jobjectArray classes, const char* name) {
 
 void NVMRecovery::createDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_copy_list,
                                  jobjectArray classes, jstring nvm_file_path, TRAPS) {
-  // FIXME:
-  //NVMRecoveryWorkListStack worklist;
+  NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK);
+  if (HAS_PENDING_EXCEPTION) return;
+
+  // FIXME: delete cheap
   NVMRecoveryWorkListStack* worklist = new NVMRecoveryWorkListStack();
 
   // Collect all nvm mirrors
-  NVMAllocator::init();
   nvmMirrorOopDesc* head = (nvmMirrorOopDesc*)0x700000000000;
   nvmMirrorOopDesc* cur = head;
   while (cur != NULL) {
@@ -318,6 +347,9 @@ void NVMRecovery::createDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_co
 // TODO: implement
 void NVMRecovery::recoveryDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_copy_list,
                                    jobjectArray classes, jstring nvm_file_path, TRAPS) {
+  NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK);
+  if (HAS_PENDING_EXCEPTION) return;
+
   VM_OurPersistRecoveryDramCopy op(env, clazz, dram_copy_list, classes, nvm_file_path);
   VMThread::execute(&op);
 
@@ -428,7 +460,6 @@ void VM_OurPersistRecoveryDramCopy::doit() {
     }
   }
   {
-    NVMAllocator::init();
     nvmMirrorOopDesc* head = (nvmMirrorOopDesc*)0x700000000000;
     nvmMirrorOopDesc* cur = head;
     while (cur != NULL) {
@@ -518,7 +549,6 @@ void VM_OurPersistRecoveryDramCopy::doit() {
   }
 
   // Set all durableroots and init allocator
-  NVMAllocator::init();
   //NVMAllocator::nvm_head = (nvmMirrorOopDesc*)0x700000100000; // DEBUG:
   nvmMirrorOopDesc* head = (nvmMirrorOopDesc*)0x700000000000;
   nvmMirrorOopDesc::class_list_head = head;
@@ -585,7 +615,6 @@ void VM_OurPersistRecoveryDramCopy::doit() {
     }
   }
   {
-    NVMAllocator::init();
     nvmMirrorOopDesc* head = (nvmMirrorOopDesc*)0x700000000000;
     nvmMirrorOopDesc* cur = head;
     while (cur != NULL) {

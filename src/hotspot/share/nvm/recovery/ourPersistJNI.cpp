@@ -9,6 +9,13 @@
 #include "runtime/interfaceSupport.inline.hpp"
 #include "utilities/exceptions.hpp"
 
+JVM_ENTRY(static void, OurPersist_initNvmFile(JNIEnv *env, jclass clazz, jstring nvm_file_path))
+  if (!OurPersist::enable()) {
+    THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
+  }
+  NVMRecovery::initNvmFile(env, clazz, nvm_file_path, THREAD);
+JVM_END
+
 JVM_ENTRY(static jboolean, OurPersist_exists(JNIEnv *env, jclass clazz, jstring nvm_file_path))
   if (!OurPersist::enable()) {
     THROW_MSG_0(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
@@ -21,13 +28,6 @@ JVM_ENTRY(static void, OurPersist_initInternal(JNIEnv *env, jclass clazz, jstrin
     THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
   }
   NVMRecovery::initInternal(env, clazz, nvm_file_path, THREAD);
-JVM_END
-
-JVM_ENTRY(static void, OurPersist_createNvmFile(JNIEnv *env, jclass clazz, jstring nvm_file_path))
-  if (!OurPersist::enable()) {
-    THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
-  }
-  NVMRecovery::createNvmFile(env, clazz, nvm_file_path, THREAD);
 JVM_END
 
 JVM_ENTRY(static jobjectArray, OurPersist_nvmCopyClassNames(JNIEnv *env, jclass clazz, jstring nvm_file_path))
@@ -77,10 +77,10 @@ JVM_END
 #define FN_PTR(f) CAST_FROM_FN_PTR(void*, &f)
 
 static JNINativeMethod ourpersist_methods[] = {
+  {CC "initNvmFile", CC "(" STRING ")V", FN_PTR(OurPersist_initNvmFile)},
   {CC "exists", CC "(" STRING ")Z", FN_PTR(OurPersist_exists)},
 
   {CC "initInternal", CC "(" STRING ")V", FN_PTR(OurPersist_initInternal)},
-  {CC "createNvmFile", CC "(" STRING ")V", FN_PTR(OurPersist_createNvmFile)},
 
   {CC "nvmCopyClassNames", CC "(" STRING ")[" STRING "", FN_PTR(OurPersist_nvmCopyClassNames)},
   {CC "createDramCopy", CC "([" OBJ "[" CLASS "" STRING ")V", FN_PTR(OurPersist_createDramCopy)},

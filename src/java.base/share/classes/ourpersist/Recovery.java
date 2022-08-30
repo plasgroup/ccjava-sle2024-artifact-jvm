@@ -30,11 +30,11 @@ public class Recovery {
     super();
   }
 
+  public static native void initNvmFile(String nvmFilePath);
   public static native boolean exists(String nvmFilePath);
 
   // public static void init(String nvmFilePath);
-  public static native void initInternal(String nvmFilePath);
-  public static native void createNvmFile(String nvmFilePath);
+  private static native void initInternal(String nvmFilePath);
 
   // public static void recovery(ClassLoader[] classLoaders, String nvmFilePath);
   private static native String[] nvmCopyClassNames(String nvmFilePath);
@@ -48,10 +48,6 @@ public class Recovery {
     if (nvmFilePath == null) {
       throw new NullPointerException("nvmFilePath is null");
     }
-    if (!exists(nvmFilePath)) {
-      createNvmFile(nvmFilePath);
-    }
-
     initInternal(nvmFilePath);
   }
 
@@ -81,11 +77,13 @@ public class Recovery {
     //          These objects are incomplete and should not be used in java code.
     Object[] dramCopyList = new Object[8];
     createDramCopy(dramCopyList, classes, nvmFilePath);
+    // DEBUG:
     for (Object dramCopy : dramCopyList) {
       System.out.println(dramCopy != null);
     }
 
     recoveryDramCopy(dramCopyList, classes, nvmFilePath);
+    // DEBUG:
     for (Object dramCopy : dramCopyList) {
       System.out.println(dramCopy);
     }

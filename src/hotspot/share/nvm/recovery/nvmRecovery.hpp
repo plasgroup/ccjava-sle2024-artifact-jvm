@@ -13,6 +13,10 @@ class NVMRecovery : AllStatic {
  friend class OurPersistJNI;
  private:
   static Symbol* _ourpersist_recovery_exception;
+  static bool _init_nvm;
+  static char _nvm_path[1024];
+
+  static void check_nvm_loaded(jstring nvm_file_path, TRAPS);
 
  public:
   // DEBUG:
@@ -26,6 +30,7 @@ class NVMRecovery : AllStatic {
     return _ourpersist_recovery_exception;
   }
 
+  static void initNvmFile(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS);
   static jboolean exists(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS);
   static void initInternal(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS);
   static void createNvmFile(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS);

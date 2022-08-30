@@ -16,16 +16,10 @@ void* NVMAllocator::large_top = NULL;
 NonVolatileChunkLarge* NVMAllocator::first_free_nvcl = (NonVolatileChunkLarge*) NULL;
 pthread_mutex_t NVMAllocator::allocate_mtx = PTHREAD_MUTEX_INITIALIZER;
 
-void NVMAllocator::init() {
+void NVMAllocator::init(const char* nvm_path) {
   if (nvm_head != NULL) {
-    return;
+    assert(false, "NVMAllocator::init() is called twice");
   }
-
-#ifdef USE_NVM
-  const char* nvm_path = XSTR(NVM_FILE_PATH); // NVM
-#else  // USE_NVM
-  const char* nvm_path = "/dev/zero";         // DRAM
-#endif // USE_NVM
   const void* nvm_target_addr = (void*)0x700000000000;
 
   // get the size of the NVM file.

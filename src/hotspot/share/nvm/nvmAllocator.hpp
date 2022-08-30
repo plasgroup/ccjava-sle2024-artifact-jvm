@@ -29,7 +29,13 @@ public:
   static void* allocate_large(size_t size);
 
  public:
-  static void init();
+  static void init(
+#ifdef USE_NVM
+  const char* nvm_path = XSTR(NVM_FILE_PATH) // NVM
+#else  // USE_NVM
+  const char* nvm_path = "/dev/zero"         // DRAM
+#endif // USE_NVM
+  );
   // allocate an UNINITILIZED memory block in NVM
   static void* allocate(size_t _word_size);
 

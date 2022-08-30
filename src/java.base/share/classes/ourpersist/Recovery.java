@@ -77,11 +77,17 @@ public class Recovery {
       }
     }
 
-/*
-    Object[] dramCopyList = new Object[128];
+    // WARNING: This is a hack to avoid garbage collection of the objects.
+    //          These objects are incomplete and should not be used in java code.
+    Object[] dramCopyList = new Object[8];
     createDramCopy(dramCopyList, classes, nvmFilePath);
+    for (Object dramCopy : dramCopyList) {
+      System.out.println(dramCopy != null);
+    }
 
     recoveryDramCopy(dramCopyList, classes, nvmFilePath);
-*/
+    for (Object dramCopy : dramCopyList) {
+      System.out.println(dramCopy);
+    }
   }
 }

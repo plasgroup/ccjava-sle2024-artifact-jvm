@@ -369,6 +369,7 @@ class OurPersistSetNvmMirrors : public KlassClosure {
 
     nvmMirrorOop nvm_mirror = nvmMirrorOop(mirror->nvm_header().fwd());
     if (nvm_mirror == NULL) {
+      tty->print_cr("nvm_mirror is null: %s", k->name()->as_C_string()); // DEBUG:
       if (_nvm_mirrors != NULL) {
         char* klass_name = k->name()->as_C_string();
         for (int i = 0; i < _nvm_mirror_n; i++) {
@@ -394,8 +395,6 @@ class OurPersistSetNvmMirrors : public KlassClosure {
 };
 
 void VM_OurPersistRecoveryInit::doit() {
-  tty->print_cr("VM_OurPersistRecoveryInit");
-
   OurPersistSetNvmMirrors klass_closure(0, NULL);
   ClassLoaderDataGraph::classes_do(&klass_closure);
   if (klass_closure.result() == JNI_FALSE) return;
@@ -406,7 +405,209 @@ void VM_OurPersistRecoveryInit::doit() {
 }
 
 void VM_OurPersistRecoveryDramCopy::doit() {
-  tty->print_cr("VM_OurPersistRecoveryDramCopy");
+  objArrayOop dram_copy_list_oop = objArrayOop(JNIHandles::resolve(_dram_copy_list));
+  if (dram_copy_list_oop == NULL) return;
+  int list_length = dram_copy_list_oop->length();
+  objArrayOop classes_oop = objArrayOop(JNIHandles::resolve(_classes));
+  if (classes_oop == NULL) return;
+
+  // Set forwarding pointer to dram copy
+  {
+    objArrayOop cur = dram_copy_list_oop;
+    while (cur != NULL) {
+      for (int i = 0; i < list_length - 1; i++) {
+        oop obj = cur->obj_at(i);
+        if (obj == NULL) continue;
+
+        nvmOop nvm_obj = obj->nvm_header().fwd();
+        assert(nvm_obj != NULL, "");
+
+        nvm_obj->set_dram_copy(obj);
+      }
+      cur = objArrayOop(cur->obj_at(list_length - 1));
+    }
+  }
+  {
+    NVMAllocator::init();
+    nvmMirrorOopDesc* head = (nvmMirrorOopDesc*)0x700000000000;
+    nvmMirrorOopDesc* cur = head;
+    while (cur != NULL) {
+      const char* name = cur->klass_name();
+      oop jc = resolve_class_oop(classes_oop, name);
+      if (jc == NULL) return;
+      Klass* klass = java_lang_Class::as_Klass(jc);
+      cur->set_mark();
+      cur->set_dram_copy(klass->java_mirror());
+      cur = cur->class_list_next();
+    }
+  }
+
+  // Recovery
+  {
+    oop cur = dram_copy_list_oop;
+    while (cur != NULL) {
+      for (int i = 0; i < list_length - 1; i++) {
+        oop obj = dram_copy_list_oop->obj_at(i);
+        if (obj == NULL) continue;
+
+        nvmOop nvm_obj = obj->nvm_header().fwd();
+        assert(nvm_obj != NULL, "");
+
+        const char* name = nvm_obj->klass()->klass_name();
+        oop jc = resolve_class_oop(classes_oop, name);
+        if (jc == NULL) return;
+        Klass* klass = java_lang_Class::as_Klass(jc);
+
+        // begin "for f in obj.fields"
+        if (klass->is_instance_klass()) {
+          Klass* cur_k = klass;
+          while (cur_k != NULL) {
+            InstanceKlass* ik = (InstanceKlass*)cur_k;
+            int cnt = ik->java_fields_count();
+
+            for (int i = 0; i < cnt; i++) {
+              AccessFlags field_flags = accessFlags_from(ik->field_access_flags(i));
+              Symbol* field_sig = ik->field_signature(i);
+              BasicType field_type = Signature::basic_type(field_sig);
+              int field_offset = ik->field_offset(i);
+
+              if (field_flags.is_static()) {
+                continue;
+              }
+              if (is_java_primitive(field_type)) {
+                OurPersist::copy_nvm_to_dram(nvm_obj, obj, field_offset, field_type);
+              } else {
+                nvmOop nvm_v = nvmOopDesc::load_at<nvmOop>(nvm_obj, field_offset);
+                oop v = nvm_v != NULL ? nvm_v->dram_copy() : NULL;
+                RawAccess<>::oop_store_at(obj, field_offset, v);
+              }
+            }
+            cur_k = cur_k->super();
+          }
+        } else if (klass->is_objArray_klass()) {
+          ObjArrayKlass* ak = (ObjArrayKlass*)klass;
+          BasicType array_type = ((ArrayKlass*)ak)->element_type();
+
+          objArrayOop ao = (objArrayOop)obj;
+          int array_length = ao->length();
+
+          for (int i = 0; i < array_length; i++) {
+            ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
+            nvmOop nvm_v = nvmOopDesc::load_at<nvmOop>(nvm_obj, field_offset);
+            oop v = nvm_v != NULL ? nvm_v->dram_copy() : NULL;
+            RawAccess<>::oop_store_at(ao, field_offset, v);
+          }
+        } else if (klass->is_typeArray_klass()) {
+          TypeArrayKlass* ak = (TypeArrayKlass*)klass;
+          BasicType array_type = ((ArrayKlass*)ak)->element_type();
+
+          typeArrayOop ao = (typeArrayOop)obj;
+          int array_length = ao->length();
+
+          for (int i = 0; i < array_length; i++) {
+            ptrdiff_t field_offset = typeArrayOopDesc::base_offset_in_bytes(array_type) + type2aelembytes(array_type) * i;
+            OurPersist::copy_nvm_to_dram(nvm_obj, ao, field_offset, array_type);
+          }
+        } else {
+          report_vm_error(__FILE__, __LINE__, "Illegal field type.");
+        }
+        // end "for f in obj.fields"
+      }
+      cur = objArrayOop(cur)->obj_at(list_length - 1);
+    }
+  }
+
+  // Set all durableroots and init allocator
+  NVMAllocator::init();
+  //NVMAllocator::nvm_head = (nvmMirrorOopDesc*)0x700000100000; // DEBUG:
+  nvmMirrorOopDesc* head = (nvmMirrorOopDesc*)0x700000000000;
+  nvmMirrorOopDesc::class_list_head = head;
+  nvmMirrorOopDesc* cur = head;
+  while (cur != NULL) {
+    nvmMirrorOopDesc::class_list_tail = cur;
+
+    const char* name = cur->klass_name();
+    oop jc = resolve_class_oop(classes_oop, name);
+    if (jc == NULL) return;
+    Klass* klass = java_lang_Class::as_Klass(jc);
+
+    assert(jc != NULL, "");
+    assert(jc == klass->java_mirror(), "");
+    nvmHeader::set_fwd(jc, cur);
+
+    if (klass->is_instance_klass()) {
+      Klass* cur_k = klass;
+      while (cur_k != NULL) {
+        InstanceKlass* ik = InstanceKlass::cast(cur_k);
+        int cnt = ik->java_fields_count();
+
+        for (int i = 0; i < cnt; i++) {
+          AccessFlags field_flags = accessFlags_from(ik->field_access_flags(i));
+          Symbol* field_sig = ik->field_signature(i);
+          field_sig->type();
+          BasicType field_type = Signature::basic_type(field_sig);
+          int field_offset = ik->field_offset(i);
+          if (!field_flags.is_durableroot()) {
+            continue;
+          }
+          assert(is_reference_type(field_type), "field is not reference");
+          assert(field_flags.is_static(), "field is not static");
+
+          nvmOop nvm_v = nvmOopDesc::load_at<nvmOop>(cur, field_offset);
+          oop v = nvm_v != NULL ? nvm_v->dram_copy() : NULL;
+          RawAccess<>::oop_store_at(cur->dram_copy(), field_offset, v);
+        }
+        // DEBUG:
+        //cur_k = cur_k->super();
+        cur_k = NULL;
+      }
+    }
+
+    cur = cur->class_list_next();
+  }
+
+  // DEBUG:
+  tty->print_cr("nvmMirrorOopDesc::class_list_tail = %p", nvmMirrorOopDesc::class_list_tail);
+
+  {
+    objArrayOop cur = dram_copy_list_oop;
+    while (cur != NULL) {
+      for (int i = 0; i < list_length - 1; i++) {
+        oop obj = cur->obj_at(i);
+        if (obj == NULL) continue;
+
+        nvmOop nvm_obj = obj->nvm_header().fwd();
+        assert(nvm_obj != NULL, "");
+
+        nvm_obj->clear_dram_copy_and_mark();
+      }
+      cur = objArrayOop(cur->obj_at(list_length - 1));
+    }
+  }
+  {
+    NVMAllocator::init();
+    nvmMirrorOopDesc* head = (nvmMirrorOopDesc*)0x700000000000;
+    nvmMirrorOopDesc* cur = head;
+    while (cur != NULL) {
+      const char* name = cur->klass_name();
+      oop jc = resolve_class_oop(classes_oop, name);
+      if (jc == NULL) return;
+      Klass* klass = java_lang_Class::as_Klass(jc);
+      cur->clear_dram_copy_and_mark();
+      cur = cur->class_list_next();
+    }
+  }
+
+  // Set fowarding pointer to nvm copy in mirrors
+  // FIXME: set arguments
+  OurPersistSetNvmMirrors klass_closure(0, NULL);
+  ClassLoaderDataGraph::classes_do(&klass_closure);
+  if (klass_closure.result() == JNI_FALSE) return;
+
+  // DEBUG:
+  OurPersist::set_started();
+
+  _result = JNI_TRUE;
 }
 
 #endif // OUR_PERSIST

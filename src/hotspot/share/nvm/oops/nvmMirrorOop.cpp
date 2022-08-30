@@ -87,29 +87,22 @@ void nvmMirrorOopDesc::add_class_list(nvmMirrorOopDesc* target) {
   assert(target != NULL, "");
   pthread_mutex_lock(&class_list_mtx);
 
+  target->set_class_list_next(NULL);
+  NVM_WRITEBACK(nvmMirrorOopDesc::class_list_next_addr(target));
+  OrderAccess::storeload();
+
   if (class_list_head == NULL) {
     class_list_head = target;
-    // DEBUG:
-    tty->print_cr("class_list_head: %p", class_list_head);
+    tty->print_cr("class_list_head: %p", class_list_head); // DEBUG:
   } else {
     assert(class_list_tail != NULL, "");
+    tty->print_cr("set: %p", class_list_tail); // DEBUG:
     class_list_tail->set_class_list_next(target);
+    NVM_WRITEBACK(nvmMirrorOopDesc::class_list_next_addr(class_list_tail));
+    OrderAccess::storeload();
   }
 
-  target->set_class_list_next(NULL);
   class_list_tail = target;
-  NVM_WRITEBACK(nvmMirrorOopDesc::class_list_next_addr(target));
-
-  if (false) {
-    nvmMirrorOopDesc* cur = (nvmMirrorOopDesc*)0x700000000000;
-    tty->print_cr("");
-    tty->print_cr("class_list_tail: %p", class_list_tail);
-    //nvmMirrorOopDesc* cur = class_list_head;
-    while (cur != NULL) {
-      tty->print_cr("%s", cur->klass_name());
-      cur = cur->class_list_next();
-    }
-  }
 
   pthread_mutex_unlock(&class_list_mtx);
 }
@@ -123,6 +116,7 @@ nvmMirrorOopDesc* nvmMirrorOopDesc::create_mirror(Klass* klass, oop mirror) {
   if (klass->is_hidden()) {
     return NULL;
   }
+  tty->print_cr("create_mirror: %s", klass->external_name()); // DEBUG:
 
   // Persistence of the mirror object
   void* nvm_mirror = NVMAllocator::allocate(mirror->size());

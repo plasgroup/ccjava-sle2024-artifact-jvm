@@ -12,6 +12,7 @@ class NVMAllocator : AllStatic {
   friend class NonVolatileThreadLocalAllocBuffer;
   friend class NonVolatileChunkSegregate;
   friend class NonVolatileChunkLarge;
+  friend class VM_OurPersistRecoveryDramCopy; // DEBUG:
 public:
   static const size_t NVM_CHUNK_BYTE_SIZE = 4096;
   static const size_t SEGREGATED_REGION_SIZE_GB = 10;

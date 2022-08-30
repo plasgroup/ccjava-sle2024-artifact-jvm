@@ -11,6 +11,7 @@
 
 typedef class nvmMirrorOopDesc* nvmMirrorOop;
 class nvmMirrorOopDesc : public nvmOopDesc {
+  friend class VM_OurPersistRecoveryDramCopy; // DEBUG:
  private:
   static nvmMirrorOopDesc* class_list_head;
   static nvmMirrorOopDesc* class_list_tail;

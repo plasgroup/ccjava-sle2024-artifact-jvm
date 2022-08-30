@@ -45,6 +45,8 @@ class OurPersist : AllStatic {
 #endif // ASSERT
   inline static bool is_target_fast(Klass* klass);
 
+  inline static bool enable_slow();
+
  public:
   inline static bool enable();
   inline static bool started();

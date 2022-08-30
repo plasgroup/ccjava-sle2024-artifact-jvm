@@ -12,10 +12,26 @@
 #include "runtime/fieldDescriptor.inline.hpp"
 #include "utilities/globalDefinitions.hpp"
 
+inline bool OurPersist::enable_slow() {
+  if (UseCompressedOops) {
+    return false;
+  }
+
+  if (UseCompressedClassPointers) {
+    return false;
+  }
+
+  if (!Arguments::is_interpreter_only()) {
+    return false;
+  }
+
+  return true;
+}
+
 inline bool OurPersist::enable() {
   // init
   if (OurPersist::_enable == our_persist_unknown) {
-    bool enable_slow = Arguments::is_interpreter_only() && !UseCompressedOops;
+    bool enable_slow = OurPersist::enable_slow();
     OurPersist::_enable = enable_slow ? our_persist_true : our_persist_false;
     if (enable_slow) {
       tty->print("OurPersist is enabled.\n");
@@ -174,8 +190,10 @@ inline void OurPersist::clear_responsible_thread(Thread* cur_thread) {
   nvmOop dependent_obj = cur_thread->dependent_obj_list_head();
 
   while (dependent_obj != NULL) {
+    nvmOop next = dependent_obj->dependent_object_next();
+    dependent_obj->set_responsible_thread(NULL);
     dependent_obj->set_dependent_object_next(NULL);
-    dependent_obj = dependent_obj->dependent_object_next();
+    dependent_obj = next;
   }
 
   cur_thread->set_dependent_obj_list_head(NULL);
@@ -186,7 +204,7 @@ inline void OurPersist::add_dependent_obj_list(nvmOop nvm_obj, Thread* cur_threa
   if (cur_thread->dependent_obj_list_head() == NULL) {
     cur_thread->set_dependent_obj_list_head(nvm_obj);
   } else {
-    oop(cur_thread->dependent_obj_list_tail())->set_mark(markWord::from_pointer(nvm_obj));
+    cur_thread->dependent_obj_list_tail()->set_dependent_object_next(nvm_obj);
   }
   cur_thread->set_dependent_obj_list_tail(nvm_obj);
 }

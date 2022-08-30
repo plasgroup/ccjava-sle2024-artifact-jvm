@@ -47,6 +47,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
           if (value != NULL && OurPersist::is_target(value->klass())) {
             OurPersist::ensure_recoverable(value);
             nvm_val = oop(value->nvm_header().fwd());
+            assert(value->nvm_header().recoverable(), "");
           }
 #ifndef NO_WUPD
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
@@ -80,6 +81,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
           if (value != NULL && OurPersist::is_target(value->klass())) {
             OurPersist::ensure_recoverable(value);
             nvm_val = oop(value->nvm_header().fwd());
+            assert(value->nvm_header().recoverable(), "");
           }
 #ifndef NO_WUPD
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
@@ -313,6 +315,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
           if (value != NULL && OurPersist::is_target(value->klass())) {
             OurPersist::ensure_recoverable(value);
             nvm_val = oop(value->nvm_header().fwd());
+            assert(value->nvm_header().recoverable(), "");
           }
 #ifndef NO_WUPD
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
@@ -348,6 +351,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
           if (value != NULL && OurPersist::is_target(value->klass())) {
             OurPersist::ensure_recoverable(value);
             nvm_val = oop(value->nvm_header().fwd());
+            assert(value->nvm_header().recoverable(), "");
           }
 #ifndef NO_WUPD
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
@@ -381,6 +385,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         if (new_value != NULL && OurPersist::is_target(new_value->klass())) {
           OurPersist::ensure_recoverable(new_value);
           nvm_val = oop(new_value->nvm_header().fwd());
+          assert(new_value->nvm_header().recoverable(), "");
         }
 #ifndef NO_WUPD
         Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
@@ -419,6 +424,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
           if (new_value != NULL && OurPersist::is_target(new_value->klass())) {
             OurPersist::ensure_recoverable(new_value);
             nvm_val = oop(new_value->nvm_header().fwd());
+            assert(new_value->nvm_header().recoverable(), "");
           }
 #ifndef NO_WUPD
           Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
@@ -468,6 +474,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
             if (val != NULL && OurPersist::is_target(val->klass())) {
               OurPersist::ensure_recoverable(val);
               nvm_val = oop(val->nvm_header().fwd());
+              assert(val->nvm_header().recoverable(), "");
             }
             assert(nvm_val == NULL || val->nvm_header().recoverable(), "");
 #ifndef NO_WUPD

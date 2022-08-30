@@ -56,9 +56,12 @@ void OurPersist::ensure_recoverable(oop obj) {
 
   bool success = OurPersist::shade(obj, cur_thread);
   nvmOop nvm_obj = obj->nvm_header().fwd();
+  assert(nvm_obj != NULL, "");
   if (!success) {
     barrier_sync->add(obj, nvm_obj, cur_thread);
     barrier_sync->sync();
+    assert(nvm_obj->responsible_thread() != cur_thread, "");
+    assert(obj->nvm_header().recoverable(), "");
     return;
   }
 
@@ -85,6 +88,8 @@ void OurPersist::ensure_recoverable(oop obj) {
 
   barrier_sync->sync();
   OurPersist::clear_responsible_thread(cur_thread);
+
+  assert(obj->nvm_header().recoverable(), "");
 }
 
 void OurPersist::copy_object_copy_step(oop obj, nvmOop nvm_obj, Klass* klass,
@@ -304,6 +309,10 @@ bool OurPersist::shade(oop obj, Thread* cur_thread) {
   if (!success) {
     // TODO: nvm release
   }
+
+  assert(nvm_obj->responsible_thread() == cur_thread, "");
+  assert(success == (obj->nvm_header().fwd() == nvm_obj), "");
+
   return success;
 }
 

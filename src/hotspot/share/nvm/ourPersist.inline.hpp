@@ -292,6 +292,60 @@ inline void OurPersist::copy_dram_to_nvm(oop from, oop to, ptrdiff_t offset, Bas
   }
 }
 
+inline void OurPersist::copy_nvm_to_dram(nvmOop from, oop to, ptrdiff_t offset, BasicType type) {
+  switch(type) {
+    case T_BYTE:
+      {
+        to->byte_field_put(offset, from->load_at<jbyte>(offset));
+        break;
+      }
+    case T_CHAR:
+      {
+        to->char_field_put(offset, from->load_at<jchar>(offset));
+        break;
+      }
+    case T_DOUBLE:
+      {
+        to->double_field_put(offset, from->load_at<jdouble>(offset));
+        break;
+      }
+    case T_FLOAT:
+      {
+        to->float_field_put(offset, from->load_at<jfloat>(offset));
+        break;
+      }
+    case T_INT:
+      {
+        to->int_field_put(offset, from->load_at<jint>(offset));
+        break;
+      }
+    case T_LONG:
+      {
+        to->long_field_put(offset, from->load_at<jlong>(offset));
+        break;
+      }
+    case T_SHORT:
+      {
+        to->short_field_put(offset, from->load_at<jshort>(offset));
+        break;
+      }
+    case T_BOOLEAN:
+      {
+        to->bool_field_put(offset, from->load_at<jboolean>(offset));
+        break;
+      }
+    case T_OBJECT:
+    case T_ARRAY:
+      {
+        report_vm_error(__FILE__, __LINE__, "Should not reach here.\
+                                             Must execute ensure_recoverable for each oop value.");
+        break;
+      }
+    default:
+      report_vm_error(__FILE__, __LINE__, "Illegal field type.");
+  }
+}
+
 inline bool OurPersist::cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, BasicType type, bool is_array) {
   const DecoratorSet ds = MO_UNORDERED | AS_NORMAL | IN_HEAP;
   typedef CardTableBarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet> Parent;

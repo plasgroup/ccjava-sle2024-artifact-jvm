@@ -59,6 +59,9 @@ class OurPersist : AllStatic {
 
   static void ensure_recoverable(oop obj);
   static void mirror_create(Klass* klass, oop mirror);
+
+  // TODO: move to new file
+  inline static void copy_nvm_to_dram(nvmOop from, oop to, ptrdiff_t offset, BasicType type);
 };
 
 #endif // NVM_OURPERSIST_HPP

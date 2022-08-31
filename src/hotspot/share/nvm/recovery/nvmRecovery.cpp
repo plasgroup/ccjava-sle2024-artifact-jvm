@@ -50,6 +50,24 @@ void NVMRecovery::check_nvm_loaded(jstring nvm_file_path, TRAPS) {
   }
 }
 
+Klass* NVMRecovery::nvmCopy2klass(nvmOop nvm_copy, TRAPS) {
+  nvmMirrorOop nvm_mirror = nvm_copy->klass();
+  assert(nvm_mirror != NULL, "");
+
+  return NVMRecovery::nvmMirrorCopy2klass(nvm_mirror, CHECK_NULL);
+}
+
+Klass* NVMRecovery::nvmMirrorCopy2klass(nvmMirrorOop nvm_mirror_copy, TRAPS) {
+  oop dram_mirror = JNIHandles::resolve(nvm_mirror_copy->dram_mirror());
+  assert(dram_mirror != NULL, "");
+  assert(oopDesc::is_oop(dram_mirror), "");
+
+  Klass* klass = java_lang_Class::as_Klass(dram_mirror);
+  assert(klass != NULL, "");
+
+  return klass;
+}
+
 void NVMRecovery::initNvmFile(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
   if (NVMRecovery::_init_nvm) {
     THROW_MSG(ourpersist_recovery_exception(), "NVM file has been initialized");
@@ -69,12 +87,23 @@ void NVMRecovery::initNvmFile(JNIEnv* env, jclass clazz, jstring nvm_file_path, 
   if (HAS_PENDING_EXCEPTION) return;
 }
 
-// TODO: implement
-jboolean NVMRecovery::exists(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
+jboolean NVMRecovery::hasEnableNvmData(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
   NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK_0);
   if (HAS_PENDING_EXCEPTION) return JNI_FALSE;
 
-  return JNI_TRUE;
+  if (NvmMeta::meta()->_state_flag == 1) {
+    return JNI_TRUE;
+  }
+
+  return JNI_FALSE;
+}
+
+void NVMRecovery::disableNvmData(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
+  NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK);
+  if (HAS_PENDING_EXCEPTION) return;
+
+  NvmMeta::meta()->_state_flag = 0;
+  NVM_WRITEBACK(NvmMeta::meta()->state_flag_addr());
 }
 
 void NVMRecovery::initInternal(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
@@ -92,8 +121,7 @@ jobjectArray NVMRecovery::nvmCopyClassNames(JNIEnv* env, jclass clazz, jstring n
   NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK_NULL);
   if (HAS_PENDING_EXCEPTION) return NULL;
 
-  nvmMirrorOopDesc* head = (nvmMirrorOopDesc*)0x700000000000;
-
+  nvmMirrorOopDesc* head = NvmMeta::meta()->_mirrors_head;
   nvmMirrorOopDesc* cur = head;
   int count = 0;
   while (cur != NULL) {
@@ -117,12 +145,16 @@ jobjectArray NVMRecovery::nvmCopyClassNames(JNIEnv* env, jclass clazz, jstring n
   return res;
 }
 
+/*
 oop resolve_class_oop(objArrayOop classes, const char* name) {
   int len = classes->length();
+  ResourceMark rm; // DEBUG:
+  int buf_len = strlen(name) + 10;
+  char* buf = NEW_RESOURCE_ARRAY(char, buf_len);
   for (int i = 0; i < len; i++) {
     oop obj = classes->obj_at(i);
     Klass* k = java_lang_Class::as_Klass(obj);
-    const char* str = k->name()->as_C_string();
+    const char* str = k->name()->as_C_string(buf, buf_len);
     if (strcmp(str, name) == 0) {
       return obj;
     }
@@ -148,68 +180,80 @@ jclass resolve_class(jobjectArray classes, const char* name) {
   }
   return (jclass)JNIHandles::make_local(res);;
 }
+*/
 
 void NVMRecovery::createDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_copy_list,
                                  jobjectArray classes, jstring nvm_file_path, TRAPS) {
   NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK);
   if (HAS_PENDING_EXCEPTION) return;
 
+  nvmMirrorOopDesc* mirrors_head = NvmMeta::meta()->_mirrors_head;
+
+  // Set pointer to dram copy in nvmMirrorOop
+  {
+    nvmMirrorOopDesc* nvm_mirror = mirrors_head;
+    int offset = 0;
+    while (nvm_mirror != NULL) {
+      oop dram_mirror = objArrayOop(JNIHandles::resolve(classes))->obj_at(offset);
+      offset++;
+
+#ifdef ASSERT
+      ResourceMark rm;
+      assert(dram_mirror != NULL, "");
+      assert(nvm_mirror != NULL, "");
+      assert(java_lang_Class::as_Klass(dram_mirror)->name()->equals(nvm_mirror->klass_name()), "");
+#endif // ASSERT
+
+      nvm_mirror->set_dram_mirror(JNIHandles::make_global(Handle(THREAD, dram_mirror)));
+      nvm_mirror = nvm_mirror->class_list_next();
+    }
+  }
+
   // FIXME: delete cheap
   NVMRecoveryWorkListStack* worklist = new NVMRecoveryWorkListStack();
 
   // Collect all nvm mirrors
-  nvmMirrorOopDesc* head = (nvmMirrorOopDesc*)0x700000000000;
-  nvmMirrorOopDesc* cur = head;
-  while (cur != NULL) {
-    const char* name = cur->klass_name();
-    jclass jc = resolve_class(classes, name);
-    assert(jc != NULL, "class not found, name: %s", name);
-    Klass* klass = java_lang_Class::as_Klass(JNIHandles::resolve(jc));
-    assert(klass != NULL, "klass is null");
+  {
+    nvmMirrorOopDesc* cur = mirrors_head;
+    while (cur != NULL) {
+      Klass* klass = NVMRecovery::nvmMirrorCopy2klass(cur, CHECK);
 
-    // DEBUG:
-    tty->print_cr("-- obj -- cur: %p", cur);
+      if (klass->is_instance_klass()) {
+        Klass* cur_k = klass;
+        while (cur_k != NULL) {
+          InstanceKlass* ik = InstanceKlass::cast(cur_k);
+          int cnt = ik->java_fields_count();
 
-    if (klass->is_instance_klass()) {
-      Klass* cur_k = klass;
-      while (cur_k != NULL) {
-        InstanceKlass* ik = InstanceKlass::cast(cur_k);
-        int cnt = ik->java_fields_count();
+          for (int i = 0; i < cnt; i++) {
+            AccessFlags field_flags = accessFlags_from(ik->field_access_flags(i));
+            Symbol* field_sig = ik->field_signature(i);
+            field_sig->type();
+            BasicType field_type = Signature::basic_type(field_sig);
+            int field_offset = ik->field_offset(i);
+            if (!field_flags.is_durableroot()) {
+              continue;
+            }
+            assert(is_reference_type(field_type), "field is not reference");
+            assert(field_flags.is_static(), "field is not static");
 
-        // DEBUG:
-        tty->print_cr("-- klass -- name: %s", cur_k->name()->as_C_string());
+            nvmOop nvm_v = nvmOopDesc::load_at<nvmOop>(cur, field_offset);
+            if (nvm_v == NULL) {
+              continue;
+            }
 
-        for (int i = 0; i < cnt; i++) {
-          AccessFlags field_flags = accessFlags_from(ik->field_access_flags(i));
-          Symbol* field_sig = ik->field_signature(i);
-          field_sig->type();
-          BasicType field_type = Signature::basic_type(field_sig);
-          int field_offset = ik->field_offset(i);
-          if (!field_flags.is_durableroot()) {
-            continue;
-          }
-          assert(is_reference_type(field_type), "field is not reference");
-          assert(field_flags.is_static(), "field is not static");
-
-          nvmOop nvm_v = nvmOopDesc::load_at<nvmOop>(cur, field_offset);
-          if (nvm_v == NULL) {
-            continue;
+            if (!nvm_v->mark()) {
+              nvm_v->set_mark();
+              worklist->add(nvm_v);
+            }
           }
           // DEBUG:
-          tty->print_cr("nvm_copy: %p, offset: %d, %s.%s: %p",
-            cur, field_offset, ik->name()->as_C_string(), ik->field_name(i)->as_C_string(), nvm_v);
-          if (!nvm_v->mark()) {
-            nvm_v->set_mark();
-            worklist->add(nvm_v);
-          }
+          //cur_k = cur_k->super();
+          cur_k = NULL;
         }
-        // DEBUG:
-        //cur_k = cur_k->super();
-        cur_k = NULL;
       }
-    }
 
-    cur = cur->class_list_next();
+      cur = cur->class_list_next();
+    }
   }
 
   // Get dram_copy_list length
@@ -226,11 +270,7 @@ void NVMRecovery::createDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_co
   // Collect reachable objects
   while (worklist->empty() == false) {
     nvmOop obj = worklist->remove();
-    const char* name = obj->klass()->klass_name();
-    jclass jc = resolve_class(classes, name);
-    Klass* klass = java_lang_Class::as_Klass(JNIHandles::resolve(jc));
-
-    tty->print_cr("NVMRecovery::createDramCopy: %s", name); // DEBUG:
+    Klass* klass = NVMRecovery::nvmCopy2klass(obj, CHECK);
 
     // Create a new object in DRAM and add it to dram_copy_list
     {
@@ -246,6 +286,7 @@ void NVMRecovery::createDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_co
 
         objArrayOop prev = objArrayOop(JNIHandles::resolve(dram_copy_list));
         prev->obj_at_put(list_count, next);
+        JNIHandles::destroy_local(dram_copy_list);
         dram_copy_list = jobjectArray(JNIHandles::make_local(next));
         list_count = 0;
       }
@@ -344,7 +385,6 @@ void NVMRecovery::createDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_co
   }
 }
 
-// TODO: implement
 void NVMRecovery::recoveryDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_copy_list,
                                    jobjectArray classes, jstring nvm_file_path, TRAPS) {
   NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK);
@@ -395,13 +435,16 @@ class OurPersistSetNvmMirrors : public KlassClosure {
     if (k->is_hidden()) {
       return;
     }
+    if (k->name()->starts_with("java/lang/invoke/BoundMethodHandle")) {
+      return;
+    }
 
     oop mirror = k->java_mirror();
     assert(mirror != NULL, "");
 
     nvmMirrorOop nvm_mirror = nvmMirrorOop(mirror->nvm_header().fwd());
     if (nvm_mirror == NULL) {
-      tty->print_cr("nvm_mirror is null: %s", k->name()->as_C_string()); // DEBUG:
+      //tty->print_cr("nvm_mirror is null: %s", k->name()->as_C_string()); // DEBUG:
       if (_nvm_mirrors != NULL) {
         char* klass_name = k->name()->as_C_string();
         for (int i = 0; i < _nvm_mirror_n; i++) {
@@ -427,10 +470,19 @@ class OurPersistSetNvmMirrors : public KlassClosure {
 };
 
 void VM_OurPersistRecoveryInit::doit() {
+  NvmMeta::meta()->_nvm_head = (char*)0x700000000000 + sizeof(NvmMeta);
+  NVMAllocator::nvm_head = (char*)0x700000000000 + sizeof(NvmMeta);
+  NvmMeta::meta()->_mirrors_head = NULL;
+  nvmMirrorOopDesc::class_list_tail = NULL;
+  NVM_WRITEBACK(NvmMeta::meta()->nvm_head_addr());
+  NVM_WRITEBACK(NvmMeta::meta()->mirrors_head_addr());
+
   OurPersistSetNvmMirrors klass_closure(0, NULL);
   ClassLoaderDataGraph::classes_do(&klass_closure);
   if (klass_closure.result() == JNI_FALSE) return;
 
+  NvmMeta::meta()->_state_flag = 1;
+  NVM_WRITEBACK(NvmMeta::meta()->state_flag_addr());
   OurPersist::set_started();
 
   _result = JNI_TRUE;
@@ -460,13 +512,11 @@ void VM_OurPersistRecoveryDramCopy::doit() {
     }
   }
   {
-    nvmMirrorOopDesc* head = (nvmMirrorOopDesc*)0x700000000000;
+    nvmMirrorOopDesc* head = NvmMeta::meta()->_mirrors_head;
     nvmMirrorOopDesc* cur = head;
     while (cur != NULL) {
-      const char* name = cur->klass_name();
-      oop jc = resolve_class_oop(classes_oop, name);
-      if (jc == NULL) return;
-      Klass* klass = java_lang_Class::as_Klass(jc);
+      Klass* klass = NVMRecovery::nvmMirrorCopy2klass(cur, Thread::current());
+
       cur->set_mark();
       cur->set_dram_copy(klass->java_mirror());
       cur = cur->class_list_next();
@@ -475,19 +525,16 @@ void VM_OurPersistRecoveryDramCopy::doit() {
 
   // Recovery
   {
-    oop cur = dram_copy_list_oop;
+    objArrayOop cur = dram_copy_list_oop;
     while (cur != NULL) {
       for (int i = 0; i < list_length - 1; i++) {
-        oop obj = dram_copy_list_oop->obj_at(i);
+        oop obj = cur->obj_at(i);
         if (obj == NULL) continue;
 
         nvmOop nvm_obj = obj->nvm_header().fwd();
         assert(nvm_obj != NULL, "");
 
-        const char* name = nvm_obj->klass()->klass_name();
-        oop jc = resolve_class_oop(classes_oop, name);
-        if (jc == NULL) return;
-        Klass* klass = java_lang_Class::as_Klass(jc);
+        Klass* klass = NVMRecovery::nvmCopy2klass(nvm_obj, Thread::current());
 
         // begin "for f in obj.fields"
         if (klass->is_instance_klass()) {
@@ -544,26 +591,17 @@ void VM_OurPersistRecoveryDramCopy::doit() {
         }
         // end "for f in obj.fields"
       }
-      cur = objArrayOop(cur)->obj_at(list_length - 1);
+      cur = objArrayOop(cur->obj_at(list_length - 1));
     }
   }
 
   // Set all durableroots and init allocator
-  //NVMAllocator::nvm_head = (nvmMirrorOopDesc*)0x700000100000; // DEBUG:
-  nvmMirrorOopDesc* head = (nvmMirrorOopDesc*)0x700000000000;
-  nvmMirrorOopDesc::class_list_head = head;
+  nvmMirrorOopDesc* head = NvmMeta::meta()->_mirrors_head;
   nvmMirrorOopDesc* cur = head;
   while (cur != NULL) {
     nvmMirrorOopDesc::class_list_tail = cur;
-
-    const char* name = cur->klass_name();
-    oop jc = resolve_class_oop(classes_oop, name);
-    if (jc == NULL) return;
-    Klass* klass = java_lang_Class::as_Klass(jc);
-
-    assert(jc != NULL, "");
-    assert(jc == klass->java_mirror(), "");
-    nvmHeader::set_fwd(jc, cur);
+    Klass* klass = NVMRecovery::nvmMirrorCopy2klass(cur, Thread::current());
+    nvmHeader::set_fwd(klass->java_mirror(), cur);
 
     if (klass->is_instance_klass()) {
       Klass* cur_k = klass;
@@ -596,8 +634,24 @@ void VM_OurPersistRecoveryDramCopy::doit() {
     cur = cur->class_list_next();
   }
 
-  // DEBUG:
-  tty->print_cr("nvmMirrorOopDesc::class_list_tail = %p", nvmMirrorOopDesc::class_list_tail);
+#ifdef ASSERT
+  // Verify
+  {
+    objArrayOop cur = dram_copy_list_oop;
+    while (cur != NULL) {
+      for (int i = 0; i < list_length - 1; i++) {
+        oop obj = cur->obj_at(i);
+        if (obj == NULL) continue;
+        // TODO: verify
+        if (obj != NULL) {
+          assert(oopDesc::is_oop(obj), "");
+          assert(obj->nvm_header().fwd() != NULL, "");
+        }
+      }
+      cur = objArrayOop(cur->obj_at(list_length - 1));
+    }
+  }
+#endif // ASSERT
 
   {
     objArrayOop cur = dram_copy_list_oop;
@@ -615,13 +669,9 @@ void VM_OurPersistRecoveryDramCopy::doit() {
     }
   }
   {
-    nvmMirrorOopDesc* head = (nvmMirrorOopDesc*)0x700000000000;
+    nvmMirrorOopDesc* head = NvmMeta::meta()->_mirrors_head;
     nvmMirrorOopDesc* cur = head;
     while (cur != NULL) {
-      const char* name = cur->klass_name();
-      oop jc = resolve_class_oop(classes_oop, name);
-      if (jc == NULL) return;
-      Klass* klass = java_lang_Class::as_Klass(jc);
       cur->clear_dram_copy_and_mark();
       cur = cur->class_list_next();
     }
@@ -633,7 +683,8 @@ void VM_OurPersistRecoveryDramCopy::doit() {
   ClassLoaderDataGraph::classes_do(&klass_closure);
   if (klass_closure.result() == JNI_FALSE) return;
 
-  // DEBUG:
+  NvmMeta::meta()->_state_flag = 1;
+  NVM_WRITEBACK(NvmMeta::meta()->state_flag_addr());
   OurPersist::set_started();
 
   _result = JNI_TRUE;

@@ -8,11 +8,34 @@
 
 class NonVolatileChunkLarge;
 
+// DEBUG: This is a temporary class to test the allocator
+class nvmMirrorOopDesc;
+typedef nvmMirrorOopDesc* nvmMirrorOop;
+class NvmMeta {
+ public:
+  uintptr_t _state_flag;
+  nvmMirrorOop _mirrors_head;
+  void* _nvm_head;
+  static NvmMeta* meta() {
+    return (NvmMeta*)0x700000000000;
+  }
+  uintptr_t* state_flag_addr() {
+    return &_state_flag;
+  }
+  nvmMirrorOop* mirrors_head_addr() {
+    return &_mirrors_head;
+  }
+  void** nvm_head_addr() {
+    return &_nvm_head;
+  }
+};
+
 class NVMAllocator : AllStatic {
   friend class NonVolatileThreadLocalAllocBuffer;
   friend class NonVolatileChunkSegregate;
   friend class NonVolatileChunkLarge;
   friend class VM_OurPersistRecoveryDramCopy; // DEBUG:
+  friend class VM_OurPersistRecoveryInit;     // DEBUG:
 public:
   static const size_t NVM_CHUNK_BYTE_SIZE = 4096;
   static const size_t SEGREGATED_REGION_SIZE_GB = 10;

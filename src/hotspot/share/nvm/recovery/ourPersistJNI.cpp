@@ -16,11 +16,18 @@ JVM_ENTRY(static void, OurPersist_initNvmFile(JNIEnv *env, jclass clazz, jstring
   NVMRecovery::initNvmFile(env, clazz, nvm_file_path, THREAD);
 JVM_END
 
-JVM_ENTRY(static jboolean, OurPersist_exists(JNIEnv *env, jclass clazz, jstring nvm_file_path))
+JVM_ENTRY(static jboolean, OurPersist_hasEnableNvmData(JNIEnv *env, jclass clazz, jstring nvm_file_path))
   if (!OurPersist::enable()) {
     THROW_MSG_0(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
   }
-  return NVMRecovery::exists(env, clazz, nvm_file_path, THREAD);
+  return NVMRecovery::hasEnableNvmData(env, clazz, nvm_file_path, THREAD);
+JVM_END
+
+JVM_ENTRY(static void, OurPersist_disableNvmData(JNIEnv *env, jclass clazz, jstring nvm_file_path))
+  if (!OurPersist::enable()) {
+    THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
+  }
+  NVMRecovery::disableNvmData(env, clazz, nvm_file_path, THREAD);
 JVM_END
 
 JVM_ENTRY(static void, OurPersist_initInternal(JNIEnv *env, jclass clazz, jstring nvm_file_path))
@@ -78,7 +85,8 @@ JVM_END
 
 static JNINativeMethod ourpersist_methods[] = {
   {CC "initNvmFile", CC "(" STRING ")V", FN_PTR(OurPersist_initNvmFile)},
-  {CC "exists", CC "(" STRING ")Z", FN_PTR(OurPersist_exists)},
+  {CC "hasEnableNvmData", CC "(" STRING ")Z", FN_PTR(OurPersist_hasEnableNvmData)},
+  {CC "disableNvmData", CC "(" STRING ")V", FN_PTR(OurPersist_disableNvmData)},
 
   {CC "initInternal", CC "(" STRING ")V", FN_PTR(OurPersist_initInternal)},
 

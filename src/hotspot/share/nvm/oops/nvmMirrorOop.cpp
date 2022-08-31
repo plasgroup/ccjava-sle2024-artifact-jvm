@@ -10,16 +10,11 @@
 #include "oops/oop.inline.hpp"
 #include "oops/typeArrayKlass.hpp"
 
-nvmMirrorOopDesc* nvmMirrorOopDesc::class_list_head = NULL;
 nvmMirrorOopDesc* nvmMirrorOopDesc::class_list_tail = NULL;
 pthread_mutex_t nvmMirrorOopDesc::class_list_mtx  = PTHREAD_MUTEX_INITIALIZER;
 
-void* nvmMirrorOopDesc::nvm_head = NULL;
-void* nvmMirrorOopDesc::nvm_tail = NULL;
-pthread_mutex_t nvmMirrorOopDesc::allocate_mtx = PTHREAD_MUTEX_INITIALIZER;
-
 int nvmMirrorOopDesc::offset_of_free_space() {
-  int start = oopDesc::header_size() * HeapWordSize;
+  int start = sizeof(nvmMirrorOopDesc);
   return start + 2 * HeapWordSize;
 }
 
@@ -29,19 +24,8 @@ int nvmMirrorOopDesc::length_of_free_space() {
   return size;
 }
 
-int nvmMirrorOopDesc::offset_of_class_list_next() {
-  int start = nvmMirrorOopDesc::offset_of_free_space();
-  return start;
-}
-
-nvmMirrorOopDesc** nvmMirrorOopDesc::class_list_next_addr(nvmMirrorOopDesc* target) {
-  void* addr = ((char*)target) + nvmMirrorOopDesc::offset_of_class_list_next();
-  return (nvmMirrorOopDesc**)addr;
-  //return &target->_class_list_next;
-}
-
 int nvmMirrorOopDesc::offset_of_klass_name() {
-  int start = nvmMirrorOopDesc::offset_of_class_list_next() + HeapWordSize;
+  int start = sizeof(nvmMirrorOopDesc) + HeapWordSize;
   return start;
 }
 
@@ -53,7 +37,6 @@ int nvmMirrorOopDesc::length_of_klass_name() {
 char* nvmMirrorOopDesc::klass_name() {
   char* name = ((char*)this) + nvmMirrorOopDesc::offset_of_klass_name();
   return name;
-  //return this->debug;
 }
 
 void nvmMirrorOopDesc::set_klass_name(char* name) {
@@ -73,14 +56,20 @@ void nvmMirrorOopDesc::set_klass_name(char* name) {
   addr[strlen(name)] = '\0';
 }
 
-nvmMirrorOopDesc* nvmMirrorOopDesc::class_list_next() {
-  nvmMirrorOopDesc** ptr = nvmMirrorOopDesc::class_list_next_addr(this);
-  return *ptr;
+jobject nvmMirrorOopDesc::dram_mirror() {
+  return _dram_mirror;
+}
+
+void nvmMirrorOopDesc::set_dram_mirror(jobject mirror) {
+  _dram_mirror = mirror;
+}
+
+nvmMirrorOop nvmMirrorOopDesc::class_list_next() {
+  return _next;
 }
 
 void nvmMirrorOopDesc::set_class_list_next(nvmMirrorOopDesc* next) {
-  nvmMirrorOopDesc** ptr = nvmMirrorOopDesc::class_list_next_addr(this);
-  *ptr = next;
+  _next = next;
 }
 
 void nvmMirrorOopDesc::add_class_list(nvmMirrorOopDesc* target) {
@@ -88,18 +77,17 @@ void nvmMirrorOopDesc::add_class_list(nvmMirrorOopDesc* target) {
   pthread_mutex_lock(&class_list_mtx);
 
   target->set_class_list_next(NULL);
-  NVM_WRITEBACK(nvmMirrorOopDesc::class_list_next_addr(target));
-  OrderAccess::storeload();
+  NVM_WRITEBACK(&target->_next);
 
-  if (class_list_head == NULL) {
-    class_list_head = target;
-    tty->print_cr("class_list_head: %p", class_list_head); // DEBUG:
+  if (NvmMeta::meta()->_mirrors_head == NULL) {
+    //tty->print_cr("class_list_head: %p", class_list_head); // DEBUG:
+    NvmMeta::meta()->_mirrors_head = target;
+    NVM_WRITEBACK(NvmMeta::meta()->mirrors_head_addr());
   } else {
     assert(class_list_tail != NULL, "");
-    tty->print_cr("set: %p", class_list_tail); // DEBUG:
+    //tty->print_cr("set: %p", class_list_tail); // DEBUG:
     class_list_tail->set_class_list_next(target);
-    NVM_WRITEBACK(nvmMirrorOopDesc::class_list_next_addr(class_list_tail));
-    OrderAccess::storeload();
+    NVM_WRITEBACK(&class_list_tail->_next);
   }
 
   class_list_tail = target;
@@ -116,7 +104,10 @@ nvmMirrorOopDesc* nvmMirrorOopDesc::create_mirror(Klass* klass, oop mirror) {
   if (klass->is_hidden()) {
     return NULL;
   }
-  tty->print_cr("create_mirror: %s", klass->external_name()); // DEBUG:
+  if (klass->name()->starts_with("java/lang/invoke/BoundMethodHandle")) {
+    return NULL;
+  }
+  //tty->print_cr("create_mirror: %s", klass->external_name()); // DEBUG:
 
   // Persistence of the mirror object
   void* nvm_mirror = NVMAllocator::allocate(mirror->size());

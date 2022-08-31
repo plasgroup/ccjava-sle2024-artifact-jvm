@@ -9,6 +9,7 @@
 
 typedef class nvmMirrorOopDesc* nvmMirrorOop;
 typedef class nvmOopDesc* nvmOop;
+class Thread;
 class nvmOopDesc {
  private:
   uintptr_t _responsible_thread;

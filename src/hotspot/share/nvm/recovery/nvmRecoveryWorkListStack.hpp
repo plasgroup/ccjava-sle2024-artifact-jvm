@@ -9,7 +9,7 @@
 
 class NVMRecoveryWorkListStack : public CHeapObj<mtNone> {
  private:
-  static const unsigned long _work_list_stack_size = 1000000;
+  static const unsigned long _work_list_stack_size = 1024 * 1024 * 4; // 32 MB
 
   nvmOop _stack[_work_list_stack_size];
   unsigned long _top;

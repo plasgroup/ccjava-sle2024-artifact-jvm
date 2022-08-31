@@ -1,10 +1,10 @@
 #ifdef OUR_PERSIST
 
-#include "oops/nvmHeader.inline.hpp"
 #include "nvm/nvmMacro.hpp"
 #include "nvm/oops/nvmOop.hpp"
+#include "oops/nvmHeader.inline.hpp"
 #include "oops/oop.inline.hpp"
-#include "runtime/thread.hpp"
+#include "runtime/thread.inline.hpp"
 
 bool nvmHeader::is_null(nvmOop _fwd) {
   return _fwd == NULL;

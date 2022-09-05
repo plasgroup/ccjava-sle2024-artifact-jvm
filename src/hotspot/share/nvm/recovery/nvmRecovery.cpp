@@ -538,6 +538,15 @@ void VM_OurPersistRecoveryDramCopy::doit() {
 
         // begin "for f in obj.fields"
         if (klass->is_instance_klass()) {
+#ifdef OURPERSIST_INSTANCE_MAYBE_FASTCOPY
+          void* obj_ptr = OOP_TO_VOID(obj);
+          int base_offset_in_bytes = instanceOopDesc::base_offset_in_bytes();
+          int base_offset_in_words = base_offset_in_bytes / HeapWordSize;
+          assert(base_offset_in_bytes % HeapWordSize == 0, "");
+          HeapWord* from = (HeapWord*)((char*)nvm_obj + base_offset_in_bytes);
+          HeapWord* to   = (HeapWord*)((char*)obj_ptr + base_offset_in_bytes);
+          Copy::aligned_disjoint_words(from, to, obj->size() - base_offset_in_words /* word size */);
+#endif // OURPERSIST_INSTANCE_MAYBE_FASTCOPY
           Klass* cur_k = klass;
           while (cur_k != NULL) {
             InstanceKlass* ik = (InstanceKlass*)cur_k;
@@ -553,7 +562,9 @@ void VM_OurPersistRecoveryDramCopy::doit() {
                 continue;
               }
               if (is_java_primitive(field_type)) {
+#ifndef OURPERSIST_INSTANCE_MAYBE_FASTCOPY
                 OurPersist::copy_nvm_to_dram(nvm_obj, obj, field_offset, field_type);
+#endif // OURPERSIST_INSTANCE_MAYBE_FASTCOPY
               } else {
                 nvmOop nvm_v = nvmOopDesc::load_at<nvmOop>(nvm_obj, field_offset);
                 oop v = nvm_v != NULL ? nvm_v->dram_copy() : NULL;
@@ -578,14 +589,22 @@ void VM_OurPersistRecoveryDramCopy::doit() {
         } else if (klass->is_typeArray_klass()) {
           TypeArrayKlass* ak = (TypeArrayKlass*)klass;
           BasicType array_type = ((ArrayKlass*)ak)->element_type();
-
+#ifdef OURPERSIST_TYPEARRAY_SLOWCOPY
           typeArrayOop ao = (typeArrayOop)obj;
           int array_length = ao->length();
-
           for (int i = 0; i < array_length; i++) {
             ptrdiff_t field_offset = typeArrayOopDesc::base_offset_in_bytes(array_type) + type2aelembytes(array_type) * i;
             OurPersist::copy_nvm_to_dram(nvm_obj, ao, field_offset, array_type);
           }
+#else // OURPERSIST_TYPEARRAY_SLOWCOPY
+          void* obj_ptr = OOP_TO_VOID(obj);
+          int base_offset_in_bytes = typeArrayOopDesc::base_offset_in_bytes(array_type);
+          int base_offset_in_words = base_offset_in_bytes / HeapWordSize;
+          assert(base_offset_in_bytes % HeapWordSize == 0, "");
+          HeapWord* from = (HeapWord*)((char*)nvm_obj + base_offset_in_bytes);
+          HeapWord* to   = (HeapWord*)((char*)obj_ptr + base_offset_in_bytes);
+          Copy::aligned_disjoint_words(from, to, obj->size() - base_offset_in_words /* word size */);
+#endif // OURPERSIST_TYPEARRAY_SLOWCOPY
         } else {
           report_vm_error(__FILE__, __LINE__, "Illegal field type.");
         }

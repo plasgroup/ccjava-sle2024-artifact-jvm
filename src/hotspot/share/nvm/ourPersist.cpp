@@ -97,6 +97,15 @@ void OurPersist::copy_object_copy_step(oop obj, nvmOop nvm_obj, Klass* klass,
                                        Thread* cur_thread) {
   // begin "for f in obj.fields"
   if (klass->is_instance_klass()) {
+#ifdef OURPERSIST_INSTANCE_MAYBE_FASTCOPY
+    void* obj_ptr = OOP_TO_VOID(obj);
+    int base_offset_in_bytes = instanceOopDesc::base_offset_in_bytes();
+    int base_offset_in_words = base_offset_in_bytes / HeapWordSize;
+    assert(base_offset_in_bytes % HeapWordSize == 0, "");
+    HeapWord* from = (HeapWord*)((char*)nvm_obj + base_offset_in_bytes);
+    HeapWord* to   = (HeapWord*)((char*)obj_ptr + base_offset_in_bytes);
+    Copy::aligned_disjoint_words(from, to, obj->size() - base_offset_in_words /* word size */);
+#endif // OURPERSIST_INSTANCE_MAYBE_FASTCOPY
     Klass* cur_k = klass;
     while (true) {
       InstanceKlass* ik = (InstanceKlass*)cur_k;
@@ -136,7 +145,9 @@ void OurPersist::copy_object_copy_step(oop obj, nvmOop nvm_obj, Klass* klass,
           }
           Raw::oop_store_in_heap_at((oop)nvm_obj, field_offset, (oop)nvm_v);
         } else {
+#ifndef OURPERSIST_INSTANCE_MAYBE_FASTCOPY
           OurPersist::copy_dram_to_nvm(obj, (oop)nvm_obj, field_offset, field_type);
+#endif // OURPERSIST_INSTANCE_MAYBE_FASTCOPY
         }
       }
       cur_k = cur_k->super();
@@ -185,10 +196,20 @@ void OurPersist::copy_object_copy_step(oop obj, nvmOop nvm_obj, Klass* klass,
 
     typeArrayOop(nvm_obj)->set_length(array_length);
 
+#ifdef OURPERSIST_TYPEARRAY_SLOWCOPY
     for (int i = 0; i < array_length; i++) {
       ptrdiff_t field_offset = arrayOopDesc::base_offset_in_bytes(array_type) + type2aelembytes(array_type) * i;
       OurPersist::copy_dram_to_nvm(obj, (oop)nvm_obj, field_offset, array_type, true);
     }
+#else // OURPERSIST_TYPEARRAY_SLOWCOPY
+    void* obj_ptr = OOP_TO_VOID(obj);
+    int base_offset_in_bytes = typeArrayOopDesc::base_offset_in_bytes(array_type);
+    int base_offset_in_words = base_offset_in_bytes / HeapWordSize;
+    assert(base_offset_in_bytes % HeapWordSize == 0, "");
+    HeapWord* to   = (HeapWord*)((char*)nvm_obj + base_offset_in_bytes);
+    HeapWord* from = (HeapWord*)((char*)obj_ptr + base_offset_in_bytes);
+    Copy::aligned_disjoint_words(from, to, obj->size() - base_offset_in_words /* word size */);
+#endif // OURPERSIST_TYPEARRAY_SLOWCOPY
   } else {
     report_vm_error(__FILE__, __LINE__, "Illegal field type.");
   }
@@ -242,12 +263,12 @@ bool OurPersist::copy_object_verify_step(oop obj, nvmOop nvm_obj, Klass* klass) 
     }
   } else if (klass->is_typeArray_klass()) {
     TypeArrayKlass* ak = (TypeArrayKlass*)klass;
-    typeArrayOop ao = (typeArrayOop)obj;
     BasicType array_type = ((ArrayKlass*)ak)->element_type();
+
+    assert(typeArrayOop(nvm_obj)->length() == typeArrayOop(obj)->length(), "length mismatch");
+#ifdef OURPERSIST_TYPEARRAY_SLOWCOPY
+    typeArrayOop ao = (typeArrayOop)obj;
     int array_length = ao->length();
-
-    assert(typeArrayOop(nvm_obj)->length() == array_length, "length mismatch");
-
     for (int i = 0; i < array_length; i++) {
       ptrdiff_t field_offset = arrayOopDesc::base_offset_in_bytes(array_type) + type2aelembytes(array_type) * i;
       bool same = OurPersist::cmp_dram_and_nvm(obj, (oop)nvm_obj, field_offset, array_type, true);
@@ -255,6 +276,15 @@ bool OurPersist::copy_object_verify_step(oop obj, nvmOop nvm_obj, Klass* klass) 
         return false;
       }
     }
+#else // OURPERSIST_TYPEARRAY_SLOWCOPY
+    void* obj_ptr = OOP_TO_VOID(obj);
+    int base_offset_in_bytes = typeArrayOopDesc::base_offset_in_bytes(array_type);
+    int base_offset_in_words = base_offset_in_bytes / HeapWordSize;
+    assert(base_offset_in_bytes % HeapWordSize == 0, "");
+    HeapWord* to   = (HeapWord*)((char*)nvm_obj + base_offset_in_bytes);
+    HeapWord* from = (HeapWord*)((char*)obj_ptr + base_offset_in_bytes);
+    return memcmp(from, to, (obj->size() - base_offset_in_words) * HeapWordSize) == 0;
+#endif // OURPERSIST_TYPEARRAY_SLOWCOPY
   } else {
     report_vm_error(__FILE__, __LINE__, "Illegal field type.");
   }

@@ -31,25 +31,22 @@ public class Recovery {
   }
 
   public static native void initNvmFile(String nvmFilePath);
-  public static native boolean hasEnableNvmData(String nvmFilePath);
-  public static native void disableNvmData(String nvmFilePath);
+  public static native boolean hasEnableNvmData();
+  public static native void disableNvmData();
 
-  // public static void init(String nvmFilePath);
-  private static native void initInternal(String nvmFilePath);
+  // public static void init();
+  private static native void initInternal();
 
-  // public static void recovery(ClassLoader[] classLoaders, String nvmFilePath);
-  private static native String[] nvmCopyClassNames(String nvmFilePath);
-  private static native void createDramCopy(Object[] dramCopyList, Class<?>[] classes, String nvmFilePath);
-  private static native void recoveryDramCopy(Object[] dramCopyList, Class<?>[] classes, String nvmFilePath);
+  // public static void recovery(ClassLoader[] classLoaders);
+  private static native String[] nvmCopyClassNames();
+  private static native void createDramCopy(Object[] dramCopyList, Class<?>[] classes);
+  private static native void recoveryDramCopy(Object[] dramCopyList, Class<?>[] classes);
 
   public static native void killMe();
   public static native String mode();
 
-  public static void init(String nvmFilePath) {
-    if (nvmFilePath == null) {
-      throw new NullPointerException("nvmFilePath is null");
-    }
-    initInternal(nvmFilePath);
+  public static void init() {
+    initInternal();
   }
 
   private static Class<?> loadClass(ClassLoader[] classLoaders, String className) {
@@ -61,16 +58,13 @@ public class Recovery {
     return null;
   }
 
-  public static void recovery(ClassLoader[] classLoaders, String nvmFilePath) throws Exception {
+  public static void recovery(ClassLoader[] classLoaders) throws Exception {
     System.out.println("[Recovery] start");
-    if (!hasEnableNvmData(nvmFilePath)) {
-      throw new RecoveryException("nvm data is not enabled");
-    }
 
-    disableNvmData(nvmFilePath);
+    disableNvmData();
 
     System.out.println("[Recovery] get class names");
-    String[] classNames = nvmCopyClassNames(nvmFilePath);
+    String[] classNames = nvmCopyClassNames();
 
     System.out.println("[Recovery] load classes");
     Class<?>[] classes = new Class<?>[classNames.length];
@@ -88,7 +82,7 @@ public class Recovery {
     System.out.println("[Recovery] create dram copy");
     Object[] dramCopyList = new Object[16]; // DEBUG:
     long createDramCopyTime = System.currentTimeMillis();
-    createDramCopy(dramCopyList, classes, nvmFilePath);
+    createDramCopy(dramCopyList, classes);
     System.out.println("[Recovery] create dram copy --> " +
       (System.currentTimeMillis() - createDramCopyTime) + "ms");
     // DEBUG:
@@ -106,7 +100,7 @@ public class Recovery {
 
     System.out.println("[Recovery] recovery dram copy");
     long recoveryDramCopyTime = System.currentTimeMillis();
-    recoveryDramCopy(dramCopyList, classes, nvmFilePath);
+    recoveryDramCopy(dramCopyList, classes);
     System.out.println("[Recovery] recovery dram copy --> " +
       (System.currentTimeMillis() - recoveryDramCopyTime) + "ms");
 

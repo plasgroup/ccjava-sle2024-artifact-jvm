@@ -17,9 +17,8 @@ class NVMRecovery : AllStatic {
  private:
   static Symbol* _ourpersist_recovery_exception;
   static bool _init_nvm;
-  static char _nvm_path[1024];
 
-  static void check_nvm_loaded(jstring nvm_file_path, TRAPS);
+  static void check_nvm_loaded(TRAPS);
   static Klass* nvmCopy2klass(nvmOop nvm_copy, TRAPS);
   static Klass* nvmMirrorCopy2klass(nvmMirrorOop nvm_mirror_copy, TRAPS);
 
@@ -36,15 +35,15 @@ class NVMRecovery : AllStatic {
   }
 
   static void initNvmFile(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS);
-  static jboolean hasEnableNvmData(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS);
-  static void disableNvmData(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS);
-  static void initInternal(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS);
-  static void createNvmFile(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS);
-  static jobjectArray nvmCopyClassNames(JNIEnv *env, jclass clazz, jstring nvm_file_path, TRAPS);
+  static jboolean hasEnableNvmData(JNIEnv *env, jclass clazz, TRAPS);
+  static void disableNvmData(JNIEnv *env, jclass clazz, TRAPS);
+  static void initInternal(JNIEnv *env, jclass clazz, TRAPS);
+  static void createNvmFile(JNIEnv *env, jclass clazz, TRAPS);
+  static jobjectArray nvmCopyClassNames(JNIEnv *env, jclass clazz, TRAPS);
   static void createDramCopy(JNIEnv *env, jclass clazz, jobjectArray dram_copy_list,
-                             jobjectArray classes, jstring nvm_file_path, TRAPS);
+                             jobjectArray classes, TRAPS);
   static void recoveryDramCopy(JNIEnv *env, jclass clazz, jobjectArray dram_copy_list,
-                             jobjectArray classes, jstring nvm_file_path, TRAPS);
+                             jobjectArray classes, TRAPS);
   static void killMe(JNIEnv *env, jclass clazz, TRAPS);
   static jstring mode(JNIEnv *env, jclass clazz, TRAPS);
 };
@@ -53,12 +52,11 @@ class VM_OurPersistRecoveryInit: public VM_Operation {
  private:
   JNIEnv* _env;
   jclass _clazz;
-  jstring _nvm_file_path;
   jboolean _result;
 
  public:
-  VM_OurPersistRecoveryInit(JNIEnv* env, jclass clazz, jstring nvm_file_path):
-    _env(env), _clazz(clazz), _nvm_file_path(nvm_file_path), _result(JNI_FALSE) {}
+  VM_OurPersistRecoveryInit(JNIEnv* env, jclass clazz):
+    _env(env), _clazz(clazz), _result(JNI_FALSE) {}
   VMOp_Type type() const { return VMOp_OurPersistRecoveryInit; }
   jboolean result() { return _result; }
   void doit();
@@ -70,14 +68,13 @@ class VM_OurPersistRecoveryDramCopy: public VM_Operation {
   jclass _clazz;
   jobjectArray _dram_copy_list;
   jobjectArray _classes;
-  jstring _nvm_file_path;
   jboolean _result;
 
  public:
   VM_OurPersistRecoveryDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_copy_list,
-                                jobjectArray classes, jstring nvm_file_path) :
+                                jobjectArray classes) :
                                   _env(env), _clazz(clazz), _dram_copy_list(dram_copy_list),
-                                  _classes(classes), _nvm_file_path(nvm_file_path), _result(JNI_FALSE) {}
+                                  _classes(classes), _result(JNI_FALSE) {}
   VMOp_Type type() const { return VMOp_OurPersistRecoveryDramCopy; }
   jboolean result() { return _result; }
   void doit();

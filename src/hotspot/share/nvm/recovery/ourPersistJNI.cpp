@@ -16,50 +16,48 @@ JVM_ENTRY(static void, OurPersist_initNvmFile(JNIEnv *env, jclass clazz, jstring
   NVMRecovery::initNvmFile(env, clazz, nvm_file_path, THREAD);
 JVM_END
 
-JVM_ENTRY(static jboolean, OurPersist_hasEnableNvmData(JNIEnv *env, jclass clazz, jstring nvm_file_path))
+JVM_ENTRY(static jboolean, OurPersist_hasEnableNvmData(JNIEnv *env, jclass clazz))
   if (!OurPersist::enable()) {
     THROW_MSG_0(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
   }
-  return NVMRecovery::hasEnableNvmData(env, clazz, nvm_file_path, THREAD);
+  return NVMRecovery::hasEnableNvmData(env, clazz, THREAD);
 JVM_END
 
-JVM_ENTRY(static void, OurPersist_disableNvmData(JNIEnv *env, jclass clazz, jstring nvm_file_path))
+JVM_ENTRY(static void, OurPersist_disableNvmData(JNIEnv *env, jclass clazz))
   if (!OurPersist::enable()) {
     THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
   }
-  NVMRecovery::disableNvmData(env, clazz, nvm_file_path, THREAD);
+  NVMRecovery::disableNvmData(env, clazz, THREAD);
 JVM_END
 
-JVM_ENTRY(static void, OurPersist_initInternal(JNIEnv *env, jclass clazz, jstring nvm_file_path))
+JVM_ENTRY(static void, OurPersist_initInternal(JNIEnv *env, jclass clazz))
   if (!OurPersist::enable()) {
     THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
   }
-  NVMRecovery::initInternal(env, clazz, nvm_file_path, THREAD);
+  NVMRecovery::initInternal(env, clazz, THREAD);
 JVM_END
 
-JVM_ENTRY(static jobjectArray, OurPersist_nvmCopyClassNames(JNIEnv *env, jclass clazz, jstring nvm_file_path))
+JVM_ENTRY(static jobjectArray, OurPersist_nvmCopyClassNames(JNIEnv *env, jclass clazz))
   if (!OurPersist::enable()) {
     THROW_MSG_NULL(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
   }
-  return NVMRecovery::nvmCopyClassNames(env, clazz, nvm_file_path, THREAD);
+  return NVMRecovery::nvmCopyClassNames(env, clazz, THREAD);
 JVM_END
 
 JVM_ENTRY(static void, OurPersist_createDramCopy(JNIEnv *env, jclass clazz,
-                                                 jobjectArray dram_copy_list, jobjectArray classes,
-                                                 jstring nvm_file_path))
+                                                 jobjectArray dram_copy_list, jobjectArray classes))
   if (!OurPersist::enable()) {
     THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
   }
-  NVMRecovery::createDramCopy(env, clazz, dram_copy_list, classes, nvm_file_path, THREAD);
+  NVMRecovery::createDramCopy(env, clazz, dram_copy_list, classes, THREAD);
 JVM_END
 
 JVM_ENTRY(static void, OurPersist_recoveryDramCopy(JNIEnv *env, jclass clazz,
-                                                   jobjectArray dram_copy_list, jobjectArray classes,
-                                                   jstring nvm_file_path))
+                                                   jobjectArray dram_copy_list, jobjectArray classes))
   if (!OurPersist::enable()) {
     THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
   }
-  NVMRecovery::recoveryDramCopy(env, clazz, dram_copy_list, classes, nvm_file_path, THREAD);
+  NVMRecovery::recoveryDramCopy(env, clazz, dram_copy_list, classes, THREAD);
 JVM_END
 
 JVM_ENTRY(static void, OurPersist_killMe(JNIEnv *env, jclass clazz))
@@ -85,14 +83,14 @@ JVM_END
 
 static JNINativeMethod ourpersist_methods[] = {
   {CC "initNvmFile", CC "(" STRING ")V", FN_PTR(OurPersist_initNvmFile)},
-  {CC "hasEnableNvmData", CC "(" STRING ")Z", FN_PTR(OurPersist_hasEnableNvmData)},
-  {CC "disableNvmData", CC "(" STRING ")V", FN_PTR(OurPersist_disableNvmData)},
+  {CC "hasEnableNvmData", CC "()Z", FN_PTR(OurPersist_hasEnableNvmData)},
+  {CC "disableNvmData", CC "()V", FN_PTR(OurPersist_disableNvmData)},
 
-  {CC "initInternal", CC "(" STRING ")V", FN_PTR(OurPersist_initInternal)},
+  {CC "initInternal", CC "()V", FN_PTR(OurPersist_initInternal)},
 
-  {CC "nvmCopyClassNames", CC "(" STRING ")[" STRING "", FN_PTR(OurPersist_nvmCopyClassNames)},
-  {CC "createDramCopy", CC "([" OBJ "[" CLASS "" STRING ")V", FN_PTR(OurPersist_createDramCopy)},
-  {CC "recoveryDramCopy", CC "([" OBJ "[" CLASS "" STRING ")V", FN_PTR(OurPersist_recoveryDramCopy)},
+  {CC "nvmCopyClassNames", CC "()[" STRING "", FN_PTR(OurPersist_nvmCopyClassNames)},
+  {CC "createDramCopy", CC "([" OBJ "[" CLASS ")V", FN_PTR(OurPersist_createDramCopy)},
+  {CC "recoveryDramCopy", CC "([" OBJ "[" CLASS ")V", FN_PTR(OurPersist_recoveryDramCopy)},
 
   {CC "killMe", CC "()V", FN_PTR(OurPersist_killMe)},
   {CC "mode", CC "()" STRING "", FN_PTR(OurPersist_mode)},

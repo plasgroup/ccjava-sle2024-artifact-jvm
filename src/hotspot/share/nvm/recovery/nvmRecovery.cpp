@@ -34,19 +34,11 @@
 Symbol* NVMRecovery::_ourpersist_recovery_exception = NULL;
 // DEBUG:
 int NVMRecovery::create_mirror_count = 0;
-#define NVM_FILE_PATH_MAX_SIZE 1024
 bool NVMRecovery::_init_nvm = false;
-char NVMRecovery::_nvm_path[NVM_FILE_PATH_MAX_SIZE] = {0};
 
-void NVMRecovery::check_nvm_loaded(jstring nvm_file_path, TRAPS) {
-  const char* nvm_file_path_cstr =
-    java_lang_String::as_utf8_string(JNIHandles::resolve(nvm_file_path));
+void NVMRecovery::check_nvm_loaded(TRAPS) {
   if (!NVMRecovery::_init_nvm) {
     THROW_MSG(ourpersist_recovery_exception(), "NVM file has not been initialized");
-  }
-  if (strcmp(NVMRecovery::_nvm_path, nvm_file_path_cstr) != 0) {
-    THROW_MSG(ourpersist_recovery_exception(),
-      "This implementation does not support multiple NVM files");
   }
 }
 
@@ -72,23 +64,18 @@ void NVMRecovery::initNvmFile(JNIEnv* env, jclass clazz, jstring nvm_file_path, 
   if (NVMRecovery::_init_nvm) {
     THROW_MSG(ourpersist_recovery_exception(), "NVM file has been initialized");
   }
+
   const char* nvm_file_path_cstr =
     java_lang_String::as_utf8_string(JNIHandles::resolve(nvm_file_path));
-  if (strlen(nvm_file_path_cstr) >= NVM_FILE_PATH_MAX_SIZE) {
-    THROW_MSG(ourpersist_recovery_exception(), "NVM file path is too long");
-  }
-
   NVMAllocator::init(nvm_file_path_cstr);
 
   NVMRecovery::_init_nvm = true;
-  strcpy(NVMRecovery::_nvm_path, nvm_file_path_cstr);
-
-  NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK);
+  NVMRecovery::check_nvm_loaded(CHECK);
   if (HAS_PENDING_EXCEPTION) return;
 }
 
-jboolean NVMRecovery::hasEnableNvmData(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
-  NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK_0);
+jboolean NVMRecovery::hasEnableNvmData(JNIEnv* env, jclass clazz, TRAPS) {
+  NVMRecovery::check_nvm_loaded(CHECK_0);
   if (HAS_PENDING_EXCEPTION) return JNI_FALSE;
 
   if (NvmMeta::meta()->_state_flag == 1) {
@@ -98,27 +85,27 @@ jboolean NVMRecovery::hasEnableNvmData(JNIEnv* env, jclass clazz, jstring nvm_fi
   return JNI_FALSE;
 }
 
-void NVMRecovery::disableNvmData(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
-  NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK);
+void NVMRecovery::disableNvmData(JNIEnv* env, jclass clazz, TRAPS) {
+  NVMRecovery::check_nvm_loaded(CHECK);
   if (HAS_PENDING_EXCEPTION) return;
 
   NvmMeta::meta()->_state_flag = 0;
   NVM_WRITEBACK(NvmMeta::meta()->state_flag_addr());
 }
 
-void NVMRecovery::initInternal(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
-  NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK);
+void NVMRecovery::initInternal(JNIEnv* env, jclass clazz, TRAPS) {
+  NVMRecovery::check_nvm_loaded(CHECK);
   if (HAS_PENDING_EXCEPTION) return;
 
-  VM_OurPersistRecoveryInit op(env, clazz, nvm_file_path);
+  VM_OurPersistRecoveryInit op(env, clazz);
   VMThread::execute(&op);
   if (op.result() == JNI_FALSE) {
     THROW_MSG(NVMRecovery::ourpersist_recovery_exception(), "Error in NVMRecovery::initInternal");
   }
 }
 
-jobjectArray NVMRecovery::nvmCopyClassNames(JNIEnv* env, jclass clazz, jstring nvm_file_path, TRAPS) {
-  NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK_NULL);
+jobjectArray NVMRecovery::nvmCopyClassNames(JNIEnv* env, jclass clazz, TRAPS) {
+  NVMRecovery::check_nvm_loaded(CHECK_NULL);
   if (HAS_PENDING_EXCEPTION) return NULL;
 
   nvmMirrorOopDesc* head = NvmMeta::meta()->_mirrors_head;
@@ -183,8 +170,8 @@ jclass resolve_class(jobjectArray classes, const char* name) {
 */
 
 void NVMRecovery::createDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_copy_list,
-                                 jobjectArray classes, jstring nvm_file_path, TRAPS) {
-  NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK);
+                                 jobjectArray classes, TRAPS) {
+  NVMRecovery::check_nvm_loaded(CHECK);
   if (HAS_PENDING_EXCEPTION) return;
 
   nvmMirrorOopDesc* mirrors_head = NvmMeta::meta()->_mirrors_head;
@@ -386,11 +373,11 @@ void NVMRecovery::createDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_co
 }
 
 void NVMRecovery::recoveryDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_copy_list,
-                                   jobjectArray classes, jstring nvm_file_path, TRAPS) {
-  NVMRecovery::check_nvm_loaded(nvm_file_path, CHECK);
+                                   jobjectArray classes, TRAPS) {
+  NVMRecovery::check_nvm_loaded(CHECK);
   if (HAS_PENDING_EXCEPTION) return;
 
-  VM_OurPersistRecoveryDramCopy op(env, clazz, dram_copy_list, classes, nvm_file_path);
+  VM_OurPersistRecoveryDramCopy op(env, clazz, dram_copy_list, classes);
   VMThread::execute(&op);
 
   if (op.result() == JNI_FALSE) {

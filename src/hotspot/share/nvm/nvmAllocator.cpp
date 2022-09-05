@@ -64,6 +64,11 @@ void NVMAllocator::init(const char* nvm_path) {
   NVMAllocator::segregated_top = NVMAllocator::nvm_head;
   NVMAllocator::nvm_tail = (void*)(((char*)NVMAllocator::nvm_head) + size);
 
+  // initialize the NVM headers.
+#ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
+  NvmMeta::meta()->_state_flag = 0;
+  NvmMeta::meta()->_mirrors_head = NULL;
+#endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
   if (NvmMeta::meta()->_state_flag == 1) {
     NVMAllocator::nvm_head = NvmMeta::meta()->_nvm_head;
   } else {

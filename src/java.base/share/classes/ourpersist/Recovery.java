@@ -32,7 +32,7 @@ public class Recovery {
 
   public static native void initNvmFile(String nvmFilePath);
   public static native boolean hasEnableNvmData(String nvmFilePath);
-  private static native void disableNvmData(String nvmFilePath);
+  public static native void disableNvmData(String nvmFilePath);
 
   // public static void init(String nvmFilePath);
   private static native void initInternal(String nvmFilePath);
@@ -89,39 +89,26 @@ public class Recovery {
     Object[] dramCopyList = new Object[16]; // DEBUG:
     long createDramCopyTime = System.currentTimeMillis();
     createDramCopy(dramCopyList, classes, nvmFilePath);
-    System.out.println("[Recovery] create dram copy time: " + (System.currentTimeMillis() - createDramCopyTime));
+    System.out.println("[Recovery] create dram copy --> " +
+      (System.currentTimeMillis() - createDramCopyTime) + "ms");
     // DEBUG:
     {
-      int count_true = 0;
-      int count_false = 0;
+      int dram_copy_count = 0;
       Object[] cur = dramCopyList;
       while (cur != null) {
         for (int i = 0; i < dramCopyList.length - 1; i++) {
-          if (cur[i] != null) {
-            count_true++;
-          } else {
-            count_false++;
-          }
+          if (cur[i] != null) dram_copy_count++;
         }
         cur = (Object[])cur[dramCopyList.length - 1];
       }
-      System.out.println("[Recovery] dram copy count: " + count_true + " " + count_false);
+      System.out.println("[Recovery] number of dram copy: " + dram_copy_count);
     }
 
     System.out.println("[Recovery] recovery dram copy");
     long recoveryDramCopyTime = System.currentTimeMillis();
     recoveryDramCopy(dramCopyList, classes, nvmFilePath);
-    System.out.println("[Recovery] recovery dram copy time: " + (System.currentTimeMillis() - recoveryDramCopyTime));
-    // DEBUG:
-    {
-      Object[] cur = dramCopyList;
-      while (cur != null) {
-        for (int i = 0; i < dramCopyList.length - 1; i++) {
-          //System.out.println(cur[i]);
-        }
-        cur = (Object[])cur[dramCopyList.length - 1];
-      }
-    }
+    System.out.println("[Recovery] recovery dram copy --> " +
+      (System.currentTimeMillis() - recoveryDramCopyTime) + "ms");
 
     System.out.println("[Recovery] finish");
   }

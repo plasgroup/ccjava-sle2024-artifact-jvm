@@ -7,6 +7,7 @@
 #include "nvm/recovery/nvmRecovery.hpp"
 #include "nvm/recovery/ourPersistJNI.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
+#include "runtime/thread.inline.hpp"
 #include "utilities/exceptions.hpp"
 
 JVM_ENTRY(static void, OurPersist_initNvmFile(JNIEnv *env, jclass clazz, jstring nvm_file_path))
@@ -20,7 +21,8 @@ JVM_ENTRY(static jboolean, OurPersist_hasEnableNvmData(JNIEnv *env, jclass clazz
   if (!OurPersist::enable()) {
     THROW_MSG_0(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
   }
-  return NVMRecovery::hasEnableNvmData(env, clazz, CHECK_0);
+  jboolean res = NVMRecovery::hasEnableNvmData(env, clazz, CHECK_0);
+  return res;
 JVM_END
 
 JVM_ENTRY(static void, OurPersist_disableNvmData(JNIEnv *env, jclass clazz))
@@ -41,7 +43,8 @@ JVM_ENTRY(static jobjectArray, OurPersist_nvmCopyClassNames(JNIEnv *env, jclass 
   if (!OurPersist::enable()) {
     THROW_MSG_NULL(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
   }
-  return NVMRecovery::nvmCopyClassNames(env, clazz, CHECK_NULL);
+  jobjectArray res = NVMRecovery::nvmCopyClassNames(env, clazz, CHECK_NULL);
+  return res;
 JVM_END
 
 JVM_ENTRY(static void, OurPersist_createDramCopy(JNIEnv *env, jclass clazz,
@@ -71,7 +74,8 @@ JVM_ENTRY(static jstring, OurPersist_mode(JNIEnv *env, jclass clazz))
   if (!OurPersist::enable()) {
     THROW_MSG_NULL(NVMRecovery::ourpersist_recovery_exception(), "OurPersist is disabled.");
   }
-  return NVMRecovery::mode(env, clazz, CHECK_NULL);
+  jstring res = NVMRecovery::mode(env, clazz, CHECK_NULL);
+  return res;
 JVM_END
 
 #define LANG "Ljava/lang/"

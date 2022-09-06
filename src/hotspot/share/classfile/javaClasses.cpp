@@ -1059,8 +1059,6 @@ void java_lang_Class::create_mirror(Klass* k, Handle class_loader,
     }
 
 #ifdef OUR_PERSIST
-    // DEBUG:
-    Atomic::inc(&NVMRecovery::create_mirror_count);
     if (OurPersist::enable() && OurPersist::started()) {
       nvmMirrorOopDesc::create_and_set_mirror(k, mirror_oop);
     }

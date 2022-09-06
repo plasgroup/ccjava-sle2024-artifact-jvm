@@ -23,9 +23,6 @@ class NVMRecovery : AllStatic {
   static Klass* nvmMirrorCopy2klass(nvmMirrorOop nvm_mirror_copy, TRAPS);
 
  public:
-  // DEBUG:
-  static int create_mirror_count;
-
   static Symbol* ourpersist_recovery_exception() {
     assert(Thread::current() != NULL, "must be");
     if (_ourpersist_recovery_exception == NULL) {

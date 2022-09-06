@@ -32,8 +32,6 @@
 #include "utilities/macros.hpp"
 
 Symbol* NVMRecovery::_ourpersist_recovery_exception = NULL;
-// DEBUG:
-int NVMRecovery::create_mirror_count = 0;
 bool NVMRecovery::_init_nvm = false;
 
 void NVMRecovery::check_nvm_loaded(TRAPS) {

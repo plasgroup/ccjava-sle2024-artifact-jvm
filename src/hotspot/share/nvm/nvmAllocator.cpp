@@ -17,18 +17,17 @@ void* NVMAllocator::large_top = NULL;
 NonVolatileChunkLarge* NVMAllocator::first_free_nvcl = (NonVolatileChunkLarge*) NULL;
 pthread_mutex_t NVMAllocator::allocate_mtx = PTHREAD_MUTEX_INITIALIZER;
 
-void NVMAllocator::init(const char* nvm_path) {
+void NVMAllocator::init(const char* nvm_path, const char* nvm_path_for_size) {
   if (nvm_head != NULL) {
     assert(false, "NVMAllocator::init() is called twice");
   }
-  const void* nvm_target_addr = (void*)0x700000000000;
 
   // get the size of the NVM file.
   off_t size = 0;
   {
     const char* nvm_path_for_size = XSTR(NVM_FILE_PATH);
     struct stat stat_buf;
-    int nvm_fd_for_size = open(nvm_path_for_size, O_CREAT | O_RDWR, 0666);
+    int nvm_fd_for_size = open(nvm_path_for_size, O_RDWR, 0666);
     if(nvm_fd_for_size < 0) {
       report_vm_error(__FILE__, __LINE__,
                       "Failed to open the file.", "nvm_path_for_size: %s", nvm_path_for_size);
@@ -39,22 +38,30 @@ void NVMAllocator::init(const char* nvm_path) {
 
   // map the NVM file.
   void* nvm_addr = NULL;
+  void* map_addr = NVMAllocator::map_addr();
   {
-    int nvm_fd = open(nvm_path, O_CREAT | O_RDWR, 0666);
+    int nvm_fd = open(nvm_path, O_RDWR, 0666);
     if(nvm_fd < 0) {
       report_vm_error(__FILE__, __LINE__,
                       "Failed to open the file.", "nvm_path: %s", nvm_path);
     }
-    nvm_addr = (void*)mmap((void*)nvm_target_addr, size, PROT_WRITE, MAP_SHARED, nvm_fd, 0);
-    bool success = (nvm_addr != MAP_FAILED) && (nvm_addr == nvm_target_addr);
-    if (!success) {
+    nvm_addr = (void*)mmap(map_addr, size, PROT_WRITE, MAP_SHARED, nvm_fd, 0);
+    if (nvm_addr == MAP_FAILED) {
       report_vm_error(__FILE__, __LINE__,
-                      "Failed to map the file.", "nvm_path: %s, nvm_addr: %p, nvm_target_addr: %p",
-                      nvm_path, nvm_addr, nvm_target_addr);
+                      "Failed to map the file.",
+                      "nvm_path: %s, nvm_addr: %p, map_addr: %p, error massage: %s",
+                      nvm_path, nvm_addr, map_addr, strerror(errno));
+    }
+    if (nvm_addr != map_addr) {
+      report_vm_error(__FILE__, __LINE__,
+                      "Failed to map the file.",
+                      "nvm_path: %s, nvm_addr: %p, map_addr: %p",
+                      nvm_path, nvm_addr, map_addr);
     }
   }
 
   // DEBUG:
+  tty->print_cr("map addr: %p", nvm_addr);
   tty->print_cr("meta->_state_flag: %ld", NvmMeta::meta()->_state_flag);
   tty->print_cr("meta->_nvm_head: %p", NvmMeta::meta()->_nvm_head);
   tty->print_cr("meta->_mirrors_head: %p", NvmMeta::meta()->_mirrors_head);

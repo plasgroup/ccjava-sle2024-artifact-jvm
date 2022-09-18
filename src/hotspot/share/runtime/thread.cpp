@@ -145,8 +145,9 @@
 #include "jfr/jfr.hpp"
 #endif
 #ifdef OUR_PERSIST
-#include "nvm/nvmWorkListStack.hpp"
 #include "nvm/nvmBarrierSync.hpp"
+#include "nvm/nvmWorkListStack.hpp"
+#include "nvm/oops/nvmOop.hpp"
 #endif // OUR_PERSIST
 
 // Initialization after module runtime initialization
@@ -3457,6 +3458,11 @@ void Threads::initialize_jsr292_core_classes(TRAPS) {
 
 jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
   extern void JDK_Version_init();
+
+#ifdef OUR_PERSIST
+  // verify for OurPersist
+  nvmOopDesc::static_verify();
+#endif // OUR_PERSIST
 
   // Preinitialize version info.
   VM_Version::early_initialize();

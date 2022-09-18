@@ -22,7 +22,12 @@ class nvmOopDesc {
   uintptr_t _dependent_object_next_OR_dram_copy_and_mark;
   uintptr_t _klass;
 
+#ifdef ASSERT
+  static int _static_verify_count;
+#endif // ASSERT
+
  public:
+  static void static_verify();
 
   inline Thread* responsible_thread() const {
     return (Thread*)_responsible_thread;

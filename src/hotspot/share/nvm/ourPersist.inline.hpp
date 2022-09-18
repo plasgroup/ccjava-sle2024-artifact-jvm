@@ -61,6 +61,19 @@ inline bool OurPersist::is_target(Klass* klass) {
   return OurPersist::is_target_fast(klass);
 }
 
+inline bool OurPersist::is_target_mirror(Klass* klass) {
+  assert(klass != NULL, "");
+  // DEBUG:
+  // if (OurPersist::is_target_mirror_slow(klass) != OurPersist::is_target_mirror_fast(klass)) {
+  //   tty->print_cr("is_target_mirror_slow(%s) = %d", klass->external_name(), OurPersist::is_target_mirror_slow(klass));
+  //   tty->print_cr("is_target_mirror_fast(%s) = %d", klass->external_name(), OurPersist::is_target_mirror_fast(klass));
+  // }
+  // assert(OurPersist::is_target_mirror_slow(klass) == OurPersist::is_target_mirror_fast(klass), "");
+
+  // return OurPersist::is_target_mirror_fast(klass);
+  return OurPersist::is_target_mirror_slow(klass);
+}
+
 #ifdef ASSERT
 inline bool OurPersist::is_target_slow(Klass* klass) {
   while (klass != NULL) {
@@ -73,6 +86,17 @@ inline bool OurPersist::is_target_slow(Klass* klass) {
   return true;
 }
 #endif // ASSERT
+
+inline bool OurPersist::is_target_mirror_slow(Klass* klass) {
+  while (klass != NULL) {
+    if (!OurPersist::is_target_mirror_fast(klass)) {
+      return false;
+    }
+    klass = klass->super();
+  }
+
+  return true;
+}
 
 inline bool OurPersist::is_target_fast(Klass* klass) {
   int klass_id = klass->id();
@@ -88,6 +112,22 @@ inline bool OurPersist::is_target_fast(Klass* klass) {
   }
 
   if (klass->is_hidden()) {
+    return false;
+  }
+
+  return true;
+}
+
+inline bool OurPersist::is_target_mirror_fast(Klass* klass) {
+  if (klass->is_hidden()) {
+    return false;
+  }
+
+  if (klass->name()->starts_with("java/lang/invoke/BoundMethodHandle")) {
+    return false;
+  }
+
+  if (klass->name()->starts_with("jdk/internal/reflect/")) {
     return false;
   }
 

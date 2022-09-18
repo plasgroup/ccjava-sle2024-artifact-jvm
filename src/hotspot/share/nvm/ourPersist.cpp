@@ -60,8 +60,9 @@ void OurPersist::ensure_recoverable(oop obj) {
   if (!success) {
     barrier_sync->add(obj, nvm_obj, cur_thread);
     barrier_sync->sync();
-    assert(nvm_obj->responsible_thread() != cur_thread, "");
-    assert(obj->nvm_header().recoverable(), "");
+    assert(nvm_obj->responsible_thread() != cur_thread,
+      "responsible thread: %p, cur thread: %p",
+      nvm_obj->responsible_thread(), cur_thread);
     return;
   }
 

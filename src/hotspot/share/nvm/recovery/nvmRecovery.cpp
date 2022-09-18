@@ -417,10 +417,7 @@ class OurPersistSetNvmMirrors : public KlassClosure {
   void do_klass(Klass* k) {
     assert(k != NULL, "");
 
-    if (k->is_hidden()) {
-      return;
-    }
-    if (k->name()->starts_with("java/lang/invoke/BoundMethodHandle")) {
+    if (!OurPersist::is_target_mirror(k)) {
       return;
     }
 

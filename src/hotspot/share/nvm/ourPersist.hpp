@@ -43,7 +43,10 @@ class OurPersist : AllStatic {
 #ifdef ASSERT
   inline static bool is_target_slow(Klass* klass);
 #endif // ASSERT
+  inline static bool is_target_mirror_slow(Klass* klass);
+
   inline static bool is_target_fast(Klass* klass);
+  inline static bool is_target_mirror_fast(Klass* klass);
 
   inline static bool enable_slow();
 
@@ -52,6 +55,7 @@ class OurPersist : AllStatic {
   inline static bool started();
   inline static void set_started();
   inline static bool is_target(Klass* klass);
+  inline static bool is_target_mirror(Klass* klass);
   inline static bool is_static_field(oop obj, ptrdiff_t offset);
   inline static bool is_volatile(oop obj, ptrdiff_t offset, DecoratorSet ds);
   inline static bool is_durableroot(oop klass_obj, ptrdiff_t offset, DecoratorSet ds);

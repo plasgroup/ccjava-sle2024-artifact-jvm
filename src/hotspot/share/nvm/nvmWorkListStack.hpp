@@ -9,7 +9,8 @@
 
 class NVMWorkListStack : public CHeapObj<mtNone> {
  private:
-  static const unsigned long _work_list_stack_size = 1024 * 128; // 1 MB
+  //static const unsigned long _work_list_stack_size = 1024 * 128; // 1 MB
+  static const unsigned long _work_list_stack_size = 1024 * 1024 * 1; // 8 MB
 
   oop _stack[_work_list_stack_size];
   unsigned long _top;

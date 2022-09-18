@@ -150,7 +150,7 @@ nvmMirrorOopDesc* nvmMirrorOopDesc::create_mirror(Klass* klass, oop mirror) {
 #endif // ASSERT
 
   // writeback
-  NVM_WRITEBACK_LOOP(nvm_java_class, mirror->size());
+  NVM_WRITEBACK_LOOP(nvm_java_class, mirror->size() * HeapWordSize);
 
   // Set the list of classes in the nvm
   // NOTE: Includes lock operation (fence effect)

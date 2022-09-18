@@ -452,8 +452,9 @@ class OurPersistSetNvmMirrors : public KlassClosure {
 };
 
 void VM_OurPersistRecoveryInit::doit() {
-  NvmMeta::meta()->_nvm_head = (char*)0x700000000000 + sizeof(NvmMeta);
-  NVMAllocator::nvm_head = (char*)0x700000000000 + sizeof(NvmMeta);
+  void* nvm_head = (char*)NVMAllocator::map_addr() + sizeof(NvmMeta);
+  NvmMeta::meta()->_nvm_head = nvm_head;
+  NVMAllocator::nvm_head = nvm_head;
   NvmMeta::meta()->_mirrors_head = NULL;
   nvmMirrorOopDesc::class_list_tail = NULL;
   NVM_WRITEBACK(NvmMeta::meta()->nvm_head_addr());

@@ -1,5 +1,6 @@
 #ifdef OUR_PERSIST
 
+#include "nvm/memory/nvmMetaData.hpp"
 #include "nvm/nvmDebug.hpp"
 #include "nvm/oops/nvmMirrorOop.hpp"
 #include "oops/fieldStreams.inline.hpp"
@@ -79,10 +80,10 @@ void nvmMirrorOopDesc::add_class_list(nvmMirrorOopDesc* target) {
   target->set_class_list_next(NULL);
   NVM_WRITEBACK(&target->_next);
 
-  if (NvmMeta::meta()->_mirrors_head == NULL) {
+  if (NVMMetaData::meta()->_mirrors_head == NULL) {
     //tty->print_cr("class_list_head: %p", class_list_head); // DEBUG:
-    NvmMeta::meta()->_mirrors_head = target;
-    NVM_WRITEBACK(NvmMeta::meta()->mirrors_head_addr());
+    NVMMetaData::meta()->_mirrors_head = target;
+    NVM_WRITEBACK(NVMMetaData::meta()->mirrors_head_addr());
   } else {
     assert(class_list_tail != NULL, "");
     //tty->print_cr("set: %p", class_list_tail); // DEBUG:

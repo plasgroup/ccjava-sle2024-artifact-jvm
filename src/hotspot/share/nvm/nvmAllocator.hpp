@@ -51,28 +51,6 @@ class NVMAllocator : AllStatic {
   static void* allocate_chunksize();
 };
 
-// DEBUG: This is a temporary class to test the allocator
-class nvmMirrorOopDesc;
-typedef nvmMirrorOopDesc* nvmMirrorOop;
-class NvmMeta {
- public:
-  uintptr_t _state_flag;
-  nvmMirrorOop _mirrors_head;
-  void* _nvm_head;
-  static NvmMeta* meta() {
-    return (NvmMeta*)NVMAllocator::map_addr();
-  }
-  uintptr_t* state_flag_addr() {
-    return &_state_flag;
-  }
-  nvmMirrorOop* mirrors_head_addr() {
-    return &_mirrors_head;
-  }
-  void** nvm_head_addr() {
-    return &_nvm_head;
-  }
-};
-
 #endif // NVM_NVMALLOCATOR_HPP
 
 #endif // OUR_PERSIST

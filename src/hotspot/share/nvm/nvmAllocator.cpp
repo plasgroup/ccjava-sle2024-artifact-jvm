@@ -1,5 +1,6 @@
 #ifdef OUR_PERSIST
 
+#include "nvm/memory/nvmMetaData.hpp"
 #include "nvm/nonVolatileChunk.hpp"
 #include "nvm/nonVolatileThreadLocalAllocBuffer.hpp"
 #include "nvm/nvmAllocator.hpp"
@@ -62,12 +63,12 @@ void NVMAllocator::init(const char* nvm_path, const char* nvm_path_for_size) {
 
   // DEBUG:
   tty->print_cr("map addr: %p", nvm_addr);
-  tty->print_cr("meta->_state_flag: %ld", NvmMeta::meta()->_state_flag);
-  tty->print_cr("meta->_nvm_head: %p", NvmMeta::meta()->_nvm_head);
-  tty->print_cr("meta->_mirrors_head: %p", NvmMeta::meta()->_mirrors_head);
+  tty->print_cr("NVMMetaData->_state_flag: %ld", NVMMetaData::meta()->_state_flag);
+  tty->print_cr("NVMMetaData->_nvm_head: %p", NVMMetaData::meta()->_nvm_head);
+  tty->print_cr("NVMMetaData->_mirrors_head: %p", NVMMetaData::meta()->_mirrors_head);
 
   // initialize the NVM allocator.
-  NVMAllocator::nvm_head = (char*)nvm_addr + sizeof(NvmMeta);
+  NVMAllocator::nvm_head = (char*)nvm_addr + sizeof(NVMMetaData);
   NVMAllocator::segregated_top = NVMAllocator::nvm_head;
   NVMAllocator::nvm_tail = (void*)(((char*)NVMAllocator::nvm_head) + size);
 
@@ -76,11 +77,11 @@ void NVMAllocator::init(const char* nvm_path, const char* nvm_path_for_size) {
   NvmMeta::meta()->_state_flag = 0;
   NvmMeta::meta()->_mirrors_head = NULL;
 #endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
-  if (NvmMeta::meta()->_state_flag == 1) {
-    NVMAllocator::nvm_head = NvmMeta::meta()->_nvm_head;
+  if (NVMMetaData::meta()->_state_flag == 1) {
+    NVMAllocator::nvm_head = NVMMetaData::meta()->_nvm_head;
   } else {
-    NvmMeta::meta()->_nvm_head = NVMAllocator::nvm_head;
-    NVM_WRITEBACK(NvmMeta::meta()->nvm_head_addr());
+    NVMMetaData::meta()->_nvm_head = NVMAllocator::nvm_head;
+    NVM_WRITEBACK(NVMMetaData::meta()->nvm_head_addr());
   }
   tty->print_cr("NVMAllocator::nvm_head: %p", NVMAllocator::nvm_head);
 
@@ -195,8 +196,8 @@ void* NVMAllocator::allocate(size_t _word_size) {
   void* nvm_next = (void*)(((char*)NVMAllocator::nvm_head) + _byte_size);
   NVMAllocator::nvm_head = nvm_next;
 
-  NvmMeta::meta()->_nvm_head = NVMAllocator::nvm_head;
-  NVM_WRITEBACK(NvmMeta::meta()->nvm_head_addr());
+  NVMMetaData::meta()->_nvm_head = NVMAllocator::nvm_head;
+  NVM_WRITEBACK(NVMMetaData::meta()->nvm_head_addr());
 
   // check
   if (NVMAllocator::nvm_tail <= nvm_next) {

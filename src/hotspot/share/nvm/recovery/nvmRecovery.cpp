@@ -8,6 +8,7 @@
 #include "classfile/systemDictionaryShared.hpp"
 #include "classfile/vmSymbols.hpp"
 #include "jvmci/compilerRuntime.hpp"
+#include "nvm/memory/nvmMetaData.hpp"
 #include "nvm/oops/nvmMirrorOop.hpp"
 #include "nvm/ourPersist.inline.hpp"
 #include "nvm/recovery/nvmRecovery.hpp"
@@ -76,7 +77,7 @@ jboolean NVMRecovery::hasEnableNvmData(JNIEnv* env, jclass clazz, TRAPS) {
   NVMRecovery::check_nvm_loaded(CHECK_0);
   if (HAS_PENDING_EXCEPTION) return JNI_FALSE;
 
-  if (NvmMeta::meta()->_state_flag == 1) {
+  if (NVMMetaData::meta()->_state_flag == 1) {
     return JNI_TRUE;
   }
 
@@ -87,8 +88,8 @@ void NVMRecovery::disableNvmData(JNIEnv* env, jclass clazz, TRAPS) {
   NVMRecovery::check_nvm_loaded(CHECK);
   if (HAS_PENDING_EXCEPTION) return;
 
-  NvmMeta::meta()->_state_flag = 0;
-  NVM_WRITEBACK(NvmMeta::meta()->state_flag_addr());
+  NVMMetaData::meta()->_state_flag = 0;
+  NVM_WRITEBACK(NVMMetaData::meta()->state_flag_addr());
 }
 
 void NVMRecovery::initInternal(JNIEnv* env, jclass clazz, TRAPS) {
@@ -106,7 +107,7 @@ jobjectArray NVMRecovery::nvmCopyClassNames(JNIEnv* env, jclass clazz, TRAPS) {
   NVMRecovery::check_nvm_loaded(CHECK_NULL);
   if (HAS_PENDING_EXCEPTION) return NULL;
 
-  nvmMirrorOopDesc* head = NvmMeta::meta()->_mirrors_head;
+  nvmMirrorOopDesc* head = NVMMetaData::meta()->_mirrors_head;
   nvmMirrorOopDesc* cur = head;
   int count = 0;
   while (cur != NULL) {
@@ -172,7 +173,7 @@ void NVMRecovery::createDramCopy(JNIEnv* env, jclass clazz, jobjectArray dram_co
   NVMRecovery::check_nvm_loaded(CHECK);
   if (HAS_PENDING_EXCEPTION) return;
 
-  nvmMirrorOopDesc* mirrors_head = NvmMeta::meta()->_mirrors_head;
+  nvmMirrorOopDesc* mirrors_head = NVMMetaData::meta()->_mirrors_head;
 
   // Set pointer to dram copy in nvmMirrorOop
   {
@@ -452,20 +453,20 @@ class OurPersistSetNvmMirrors : public KlassClosure {
 };
 
 void VM_OurPersistRecoveryInit::doit() {
-  void* nvm_head = (char*)NVMAllocator::map_addr() + sizeof(NvmMeta);
-  NvmMeta::meta()->_nvm_head = nvm_head;
+  void* nvm_head = (char*)NVMAllocator::map_addr() + sizeof(NVMMetaData);
+  NVMMetaData::meta()->_nvm_head = nvm_head;
   NVMAllocator::nvm_head = nvm_head;
-  NvmMeta::meta()->_mirrors_head = NULL;
+  NVMMetaData::meta()->_mirrors_head = NULL;
   nvmMirrorOopDesc::class_list_tail = NULL;
-  NVM_WRITEBACK(NvmMeta::meta()->nvm_head_addr());
-  NVM_WRITEBACK(NvmMeta::meta()->mirrors_head_addr());
+  NVM_WRITEBACK(NVMMetaData::meta()->nvm_head_addr());
+  NVM_WRITEBACK(NVMMetaData::meta()->mirrors_head_addr());
 
   OurPersistSetNvmMirrors klass_closure(0, NULL);
   ClassLoaderDataGraph::classes_do(&klass_closure);
   if (klass_closure.result() == JNI_FALSE) return;
 
-  NvmMeta::meta()->_state_flag = 1;
-  NVM_WRITEBACK(NvmMeta::meta()->state_flag_addr());
+  NVMMetaData::meta()->_state_flag = 1;
+  NVM_WRITEBACK(NVMMetaData::meta()->state_flag_addr());
   OurPersist::set_started();
 
   _result = JNI_TRUE;
@@ -495,7 +496,7 @@ void VM_OurPersistRecoveryDramCopy::doit() {
     }
   }
   {
-    nvmMirrorOopDesc* head = NvmMeta::meta()->_mirrors_head;
+    nvmMirrorOopDesc* head = NVMMetaData::meta()->_mirrors_head;
     nvmMirrorOopDesc* cur = head;
     while (cur != NULL) {
       Klass* klass = NVMRecovery::nvmMirrorCopy2klass(cur, Thread::current());
@@ -598,7 +599,7 @@ void VM_OurPersistRecoveryDramCopy::doit() {
   }
 
   // Set all durableroots and init allocator
-  nvmMirrorOopDesc* head = NvmMeta::meta()->_mirrors_head;
+  nvmMirrorOopDesc* head = NVMMetaData::meta()->_mirrors_head;
   nvmMirrorOopDesc* cur = head;
   while (cur != NULL) {
     nvmMirrorOopDesc::class_list_tail = cur;
@@ -671,7 +672,7 @@ void VM_OurPersistRecoveryDramCopy::doit() {
     }
   }
   {
-    nvmMirrorOopDesc* head = NvmMeta::meta()->_mirrors_head;
+    nvmMirrorOopDesc* head = NVMMetaData::meta()->_mirrors_head;
     nvmMirrorOopDesc* cur = head;
     while (cur != NULL) {
       cur->clear_dram_copy_and_mark();
@@ -685,8 +686,8 @@ void VM_OurPersistRecoveryDramCopy::doit() {
   ClassLoaderDataGraph::classes_do(&klass_closure);
   if (klass_closure.result() == JNI_FALSE) return;
 
-  NvmMeta::meta()->_state_flag = 1;
-  NVM_WRITEBACK(NvmMeta::meta()->state_flag_addr());
+  NVMMetaData::meta()->_state_flag = 1;
+  NVM_WRITEBACK(NVMMetaData::meta()->state_flag_addr());
   OurPersist::set_started();
 
   _result = JNI_TRUE;

@@ -186,6 +186,8 @@ class Runtime1: public AllStatic {
   // method tracing
   static void trace_block_entry(jint block_id);
 
+  static void nvm_print(jint id);
+
 #ifndef PRODUCT
   static address throw_count_address()               { return (address)&_throw_count;             }
   static address arraycopy_count_address(BasicType type);

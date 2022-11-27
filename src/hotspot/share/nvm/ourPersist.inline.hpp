@@ -13,6 +13,7 @@
 #include "utilities/globalDefinitions.hpp"
 
 inline bool OurPersist::enable_slow() {
+  return true;
   if (UseCompressedOops) {
     return false;
   }

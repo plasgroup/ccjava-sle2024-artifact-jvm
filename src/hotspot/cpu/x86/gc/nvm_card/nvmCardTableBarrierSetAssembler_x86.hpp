@@ -6,6 +6,10 @@
 #include "asm/macroAssembler.hpp"
 #include "gc/shared/cardTableBarrierSetAssembler.hpp"
 
+class LIR_Assembler;
+class StubAssembler;
+class NVMCardTablePostBarrierStub;
+
 class NVMCardTableBarrierSetAssembler: public CardTableBarrierSetAssembler {
  public:
   typedef CardTableBarrierSetAssembler Parent;
@@ -60,6 +64,10 @@ class NVMCardTableBarrierSetAssembler: public CardTableBarrierSetAssembler {
   void runtime_needs_wupd(MacroAssembler* masm, Register dst, Address obj,
                           DecoratorSet ds, bool is_oop,
                           Register tmp1, Register tmp2, Register tmp3, Register tmp4);
+  #ifdef COMPILER1
+  void generate_c1_post_barrier_runtime_stub(StubAssembler* sasm);
+  void gen_post_barrier_stub(LIR_Assembler* ce, NVMCardTablePostBarrierStub* stub);
+  #endif
 };
 
 #endif // CPU_X86_GC_NVMCARD_NVMCARDTABLEBARRIERSETASSEMBLER_X86_HPP

@@ -7,6 +7,14 @@
 #include "oops/nvmHeader.hpp"
 #include "precompiled.hpp"
 
+#ifdef COMPILER1
+#include "c1/c1_Runtime1.hpp"
+#include "c1/c1_CodeStubs.hpp"
+#include "c1/c1_LIRAssembler.hpp"
+#include "c1/c1_MacroAssembler.hpp"
+#include "gc/shared/c1/nvmCardTableBarrierSetC1.hpp"
+#endif
+
 #define __ ((InterpreterMacroAssembler*)masm)->
 
 void NVMCardTableBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
@@ -832,5 +840,44 @@ void NVMCardTableBarrierSetAssembler::runtime_needs_wupd(MacroAssembler* masm, R
   // WARNING: Don't do anything after andptr instruction.
   // The status register is used in the following instructions.
 }
+
+  #ifdef COMPILER1
+    #undef __
+    #define __ sasm->
+void NVMCardTableBarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler* sasm) {
+  __ prologue("nvm_post_barrier", false);
+  __ push(rax);
+  __ push(rcx);
+  const Register thread = NOT_LP64(rax) LP64_ONLY(r15_thread);
+
+  Label done;
+  Label runtime;
+
+  __ bind(runtime);
+  __ save_live_registers_no_oop_map(true);
+  __ call_VM_leaf(CAST_FROM_FN_PTR(address, Runtime1::nvm_print), rcx);
+  __ restore_live_registers(true);
+
+  __ bind(done);
+  __ pop(rcx);
+  __ pop(rax);
+  __ epilogue();
+}
+
+#undef __
+#define __ ce->masm()->
+void NVMCardTableBarrierSetAssembler::gen_post_barrier_stub(LIR_Assembler* ce, NVMCardTablePostBarrierStub* stub) {
+  NVMCardTableBarrierSetC1* bs = (NVMCardTableBarrierSetC1*)BarrierSet::barrier_set()->barrier_set_c1();
+
+  __ bind(*stub->entry());
+  
+  // __ jmp(*stub->continuation());
+
+  __ call(RuntimeAddress(bs->post_barrier_c1_runtime_code_blob()->code_begin()));
+
+  __ jmp(*stub->continuation());
+}
+
+  #endif // COMPILER1
 
 #endif // OUR_PERSIST

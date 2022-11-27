@@ -334,6 +334,7 @@ const char* Runtime1::name_for_address(address entry) {
   FUNCTION_CASE(entry, SharedRuntime::dtrace_method_exit);
   FUNCTION_CASE(entry, is_instance_of);
   FUNCTION_CASE(entry, trace_block_entry);
+  FUNCTION_CASE(entry, nvm_print);
 #ifdef JFR_HAVE_INTRINSICS
   FUNCTION_CASE(entry, JFR_TIME_FUNCTION);
 #endif
@@ -1390,6 +1391,10 @@ int Runtime1::access_field_patching(JavaThread* thread) {
 JRT_LEAF(void, Runtime1::trace_block_entry(jint block_id))
   // for now we just print out the block id
   tty->print("%d ", block_id);
+JRT_END
+
+JRT_LEAF(void, Runtime1::nvm_print(jint i))
+  tty->print("%d ", i);
 JRT_END
 
 

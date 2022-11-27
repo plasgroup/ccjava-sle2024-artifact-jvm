@@ -167,6 +167,15 @@ void C1_MacroAssembler::initialize_header(Register obj, Register klass, Register
     // This assumes that all prototype bits fit in an int32_t
     movptr(Address(obj, oopDesc::mark_offset_in_bytes ()), (int32_t)(intptr_t)markWord::prototype().value());
   }
+
+#ifdef OUR_PERSIST
+  xorl(t1, t1);
+  movptr(Address(obj, oopDesc::nvm_header_offset_in_bytes()), t1);
+  #ifdef ASSERT
+    movptr(Address(obj, oopDesc::nvm_header_locked_offset_in_bytes()), t1);
+  #endif
+#endif
+
 #ifdef _LP64
   if (UseCompressedClassPointers) { // Take care not to kill klass
     movptr(t1, klass);

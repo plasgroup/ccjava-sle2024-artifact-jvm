@@ -52,24 +52,26 @@ void NVMCardTablePostBarrierStub::emit_code(LIR_Assembler* ce) {
 }
 
 void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value) {
-  // bailout
-  access.gen()->bailout("not now");return;
-  // decorators
-
-  // puts("C1: store at resolved");
-
+  
   DecoratorSet decorators = access.decorators();
   bool is_array = (decorators & IS_ARRAY) != 0;
   bool on_anonymous = (decorators & ON_UNKNOWN_OOP_REF) != 0;
 
-  // call parent's method
-  // pre_barrier
+  // bailout
+  printf("%s %d\n",  
+  type2name(access.type()),
+  (decorators & OURPERSIST_DURABLE_ANNOTATION_MASK) != 0
+  );
+  
+  bool C1_nvm_have_implemented = !access.is_oop();
+  if (!C1_nvm_have_implemented) {
+    access.gen()->bailout("not now");
+    // return;
+  }
+
+  
   parent::store_at_resolved(access, value);
 
-  // post barrier
-  bool precise = is_array || on_anonymous;
-  LIR_Opr post_addr = precise ? access.resolved_addr() : access.base().opr();
-  nvm_write_barrier(access, post_addr, value);
 }
 
 void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr new_val) {

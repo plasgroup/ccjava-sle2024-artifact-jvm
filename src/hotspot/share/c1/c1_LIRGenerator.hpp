@@ -197,7 +197,7 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
 
  public:
   // unified bailout support
-  void bailout(const char* msg) const            { puts("bailout!");compilation()->bailout(msg); }
+  void bailout(const char* msg) const            { compilation()->bailout(msg); }
   bool bailed_out() const                        { return compilation()->bailed_out(); }
 
   void block_do_prolog(BlockBegin* block);

@@ -60,72 +60,23 @@ class NVMCardTableBarrierSetC1 : public CardTableBarrierSetC1 {
 protected:
   CodeBlob* _post_barrier_c1_runtime_code_blob;
 
-  virtual LIR_Opr resolve_address(LIRAccess& access, bool resolve_in_register) {
-    access.gen()->bailout("not now");return nullptr;
-    return parent::resolve_address(access, resolve_in_register);
-  }
-
-  virtual void generate_referent_check(LIRAccess& access, LabelObj* cont) {
-    access.gen()->bailout("not now");
-  }
-
   virtual void store_at_resolved(LIRAccess& access, LIR_Opr value);
-
-  virtual void load_at_resolved(LIRAccess& access, LIR_Opr result) {
-    access.gen()->bailout("not now");
-  }
 
   virtual LIR_Opr atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value) {
     access.gen()->bailout("not now");return nullptr;
     return parent::atomic_cmpxchg_at_resolved(access, cmp_value, new_value);
   }
 
-  virtual LIR_Opr atomic_xchg_at_resolved(LIRAccess& access, LIRItem& value) {
-    access.gen()->bailout("not now");return nullptr;
-    return parent::atomic_xchg_at_resolved(access, value);
-  }
-
-  virtual LIR_Opr atomic_add_at_resolved(LIRAccess& access, LIRItem& value) {
-    access.gen()->bailout("not now");return nullptr;
-    return parent::atomic_add_at_resolved(access, value);
-  }
-
-  // virtual void nvm_write_barrier_lir(LIRAccess& access, LIR_Opr addr, LIR_Opr new_val);
-
   virtual void nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr new_val);
-
-  virtual void post_barrier(LIRAccess& access, LIR_OprDesc* addr, LIR_OprDesc* new_val) {
-    access.gen()->bailout("not now");
-  }
 
 public:
   NVMCardTableBarrierSetC1()
     : _post_barrier_c1_runtime_code_blob(NULL) {
-      puts("NVMCardTableBarrierSetC1");
     }
 
   void generate_c1_runtime_stubs(BufferBlob* buffer_blob);
+
   CodeBlob* post_barrier_c1_runtime_code_blob() { return _post_barrier_c1_runtime_code_blob; }
-
-  // virtual void store_at(LIRAccess& access, LIR_Opr result) {
-  //   puts("C1 store_at");
-  // }
-  // virtual void load_at(LIRAccess& access, LIR_Opr result) {
-  //   puts("C load_at");
-  // }
-  // virtual void load(LIRAccess& access, LIR_Opr result);
-
-  // virtual LIR_Opr atomic_cmpxchg_at(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value);
-
-  // virtual LIR_Opr atomic_xchg_at(LIRAccess& access, LIRItem& value);
-
-  // virtual LIR_Opr atomic_add_at(LIRAccess& access, LIRItem& value);
-
-  // virtual LIR_Opr resolve(LIRGenerator* gen, DecoratorSet decorators, LIR_Opr obj) {
-  //   gen->bailout("not now");return nullptr;
-  //   return parent::resolve(gen, decorators, obj);
-  // }
-
 
 };
 #endif // SHARE_GC_SHARED_C1_NVMCARDTABLEBARRIERSETC1_HPP

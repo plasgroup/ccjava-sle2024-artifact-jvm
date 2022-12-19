@@ -60,6 +60,10 @@ public:
   bool is_abstract             () const { return (_flags & JVM_ACC_ABSTRACT                  ) != 0; }
   bool is_strict               () const { return (_flags & JVM_ACC_STRICT                    ) != 0; }
   bool is_stable               () const { return (_flags & JVM_ACC_FIELD_STABLE              ) != 0; }
+#ifdef OUR_PERSIST
+  bool is_durable              () const { return (_flags & JVM_ACC_OURPERSIST_DURABLEROOT    ) != 0; }
+#endif // OUR_PERSIST
+
   // In case the current object represents a field, return true if
   // the field is modified outside of instance initializer methods
   // (or class/initializer methods if the field is static) and false

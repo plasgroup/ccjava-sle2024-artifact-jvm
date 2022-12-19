@@ -22,3 +22,5 @@ NashornProfile.txt
 scratch/*.out.*
 scratch/jar/*.jar
 scratch/xalan/*
+*.txt
+hello.java

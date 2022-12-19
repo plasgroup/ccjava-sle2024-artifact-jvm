@@ -231,11 +231,13 @@ const DecoratorSet OURPERSIST_IS_VOLATILE             = UCONST64(1) << 35;
 const DecoratorSet OURPERSIST_IS_NOT_VOLATILE         = UCONST64(1) << 36;
 const DecoratorSet OURPERSIST_IS_VOLATILE_MASK        = OURPERSIST_IS_VOLATILE |
                                                         OURPERSIST_IS_NOT_VOLATILE;
+                                                  
+const DecoratorSet OURPERSIST_NEEDS_WUPD = UCONST64(1) << 37;
 #endif // OUR_PERSIST
 
 #ifdef OUR_PERSIST
 // Keep track of the last decorator.
-const DecoratorSet DECORATOR_LAST = UCONST64(1) << 36;
+const DecoratorSet DECORATOR_LAST = UCONST64(1) << 37;
 #else  // OUR_PERSIST
 const DecoratorSet DECORATOR_LAST = UCONST64(1) << 29;
 #endif // OUR_PERSIST

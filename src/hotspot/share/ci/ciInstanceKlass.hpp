@@ -117,6 +117,11 @@ protected:
   }
 
 public:
+#ifdef OUR_PERSIST
+  bool                   is_mirror() {
+    return get_Klass()->id() == InstanceMirrorKlassID;
+  }
+#endif // OUR_PERSIST
   // Has this klass been initialized?
   bool                   is_initialized() {
     update_if_shared(InstanceKlass::fully_initialized);

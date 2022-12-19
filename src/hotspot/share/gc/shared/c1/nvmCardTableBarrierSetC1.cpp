@@ -35,7 +35,7 @@
 #include "runtime/vm_version.hpp"
 #include "c1/c1_Runtime1.hpp"
 #include "c1/c1_CodeStubs.hpp"
-
+#include "nvm/ourPersist.hpp"
 #ifdef COMPILER1
 #include "c1/c1_LIRAssembler.hpp"
 #include "c1/c1_MacroAssembler.hpp"
@@ -52,35 +52,51 @@ void NVMCardTablePostBarrierStub::emit_code(LIR_Assembler* ce) {
 }
 
 void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value) {
-  
   DecoratorSet decorators = access.decorators();
   bool is_array = (decorators & IS_ARRAY) != 0;
   bool on_anonymous = (decorators & ON_UNKNOWN_OOP_REF) != 0;
-
+  bool needs_wupd = (decorators & OURPERSIST_NEEDS_WUPD) != 0;
+  // log
+  printf("#Access Information:\n\
+type = %s\n\
+needs_wupd = %s\n\n\n", 
+  type2name(access.type()), needs_wupd ? "true" : "false");
   // bailout
-  printf("%s %d\n",  
-  type2name(access.type()),
-  (decorators & OURPERSIST_DURABLE_ANNOTATION_MASK) != 0
-  );
-  
   bool C1_nvm_have_implemented = !access.is_oop();
   if (!C1_nvm_have_implemented) {
+    printf("bail out = true\n");
     access.gen()->bailout("not now");
-    // return;
+    return;
   }
-
+  printf("bail out = false\n");
   
   parent::store_at_resolved(access, value);
 
+  if (needs_wupd) {
+    // printf("nvm writer: type = %s\n",  
+    //   type2name(access.type())
+    // );
+    nvm_write_barrier(access, access.resolved_addr(), value);
+  }
 }
 
 void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr new_val) {
   LIRGenerator* gen = access.gen();
+
+  BasicType flag_type = T_INT;
+  LIR_Address* mark_durable_flag_addr =
+    new LIR_Address(access.base().opr(),
+                    oopDesc::nvm_header_offset_in_bytes(),
+                    flag_type);
+  LIR_Opr flag_val = gen->new_register(T_INT);
+  __ load(mark_durable_flag_addr, flag_val);
+  __ cmp(lir_cond_notEqual, flag_val, LIR_OprFact::intConst(0));
+
   auto slow = new NVMCardTablePostBarrierStub(addr, new_val);
 
-
-  __ branch(lir_cond_always, slow);
+  __ branch(lir_cond_notEqual, slow);
   __ branch_destination(slow->continuation());
+
 }
 
 class C1NVMPostBarrierCodeGenClosure : public StubAssemblerCodeGenClosure {

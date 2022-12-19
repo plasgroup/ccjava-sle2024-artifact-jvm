@@ -1587,7 +1587,13 @@ void LIRGenerator::do_CompareAndSwap(Intrinsic* x, ValueType* type) {
 void LIRGenerator::do_StoreField(StoreField* x) {
   bool needs_patching = x->needs_patching();
   bool is_volatile = x->field()->is_volatile();
+  bool is_durable = x->field()->is_durable();
+  bool is_static = x->is_static();
+  bool is_mirror = x->field()->holder()->is_mirror();
+  // puts("#class name");
+  // puts(x->field()->holder()->name()->as_utf8());
   BasicType field_type = x->field_type();
+  bool is_oop = is_reference_type(field_type);
 
   CodeEmitInfo* info = NULL;
   if (needs_patching) {
@@ -1645,6 +1651,10 @@ void LIRGenerator::do_StoreField(StoreField* x) {
   }
   if (needs_patching) {
     decorators |= C1_NEEDS_PATCHING;
+  }
+  if ((!is_mirror) || 
+      (is_oop && is_static && is_durable)) {
+    decorators |= OURPERSIST_NEEDS_WUPD;
   }
 
   access_store_at(decorators, field_type, object, LIR_OprFact::intConst(x->offset()),

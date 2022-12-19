@@ -174,6 +174,9 @@ public:
   bool is_stable               () const { return flags().is_stable(); }
   bool is_volatile             () const { return flags().is_volatile(); }
   bool is_transient            () const { return flags().is_transient(); }
+#ifdef OUR_PERSIST
+  bool is_durable              () const { return flags().is_durable(); }
+#endif // OUR_PERSIST 
   // The field is modified outside of instance initializer methods
   // (or class/initializer methods if the field is static).
   bool has_initialized_final_update() const { return flags().has_initialized_final_update(); }

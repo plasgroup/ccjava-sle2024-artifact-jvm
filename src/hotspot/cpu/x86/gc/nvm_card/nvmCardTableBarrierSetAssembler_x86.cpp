@@ -13,6 +13,7 @@
 #include "c1/c1_LIRAssembler.hpp"
 #include "c1/c1_MacroAssembler.hpp"
 #include "gc/shared/c1/nvmCardTableBarrierSetC1.hpp"
+#include "gc/nvm_card/nvmCardTableBarrierSetRuntime.hpp"
 #endif
 
 #define __ ((InterpreterMacroAssembler*)masm)->
@@ -848,17 +849,17 @@ void NVMCardTableBarrierSetAssembler::generate_c1_post_barrier_runtime_stub(Stub
   __ prologue("nvm_post_barrier", false);
   __ push(rax);
   __ push(rcx);
-  const Register thread = NOT_LP64(rax) LP64_ONLY(r15_thread);
+  // const Register thread = NOT_LP64(rax) LP64_ONLY(r15_thread);
 
-  Label done;
-  Label runtime;
+  // Label done;
+  // Label runtime;
 
-  __ bind(runtime);
-  __ save_live_registers_no_oop_map(true);
-  __ call_VM_leaf(CAST_FROM_FN_PTR(address, Runtime1::nvm_print), rcx);
-  __ restore_live_registers(true);
+  // __ bind(runtime);
+  // __ save_live_registers_no_oop_map(true);
+  // __ call_VM_leaf(CAST_FROM_FN_PTR(address, Runtime1::nvm_print), rcx);
+  // __ restore_live_registers(true);
 
-  __ bind(done);
+  // __ bind(done);
   __ pop(rcx);
   __ pop(rax);
   __ epilogue();
@@ -867,11 +868,29 @@ void NVMCardTableBarrierSetAssembler::generate_c1_post_barrier_runtime_stub(Stub
 #undef __
 #define __ ce->masm()->
 void NVMCardTableBarrierSetAssembler::gen_post_barrier_stub(LIR_Assembler* ce, NVMCardTablePostBarrierStub* stub) {
-  NVMCardTableBarrierSetC1* bs = (NVMCardTableBarrierSetC1*)BarrierSet::barrier_set()->barrier_set_c1();
+   NVMCardTableBarrierSetC1* bs =
+      (NVMCardTableBarrierSetC1*)BarrierSet::barrier_set()->barrier_set_c1();
 
+  // Stub entry
   __ bind(*stub->entry());
-  
-  // __ jmp(*stub->continuation());
+
+  // // __ jmp(*stub->continuation());
+  // __ save_live_registers_no_oop_map(true);
+
+  // Register obj = stub->obj()->as_register();
+  // Register offset = stub->offset()->as_register();
+  // Register new_val = stub->new_val()->as_register();
+  // // ce->store_parameter(obj, 0);
+  // // ce->store_parameter(offset, 1);
+  // // ce->store_parameter(new_val, 2);
+
+  // __ call_VM_leaf(
+  //     CAST_FROM_FN_PTR(
+  //         address,
+  //         NVMCardTableBarrierSetRuntime::write_oop_nvm_field_post_entry(
+  //             stub->decorators(), stub->type())),
+  //     obj, offset, new_val);
+  // __ restore_live_registers(true);
 
   __ call(RuntimeAddress(bs->post_barrier_c1_runtime_code_blob()->code_begin()));
 

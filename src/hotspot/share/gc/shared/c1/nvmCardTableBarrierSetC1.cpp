@@ -62,7 +62,8 @@ type = %s\n\
 needs_wupd = %s\n\n\n", 
   type2name(access.type()), needs_wupd ? "true" : "false");
   // bailout
-  bool C1_nvm_have_implemented = !access.is_oop();
+  // bool C1_nvm_have_implemented = !access.is_oop();
+  bool C1_nvm_have_implemented = false;
   if (!C1_nvm_have_implemented) {
     printf("bail out = true\n");
     access.gen()->bailout("not now");
@@ -92,7 +93,7 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
   __ load(mark_durable_flag_addr, flag_val);
   __ cmp(lir_cond_notEqual, flag_val, LIR_OprFact::intConst(0));
 
-  auto slow = new NVMCardTablePostBarrierStub(addr, new_val);
+  auto slow = new NVMCardTablePostBarrierStub(access.base().opr(), access.offset().opr(), new_val, access.decorators(), access.type());
 
   __ branch(lir_cond_notEqual, slow);
   __ branch_destination(slow->continuation());
@@ -116,48 +117,3 @@ void NVMCardTableBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob
   // _post_barrier_c1_runtime_code_blob->print();
   // puts("exit NVMCardTableBarrierSetC1::generate_c1_runtime_stubs");
 }
-
-
-// void NVMCardTableBarrierSetC1::store_at(LIRAccess& access, LIR_Opr value) {
-//   access.gen()->bailout("not now");
-// }
-
-// void NVMCardTableBarrierSetC1::load_at(LIRAccess& access, LIR_Opr result) {
-//   access.gen()->bailout("not now");
-// }
-
-// void NVMCardTableBarrierSetC1::load(LIRAccess& access, LIR_Opr result) {
-//   access.gen()->bailout("not now");
-// }
-
-
-// LIR_Opr NVMCardTableBarrierSetC1::atomic_cmpxchg_at(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value) {
-//   access.gen()->bailout("not now"); return nullptr;
-//   return parent::atomic_cmpxchg_at(access, cmp_value, new_value);
-// }
-
-
-// LIR_Opr NVMCardTableBarrierSetC1::atomic_xchg_at(LIRAccess& access, LIRItem& value) {
-//   access.gen()->bailout("not now"); return nullptr;
-//   return parent::atomic_xchg_at(access, value);
-// }
-
-// LIR_Opr NVMCardTableBarrierSetC1::atomic_add_at(LIRAccess& access, LIRItem& value) {
-//   access.gen()->bailout("not now");return nullptr;
-//   return parent::atomic_add_at(access, value);
-// }
-
-// void NVMCardTableBarrierSetC1::nvm_write_barrier_lir(LIRAccess& access, LIR_Opr addr, LIR_Opr new_val) {
-//   // access.gen()->bailout("not now"); return;
-//   static int cnt = 0;
-//   LIRGenerator* gen = access.gen();
-  
-//   address func = CAST_FROM_FN_PTR(address, Runtime1::nvm_print);
-
-//   BasicTypeList signature(1);
-//   signature.append(T_INT);
-//   CallingConvention* cc = gen->frame_map()->c_calling_convention(&signature);
-
-//   __ move(LIR_OprFact::intConst(cnt++), cc->at(0));
-//   __ call_runtime_leaf(func, LIR_OprFact::illegalOpr, LIR_OprFact::illegalOpr, cc->args());
-// }

@@ -39,6 +39,8 @@
 #ifdef COMPILER1
 #include "c1/c1_LIRAssembler.hpp"
 #include "c1/c1_MacroAssembler.hpp"
+#include <unordered_map>
+#include <utility>
 #endif
 
 #ifdef ASSERT
@@ -46,9 +48,9 @@
 #else
 #define __ gen->lir()->
 #endif
-void NVMCardTablePostBarrierStub::emit_code(LIR_Assembler* ce) {
+void NVMCardTableWriteBarrierStub::emit_code(LIR_Assembler* ce) {
   NVMCardTableBarrierSetAssembler* bs = (NVMCardTableBarrierSetAssembler*)BarrierSet::barrier_set()->barrier_set_assembler();
-  bs->gen_post_barrier_stub(ce, this);
+  bs->gen_write_barrier_stub(ce, this);
 }
 
 void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value) {
@@ -62,8 +64,8 @@ type = %s\n\
 needs_wupd = %s\n\n\n", 
   type2name(access.type()), needs_wupd ? "true" : "false");
   // bailout
-  // bool C1_nvm_have_implemented = !access.is_oop();
-  bool C1_nvm_have_implemented = false;
+  bool C1_nvm_have_implemented = access.is_oop();
+  // bool C1_nvm_have_implemented = false;
   if (!C1_nvm_have_implemented) {
     printf("bail out = true\n");
     access.gen()->bailout("not now");
@@ -93,27 +95,67 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
   __ load(mark_durable_flag_addr, flag_val);
   __ cmp(lir_cond_notEqual, flag_val, LIR_OprFact::intConst(0));
 
-  auto slow = new NVMCardTablePostBarrierStub(access.base().opr(), access.offset().opr(), new_val, access.decorators(), access.type());
+  const address runtime_stub =  runtime_stubs[{access.decorators(), access.type()}];
+  CodeStub* const slow = new NVMCardTableWriteBarrierStub(access.base().opr(), access.offset().opr(), new_val, runtime_stub);
 
   __ branch(lir_cond_notEqual, slow);
   __ branch_destination(slow->continuation());
 
 }
 
-class C1NVMPostBarrierCodeGenClosure : public StubAssemblerCodeGenClosure {
+class NVMWriteBarrierRuntimeStubCodeGenClosure : public StubAssemblerCodeGenClosure {
+private:
+  const DecoratorSet _decorators;
+  const BasicType _type;
+
+public:
+  NVMWriteBarrierRuntimeStubCodeGenClosure(DecoratorSet decorators, BasicType type) :
+  _decorators(decorators), _type(type) {}
+
   virtual OopMapSet* generate_code(StubAssembler* sasm) {
-    auto bs = (NVMCardTableBarrierSetAssembler*)BarrierSet::barrier_set()->barrier_set_assembler();
-    bs->generate_c1_post_barrier_runtime_stub(sasm);
+    BarrierSetAssembler* const bsa = BarrierSet::barrier_set()->barrier_set_assembler();
+    auto nvm_bsa = reinterpret_cast<NVMCardTableBarrierSetAssembler*>(bsa);
+    nvm_bsa->generate_c1_write_barrier_runtime_stub(sasm, _decorators, _type);
     return NULL;
   }
 };
 
+static address generate_c1_runtime_stub(BufferBlob* blob, DecoratorSet decorators, BasicType type, const char* name) {
+  NVMWriteBarrierRuntimeStubCodeGenClosure cl(decorators, type);
+  CodeBlob* const code_blob = Runtime1::generate_blob(blob, -1 /* stub_id */, name, false /* expect_oop_map*/, &cl);
+  return code_blob->code_begin();
+}
+
 void NVMCardTableBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob) {
   // printf("enter NVMCardTableBarrierSetC1::generate_c1_runtime_stubs\n");
-
-  C1NVMPostBarrierCodeGenClosure post_code_gen_cl;
-  _post_barrier_c1_runtime_code_blob = Runtime1::generate_blob(buffer_blob, -1, "nvm_post_barrier", false, &post_code_gen_cl);
-
+  // _write_barrier_on_oop_field_1_runtime_stub =
+  //   generate_c1_runtime_stub(blob, ON_STRONG_OOP_REF, "_write_barrier_on_oop_field_1_runtime_stub");
+  for (DecoratorSet base : {1318976ULL, 270400ULL, 270464ULL}) {
+    for (DecoratorSet if_static: {OURPERSIST_IS_STATIC, OURPERSIST_IS_NOT_STATIC}) {
+      for (DecoratorSet if_volatile: {OURPERSIST_IS_VOLATILE, OURPERSIST_IS_NOT_VOLATILE}) {
+        for (DecoratorSet if_durable: {OURPERSIST_DURABLE_ANNOTATION, OURPERSIST_NOT_DURABLE_ANNOTATION}) {
+          DecoratorSet ds = OURPERSIST_BS_ASM | base | if_static | if_volatile | if_durable;
+          // address adr;
+          // switch (type) {
+          // case T_BOOLEAN: adr = generate_c1_runtime_stub(blob, ds, jboolean, ""); break;
+          // case T_CHAR:    adr = generate_c1_runtime_stub(blob, ds, jchar   , ""); break;
+          // case T_FLOAT:   adr = generate_c1_runtime_stub(blob, ds, jfloat  , ""); break;
+          // case T_DOUBLE:  adr = generate_c1_runtime_stub(blob, ds, jdouble , ""); break;
+          // case T_BYTE:    adr = generate_c1_runtime_stub(blob, ds, jbyte   , ""); break;
+          // case T_SHORT:   adr = generate_c1_runtime_stub(blob, ds, jshort  , ""); break;
+          // case T_INT:     adr = generate_c1_runtime_stub(blob, ds, jint    , ""); break;
+          // case T_LONG:    adr = generate_c1_runtime_stub(blob, ds, jlong   , ""); break;
+          // case T_ARRAY:
+          // case T_OBJECT:  adr = generate_c1_runtime_stub(blob, ds, jobject , ""); break;
+          // default: ShouldNotReachHere();
+          // }
+          for (BasicType type: {T_BOOLEAN, T_CHAR, T_FLOAT,T_DOUBLE, T_BYTE, T_SHORT, T_INT, T_LONG, T_ARRAY, T_OBJECT}) {
+            runtime_stubs[std::make_pair(ds, type)] = generate_c1_runtime_stub(buffer_blob, ds, type, "");
+          }
+        }
+      }
+    }
+  }
   // _post_barrier_c1_runtime_code_blob->print();
   // puts("exit NVMCardTableBarrierSetC1::generate_c1_runtime_stubs");
 }

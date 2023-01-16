@@ -27,32 +27,33 @@
 
 #include "c1/c1_CodeStubs.hpp"
 #include "gc/shared/c1/cardTableBarrierSetC1.hpp"
+#include <map>
+#include <utility>
 
-class NVMCardTablePostBarrierStub : public CodeStub {
+class NVMCardTableWriteBarrierStub : public CodeStub {
   friend class NVMCardTableBarrierSetC1;
 
  private:
   LIR_Opr _obj;
   LIR_Opr _offset;
   LIR_Opr _new_val;
-  DecoratorSet _decorators;
-  BasicType _basic_type;
+  address      _runtime_stub;
 
  public:
   // addr (the address of the object head) and new_val must be registers.
-  NVMCardTablePostBarrierStub(LIR_Opr obj, LIR_Opr offset, LIR_Opr new_val,
-                              DecoratorSet decorators, BasicType basic_type)
+  NVMCardTableWriteBarrierStub(LIR_Opr obj, LIR_Opr offset, LIR_Opr new_val,
+                              address runtime_stub)
       : _obj(obj),
         _offset(offset),
         _new_val(new_val),
-        _decorators(decorators),
-        _basic_type(basic_type) {}
+        _runtime_stub(runtime_stub) {}
 
   LIR_Opr obj() const { return _obj; }
   LIR_Opr offset() const { return _offset; }
   LIR_Opr new_val() const { return _new_val; }
-  DecoratorSet decorators() const { return _decorators; }
-  BasicType type() const { return _basic_type; }
+  address runtime_stub() const { return _runtime_stub; }
+  // DecoratorSet decorators() const { return _decorators; }
+  // BasicType type() const { return _basic_type; }
 
   virtual void emit_code(LIR_Assembler* ce);
   virtual void visit(LIR_OpVisitState* visitor) {
@@ -71,7 +72,6 @@ class CodeBlob;
 class NVMCardTableBarrierSetC1 : public CardTableBarrierSetC1 {
   using parent = CardTableBarrierSetC1;
 protected:
-  CodeBlob* _post_barrier_c1_runtime_code_blob;
 
   virtual void store_at_resolved(LIRAccess& access, LIR_Opr value);
 
@@ -83,13 +83,14 @@ protected:
   virtual void nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr new_val);
 
 public:
-  NVMCardTableBarrierSetC1()
-    : _post_barrier_c1_runtime_code_blob(NULL) {
+  std::map<std::pair<DecoratorSet, BasicType>, address> runtime_stubs;
+
+  NVMCardTableBarrierSetC1() {
     }
 
   void generate_c1_runtime_stubs(BufferBlob* buffer_blob);
 
-  CodeBlob* post_barrier_c1_runtime_code_blob() { return _post_barrier_c1_runtime_code_blob; }
+  // CodeBlob* post_barrier_c1_runtime_code_blob() { return _post_barrier_c1_runtime_code_blob; }
 
 };
 #endif // SHARE_GC_SHARED_C1_NVMCARDTABLEBARRIERSETC1_HPP

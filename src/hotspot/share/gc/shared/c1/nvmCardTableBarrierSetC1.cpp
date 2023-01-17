@@ -95,11 +95,11 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
   __ load(mark_durable_flag_addr, flag_val);
   __ cmp(lir_cond_notEqual, flag_val, LIR_OprFact::intConst(0));
 
-  const address runtime_stub =  runtime_stubs[{access.decorators(), access.type()}];
-  CodeStub* const slow = new NVMCardTableWriteBarrierStub(access.base().opr(), access.offset().opr(), new_val, runtime_stub);
+  const address runtime_stub = get_runtime_stub(access.decorators(), access.type());
+  // CodeStub* const slow = new NVMCardTableWriteBarrierStub(access.base().opr(), access.offset().opr(), new_val, runtime_stub);
 
-  __ branch(lir_cond_notEqual, slow);
-  __ branch_destination(slow->continuation());
+  // __ branch(lir_cond_notEqual, slow);
+  // __ branch_destination(slow->continuation());
 
 }
 
@@ -130,6 +130,8 @@ void NVMCardTableBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob
   // printf("enter NVMCardTableBarrierSetC1::generate_c1_runtime_stubs\n");
   // _write_barrier_on_oop_field_1_runtime_stub =
   //   generate_c1_runtime_stub(blob, ON_STRONG_OOP_REF, "_write_barrier_on_oop_field_1_runtime_stub");
+
+
   for (DecoratorSet base : {1318976ULL, 270400ULL, 270464ULL}) {
     for (DecoratorSet if_static: {OURPERSIST_IS_STATIC, OURPERSIST_IS_NOT_STATIC}) {
       for (DecoratorSet if_volatile: {OURPERSIST_IS_VOLATILE, OURPERSIST_IS_NOT_VOLATILE}) {
@@ -150,12 +152,14 @@ void NVMCardTableBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob
           // default: ShouldNotReachHere();
           // }
           for (BasicType type: {T_BOOLEAN, T_CHAR, T_FLOAT,T_DOUBLE, T_BYTE, T_SHORT, T_INT, T_LONG, T_ARRAY, T_OBJECT}) {
-            runtime_stubs[std::make_pair(ds, type)] = generate_c1_runtime_stub(buffer_blob, ds, type, "");
+            insert_runtime_stub(ds, type, generate_c1_runtime_stub(buffer_blob, ds, type, ""));
           }
         }
       }
     }
   }
+
+
   // _post_barrier_c1_runtime_code_blob->print();
   // puts("exit NVMCardTableBarrierSetC1::generate_c1_runtime_stubs");
 }

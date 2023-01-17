@@ -71,6 +71,10 @@ class CodeBlob;
 
 class NVMCardTableBarrierSetC1 : public CardTableBarrierSetC1 {
   using parent = CardTableBarrierSetC1;
+private:
+  // a mark
+  address runtime_stubs[2 << 10];
+
 protected:
 
   virtual void store_at_resolved(LIRAccess& access, LIR_Opr value);
@@ -83,13 +87,79 @@ protected:
   virtual void nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr new_val);
 
 public:
-  std::map<std::pair<DecoratorSet, BasicType>, address> runtime_stubs;
 
   NVMCardTableBarrierSetC1() {
     }
 
   void generate_c1_runtime_stubs(BufferBlob* buffer_blob);
 
+  void insert_runtime_stub(DecoratorSet decorators, BasicType type, address stub) {
+    // auto key = std::make_pair(decorators, type);
+    // runtime_stubs.insert({key, stub});
+
+    // std::map<std::pair<DecoratorSet, BasicType>, address>::value_type;
+    // runtime_stubs.insert(std::map<std::pair<DecoratorSet, BasicType>, address>::value_type{{std::make_pair(decorators, type)}, stub});
+    // const std::pair<DecoratorSet, BasicType> key {decorators,  type};
+    // const std::map<std::pair<DecoratorSet, BasicType>, address>::value_type & kv {key, stub};
+    // runtime_stubs.insert(kv);
+    // runtime_stubs.insert(std::pair{std::pair{decorators, type}, stub});
+    // const std::pair<DecoratorSet, BasicType> key {std::pair<DecoratorSet, BasicType>(decorators, type)};
+    // std::map<std::pair<DecoratorSet, BasicType>, address>::value_type kv { std::pair<const std::pair<DecoratorSet, BasicType>, address>(key, stub)};
+    // // runtime_stubs.insert(kv);
+    // runtime_stubs.insert((const std::map<std::pair<DecoratorSet, BasicType>, address>::value_type &)kv);
+    // runtime_stubs.insert(kv);
+    int idx = type - T_BOOLEAN;
+    int i = 4;
+    if (decorators & OURPERSIST_DURABLE_ANNOTATION != 0) {
+      idx &= (1 << i); i++;
+    }
+    if (decorators & OURPERSIST_IS_VOLATILE != 0) {
+      idx &= (1 << i); i++;
+    }
+    if (decorators & OURPERSIST_IS_STATIC != 0) {
+      idx &= (1 << i); i++;
+    }
+    if (decorators & 270400ULL == 270400ULL) {
+      idx &= (1 << i); i++;
+    }
+    if (decorators & 270464ULL == 270464ULL) {
+      idx &= (1 << i); i++;
+    }
+    runtime_stubs[idx] = stub;
+
+  }
+  address get_runtime_stub(DecoratorSet decorators, BasicType type) {
+    //    base |  Our Persist |  type
+    //    3    |     3        |  4    
+    //
+    int idx = type - T_BOOLEAN;
+    int i = 4;
+    if (decorators & OURPERSIST_DURABLE_ANNOTATION != 0) {
+      idx &= (1 << i); i++;
+    }
+    if (decorators & OURPERSIST_IS_VOLATILE != 0) {
+      idx &= (1 << i); i++;
+    }
+    if (decorators & OURPERSIST_IS_STATIC != 0) {
+      idx &= (1 << i); i++;
+    }
+    if (decorators & 270400ULL == 270400ULL) {
+      idx &= (1 << i); i++;
+    }
+    if (decorators & 270464ULL == 270464ULL) {
+      idx &= (1 << i); i++;
+    }
+    return runtime_stubs[idx];
+    // auto key = std::make_pair(decorators, type);
+    // auto key = decorators;
+    // auto it = runtime_stubs.find(key);
+    // if (it == runtime_stubs.end()) {
+    //   return 0;
+    // }
+    // return it->second;
+    // return runtime_stubs[{decorators, type}];
+    // return runtime_stubs[std::make_pair(decorators, type)];
+  };
   // CodeBlob* post_barrier_c1_runtime_code_blob() { return _post_barrier_c1_runtime_code_blob; }
 
 };

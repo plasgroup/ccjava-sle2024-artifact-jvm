@@ -119,6 +119,9 @@ protected:
 public:
 #ifdef OUR_PERSIST
   bool                   is_mirror() {
+    if (!is_loaded()) {
+      return false;
+    }
     return get_Klass()->id() == InstanceMirrorKlassID;
   }
 #endif // OUR_PERSIST

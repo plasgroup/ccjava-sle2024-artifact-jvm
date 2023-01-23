@@ -159,8 +159,16 @@ public:
     // return it->second;
     // return runtime_stubs[{decorators, type}];
     // return runtime_stubs[std::make_pair(decorators, type)];
-  };
+  }
   // CodeBlob* post_barrier_c1_runtime_code_blob() { return _post_barrier_c1_runtime_code_blob; }
-
+  void print_info(LIRAccess& access, bool needs_wupd, bool bailout) {
+    static int cnt = 0;
+    printf("= = = = = = =  #Access Information: %d  = = = = = = = \n\
+  type = %s\n\
+  needs_wupd = %s\n\
+  bailout = %s\n\n\n",
+    cnt++,
+    type2name(access.type()), needs_wupd ? "true" : "false", bailout ? "true" : "false");
+  }
 };
 #endif // SHARE_GC_SHARED_C1_NVMCARDTABLEBARRIERSETC1_HPP

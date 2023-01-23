@@ -58,27 +58,21 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
   bool is_array = (decorators & IS_ARRAY) != 0;
   bool on_anonymous = (decorators & ON_UNKNOWN_OOP_REF) != 0;
   bool needs_wupd = (decorators & OURPERSIST_NEEDS_WUPD) != 0;
-  // log
-  printf("#Access Information:\n\
-type = %s\n\
-needs_wupd = %s\n\n\n", 
-  type2name(access.type()), needs_wupd ? "true" : "false");
+
+  // bool C1_nvm_have_implemented = !access.is_oop();
   // bailout
-  bool C1_nvm_have_implemented = access.is_oop();
-  // bool C1_nvm_have_implemented = false;
+  bool C1_nvm_have_implemented = access.type() == T_BOOLEAN;
+  print_info(access, needs_wupd, !C1_nvm_have_implemented);
   if (!C1_nvm_have_implemented) {
-    printf("bail out = true\n");
+    // log
     access.gen()->bailout("not now");
     return;
   }
-  printf("bail out = false\n");
+  
   
   parent::store_at_resolved(access, value);
 
   if (needs_wupd) {
-    // printf("nvm writer: type = %s\n",  
-    //   type2name(access.type())
-    // );
     nvm_write_barrier(access, access.resolved_addr(), value);
   }
 }
@@ -96,10 +90,10 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
   __ cmp(lir_cond_notEqual, flag_val, LIR_OprFact::intConst(0));
 
   const address runtime_stub = get_runtime_stub(access.decorators(), access.type());
-  // CodeStub* const slow = new NVMCardTableWriteBarrierStub(access.base().opr(), access.offset().opr(), new_val, runtime_stub);
+  CodeStub* const slow = new NVMCardTableWriteBarrierStub(access.base().opr(), access.offset().opr(), new_val, runtime_stub);
 
-  // __ branch(lir_cond_notEqual, slow);
-  // __ branch_destination(slow->continuation());
+  __ branch(lir_cond_notEqual, slow);
+  __ branch_destination(slow->continuation());
 
 }
 

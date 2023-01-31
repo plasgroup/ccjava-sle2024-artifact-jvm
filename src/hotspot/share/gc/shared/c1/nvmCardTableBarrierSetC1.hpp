@@ -80,6 +80,28 @@ private:
   // a mark
   address runtime_stubs[2 << 10];
 
+  int get_runtime_stub_index(DecoratorSet decorators, BasicType type) {
+    //    base |  Our Persist |  type
+    //    3    |     3        |  4    
+    //
+    int idx = type - T_BOOLEAN;
+    int i = 4;
+    for (DecoratorSet bit: {OURPERSIST_DURABLE_ANNOTATION, OURPERSIST_IS_VOLATILE, OURPERSIST_IS_STATIC}) {
+      if ((decorators & bit) != 0) {
+        idx &= (1 << i);
+      }
+      i++;
+    }
+
+    for (DecoratorSet base: {270400ULL, 270464ULL}) {
+      if ((decorators & base) == base) {
+        idx &= (1 << i);
+      }
+      i++;
+    }
+    return idx;
+  }
+
 protected:
 
   virtual void store_at_resolved(LIRAccess& access, LIR_Opr value);
@@ -113,47 +135,12 @@ public:
     // // runtime_stubs.insert(kv);
     // runtime_stubs.insert((const std::map<std::pair<DecoratorSet, BasicType>, address>::value_type &)kv);
     // runtime_stubs.insert(kv);
-    int idx = type - T_BOOLEAN;
-    int i = 4;
-    if (decorators & OURPERSIST_DURABLE_ANNOTATION != 0) {
-      idx &= (1 << i); i++;
-    }
-    if (decorators & OURPERSIST_IS_VOLATILE != 0) {
-      idx &= (1 << i); i++;
-    }
-    if (decorators & OURPERSIST_IS_STATIC != 0) {
-      idx &= (1 << i); i++;
-    }
-    if (decorators & 270400ULL == 270400ULL) {
-      idx &= (1 << i); i++;
-    }
-    if (decorators & 270464ULL == 270464ULL) {
-      idx &= (1 << i); i++;
-    }
+    int idx = get_runtime_stub_index(decorators, type);
     runtime_stubs[idx] = stub;
 
   }
   address get_runtime_stub(DecoratorSet decorators, BasicType type) {
-    //    base |  Our Persist |  type
-    //    3    |     3        |  4    
-    //
-    int idx = type - T_BOOLEAN;
-    int i = 4;
-    if (decorators & OURPERSIST_DURABLE_ANNOTATION != 0) {
-      idx &= (1 << i); i++;
-    }
-    if (decorators & OURPERSIST_IS_VOLATILE != 0) {
-      idx &= (1 << i); i++;
-    }
-    if (decorators & OURPERSIST_IS_STATIC != 0) {
-      idx &= (1 << i); i++;
-    }
-    if (decorators & 270400ULL == 270400ULL) {
-      idx &= (1 << i); i++;
-    }
-    if (decorators & 270464ULL == 270464ULL) {
-      idx &= (1 << i); i++;
-    }
+    int idx = get_runtime_stub_index(decorators, type);
     return runtime_stubs[idx];
     // auto key = std::make_pair(decorators, type);
     // auto key = decorators;

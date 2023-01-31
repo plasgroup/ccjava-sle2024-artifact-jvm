@@ -59,21 +59,19 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
   bool on_anonymous = (decorators & ON_UNKNOWN_OOP_REF) != 0;
   bool needs_wupd = (decorators & OURPERSIST_NEEDS_WUPD) != 0;
 
-  // bool C1_nvm_have_implemented = !access.is_oop();
-  // bailout
-  bool C1_nvm_have_implemented = access.type() == T_BOOLEAN;
-  print_info(access, needs_wupd, !C1_nvm_have_implemented);
+  bool C1_nvm_have_implemented = 
+    access.type() != T_FLOAT && access.type() != T_DOUBLE;
   if (!C1_nvm_have_implemented) {
     // log
     access.gen()->bailout("not now");
     return;
   }
   
-  
-  parent::store_at_resolved(access, value);
-
   if (needs_wupd) {
     nvm_write_barrier(access, access.resolved_addr(), value);
+  } else {
+    parent::store_at_resolved(access, value);
+
   }
 }
 
@@ -88,11 +86,28 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
   LIR_Opr flag_val = gen->new_register(T_INT);
   __ load(mark_durable_flag_addr, flag_val);
   __ cmp(lir_cond_notEqual, flag_val, LIR_OprFact::intConst(0));
+  // BasicType flag_type = T_ADDRESS;
+  // LIR_Address* mark_durable_flag_addr =
+  //   new LIR_Address(access.base().opr(),
+  //                   oopDesc::nvm_header_offset_in_bytes(),
+  //                   flag_type);
+  // LIR_Opr flag_val = gen->new_register(T_ADDRESS);
+  // __ load(mark_durable_flag_addr, flag_val);
+  // __ cmp(lir_cond_notEqual, flag_val, LIR_OprFact::intptrConst((void*)0));
 
   const address runtime_stub = get_runtime_stub(access.decorators(), access.type());
-  CodeStub* const slow = new NVMCardTableWriteBarrierStub(access.base().opr(), access.offset().opr(), new_val, runtime_stub);
+
+
+  LIR_Opr offset_reg = access.offset().opr();
+
+  LIR_Opr value_reg = ensure_in_register(gen, new_val, is_subword_type(access.type()) ? T_INT : access.type());
+
+  CodeStub* const slow = new NVMCardTableWriteBarrierStub(access.base().opr(), offset_reg, value_reg, runtime_stub, access.type());
+
+  // print_info(access, new_val, value_reg, true, false);
 
   __ branch(lir_cond_notEqual, slow);
+  parent::store_at_resolved(access, new_val);
   __ branch_destination(slow->continuation());
 
 }

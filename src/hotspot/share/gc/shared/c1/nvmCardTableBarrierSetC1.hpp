@@ -38,22 +38,27 @@ class NVMCardTableWriteBarrierStub : public CodeStub {
   LIR_Opr _offset;
   LIR_Opr _new_val;
   address      _runtime_stub;
+  BasicType _type;
 
  public:
   // addr (the address of the object head) and new_val must be registers.
   NVMCardTableWriteBarrierStub(LIR_Opr obj, LIR_Opr offset, LIR_Opr new_val,
-                              address runtime_stub)
+                              address runtime_stub, BasicType type)
       : _obj(obj),
         _offset(offset),
         _new_val(new_val),
-        _runtime_stub(runtime_stub) {}
+        _runtime_stub(runtime_stub),
+        _type(type) {
+          assert(new_val->is_register(), "new_val should be register");
+          assert(obj->is_register(), "obj should be register");
+        }
 
   LIR_Opr obj() const { return _obj; }
   LIR_Opr offset() const { return _offset; }
   LIR_Opr new_val() const { return _new_val; }
   address runtime_stub() const { return _runtime_stub; }
   // DecoratorSet decorators() const { return _decorators; }
-  // BasicType type() const { return _basic_type; }
+  BasicType type() const { return _type; }
 
   virtual void emit_code(LIR_Assembler* ce);
   virtual void visit(LIR_OpVisitState* visitor) {
@@ -161,7 +166,7 @@ public:
     // return runtime_stubs[std::make_pair(decorators, type)];
   }
   // CodeBlob* post_barrier_c1_runtime_code_blob() { return _post_barrier_c1_runtime_code_blob; }
-  void print_info(LIRAccess& access, bool needs_wupd, bool bailout) {
+  void print_info(LIRAccess& access, LIR_Opr new_value, LIR_Opr new_reg_value, bool needs_wupd, bool bailout) {
     static int cnt = 0;
     printf("= = = = = = =  #Access Information: %d  = = = = = = = \n\
   type = %s\n\
@@ -169,6 +174,72 @@ public:
   bailout = %s\n\n\n",
     cnt++,
     type2name(access.type()), needs_wupd ? "true" : "false", bailout ? "true" : "false");
+
+    if (access.base().opr()->is_constant()) {
+      printf("base opr is constant\n");
+    }
+    if (access.base().opr()->is_register()) {
+      printf("base opr is is_register\n");
+    }
+    if (access.base().opr()->is_pointer()) {
+      printf("base opr is is_pointer\n");
+    }
+    if (access.base().opr()->is_address()) {
+      printf("base opr is is_address\n");
+    }
+    if (access.offset().opr()->is_constant()) {
+      printf("offset opr is constant\n");
+    }
+    if (access.offset().opr()->is_register()) {
+      printf("offset opr is is_register\n");
+    }
+    if (access.offset().opr()->is_pointer()) {
+      printf("offset opr is is_pointer\n");
+    }
+    if (access.offset().opr()->is_address()) {
+      printf("offset opr is is_address\n");
+    }
+    if (new_value->is_constant()) {
+      printf("new_value opr is constant\n");
+    }
+    if (new_value->is_register()) {
+      printf("new_value opr is is_register\n");
+    }
+    if (new_value->is_pointer()) {
+      printf("new_value opr is is_pointer\n");
+    }
+    if (new_value->is_address()) {
+      printf("new_value opr is is_address\n");
+    }
+    if (new_reg_value->is_constant()) {
+      printf("new_reg_value opr is constant\n");
+    }
+    if (new_reg_value->is_register()) {
+      printf("new_reg_value opr is is_register\n");
+    }
+    if (new_reg_value->is_pointer()) {
+      printf("new_reg_value opr is is_pointer\n");
+    }
+    if (new_reg_value->is_address()) {
+      printf("new_reg_value opr is is_address\n");
+    }
+
   }
+
+
+  LIR_Opr ensure_in_register(LIRGenerator* gen, LIR_Opr opr, BasicType type) {
+  if (!opr->is_register()) {
+    LIR_Opr opr_reg;
+    if (opr->is_constant()) {
+      opr_reg = gen->new_register(type);
+      gen->lir()->move(opr, opr_reg);
+    } else {
+      opr_reg = gen->new_pointer_register();
+      gen->lir()->leal(opr, opr_reg);
+    }
+    opr = opr_reg;
+  }
+  return opr;
+}
 };
 #endif // SHARE_GC_SHARED_C1_NVMCARDTABLEBARRIERSETC1_HPP

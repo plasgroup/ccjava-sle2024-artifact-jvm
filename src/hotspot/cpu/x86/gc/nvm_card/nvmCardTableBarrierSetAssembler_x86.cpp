@@ -862,7 +862,7 @@ void NVMCardTableBarrierSetAssembler::generate_c1_write_barrier_runtime_stub(Stu
   __ load_parameter(0, c_rarg0);
   // Call VM
   __ call_VM_leaf(NVMCardTableBarrierSetRuntime::write_nvm_field_post_entry(decorators, type), c_rarg0, c_rarg1, c_rarg2);
-  // __ restore_live_registers(true);
+  __ restore_live_registers(true);
 
   // __ bind(done);
   // __ pop(rcx);
@@ -873,28 +873,35 @@ void NVMCardTableBarrierSetAssembler::generate_c1_write_barrier_runtime_stub(Stu
 #undef __
 #define __ ce->masm()->
 void NVMCardTableBarrierSetAssembler::gen_write_barrier_stub(LIR_Assembler* ce, NVMCardTableWriteBarrierStub* stub) {
-   NVMCardTableBarrierSetC1* bs =
+  static int cnt = 0;
+    printf("= = = = = = =  #Stub Information: %d  = = = = = = = \n\
+  type = %s\n",
+    cnt++,
+    type2name(stub->type()));
+
+  NVMCardTableBarrierSetC1* bs =
       reinterpret_cast<NVMCardTableBarrierSetC1*>(BarrierSet::barrier_set()->barrier_set_c1());
 
   // Stub entry
   __ bind(*stub->entry());
 
-  // if (is_reference_type(stub->type())) {
-
   __ jmp(*stub->continuation());
 
   Register obj = stub->obj()->as_register();
-  Register offset = stub->offset()->as_register();
-  Register new_val = stub->new_val()->as_register();
+
+  Register new_val = noreg;
+  if (stub->type() == T_LONG) {
+    new_val = stub->new_val()->as_register_hi();
+    ce->store_parameter(stub->new_val()->as_register_lo(), 3);
+  } else {
+    new_val = stub->new_val()->as_register();
+  }
+
   ce->store_parameter(obj, 0);
-  ce->store_parameter(offset, 1);
+  ce->store_parameter(stub->offset()->as_jint(), 1);
   ce->store_parameter(new_val, 2);
 
-    __ call(RuntimeAddress(stub->runtime_stub()));
-    // __ restore_live_registers(true);
-
-    // __ call(RuntimeAddress(bs->post_barrier_c1_runtime_code_blob()->code_begin()));
-  // }
+  __ call(RuntimeAddress(stub->runtime_stub()));
 
   __ jmp(*stub->continuation());
 }

@@ -60,6 +60,11 @@ public:
   void store_parameter(jobject c,   int offset_from_esp_in_words);
   void store_parameter(Metadata* c, int offset_from_esp_in_words);
 
+#ifdef OUR_PERSIST
+  void store_parameter_float(XMMRegister r, int offset_from_esp_in_words);
+  void store_parameter_double(XMMRegister r, int offset_from_esp_in_words);
+#endif  // OURPERSIST
+
 #ifndef _LP64
   void arith_fpu_implementation(LIR_Code code, int left_index, int right_index, int dest_index, bool pop_fpu_stack);
 

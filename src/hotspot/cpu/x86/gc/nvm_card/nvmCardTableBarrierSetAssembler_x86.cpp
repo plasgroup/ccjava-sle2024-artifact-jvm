@@ -887,19 +887,30 @@ void NVMCardTableBarrierSetAssembler::gen_write_barrier_stub(LIR_Assembler* ce, 
 
   __ jmp(*stub->continuation());
 
-  Register obj = stub->obj()->as_register();
-
-  Register new_val = noreg;
   if (stub->type() == T_LONG) {
-    new_val = stub->new_val()->as_register_hi();
+    ce->store_parameter(stub->new_val()->as_register_hi(), 2);
     ce->store_parameter(stub->new_val()->as_register_lo(), 3);
+  } else if (stub->type() == T_FLOAT) {
+
+    stub->new_val()->print();
+
+    // printf("fpu register= %d\n", stub->new_val()->is_fpu_register());
+    // printf("single cpu = %d\n", stub->new_val()->is_single_cpu());
+    // printf("double cpu = %d\n", stub->new_val()->is_double_cpu());
+    // printf("!isvirtual= %d\n", !stub->new_val()->is_virtual());
+    //   // ce->store_parameter(stub->new_val()->as_register_lo(), 3);
+    // ce->bailout(" xmm ");
+    ce->store_parameter_float(stub->new_val()->as_xmm_float_reg(), 2);
+  } else if (stub->type() == T_DOUBLE) {
+    ce->store_parameter_double(stub->new_val()->as_xmm_double_reg(), 2);
+
+
   } else {
-    new_val = stub->new_val()->as_register();
+    ce->store_parameter(stub->new_val()->as_register(), 2);
   }
 
-  ce->store_parameter(obj, 0);
+  ce->store_parameter(stub->obj()->as_register(), 0);
   ce->store_parameter(stub->offset()->as_jint(), 1);
-  ce->store_parameter(new_val, 2);
 
   __ call(RuntimeAddress(stub->runtime_stub()));
 

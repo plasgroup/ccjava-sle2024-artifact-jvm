@@ -59,48 +59,44 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
   bool on_anonymous = (decorators & ON_UNKNOWN_OOP_REF) != 0;
   bool needs_wupd = (decorators & OURPERSIST_NEEDS_WUPD) != 0;
 
+  // {T_BOOLEAN, T_CHAR, T_FLOAT,T_DOUBLE, T_BYTE, T_SHORT, T_INT, T_LONG, T_ARRAY, T_OBJECT}
+  // OK
   // bool C1_nvm_have_implemented = 
-  //   access.type() != T_FLOAT && access.type() != T_DOUBLE;
-  bool C1_nvm_have_implemented = 
-    true;
-    // 86 64 defined
+  //   access.type() == T_BYTE;
+  // OK
   // bool C1_nvm_have_implemented = 
-  //    access.type() != T_DOUBLE;
-  // bool C1_nvm_have_implemented = 
-  //   true;
-// #ifdef X86
-//   printf("86");
-// #endif
-    // value->print();puts("");
+  //   access.type() == T_FLOAT
+  //   || access.type() == T_BYTE
+  //   ;
+  // OK
+  bool C1_nvm_have_implemented = access.type() == T_OBJECT;
+    
+  // 86 64 defined
+
 
   if (!C1_nvm_have_implemented) {
     // log
-    printf(" = = =  = = = = =  = =  = = =\n");
-    printf("value is float %d\n", access.type() == T_FLOAT);
-    printf("value is double %d\n", access.type() == T_DOUBLE);
-    printf("value is constant %d\n", value->is_constant());
-    printf("value is fpu_register %d\n", value->is_fpu_register());
-    printf("value is single_fpu %d\n", value->is_single_fpu());
-    printf("value is double_fpu %d\n", value->is_double_fpu());
-    printf("value is virtual %d\n", value->is_virtual());
-    printf("value is stack %d\n", value->is_stack());
-    printf("value is is_xmm_register() %d\n", value->is_xmm_register());
+    // printf(" = = =  = = = = =  = =  = = =\n");
+    // printf("value is float %d\n", access.type() == T_FLOAT);
+    // printf("value is double %d\n", access.type() == T_DOUBLE);
+    // printf("value is constant %d\n", value->is_constant());
+    // printf("value is fpu_register %d\n", value->is_fpu_register());
+    // printf("value is single_fpu %d\n", value->is_single_fpu());
+    // printf("value is double_fpu %d\n", value->is_double_fpu());
+    // printf("value is virtual %d\n", value->is_virtual());
+    // printf("value is stack %d\n", value->is_stack());
+    // printf("value is is_xmm_register() %d\n", value->is_xmm_register());
     // printf("value fpu regnr %d\n", value->fpu_regnr());
     // printf("value fpu regnr %d\n", ensure_in_register(access.gen(), value, is_subword_type(access.type()) ? T_INT : access.type())->fpu_regnr());
     // puts("");
     
-    
-    access.gen()->bailout("not now");
+    parent::store_at_resolved(access, value);
     return;
   }
   
-  if (needs_wupd) {
-    nvm_write_barrier(access, access.resolved_addr(), value);
-  } else {
-    parent::store_at_resolved(access, value);
-
-
-  }
+  
+  nvm_write_barrier(access, access.resolved_addr(), value);
+ 
 }
 
 void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr value) {
@@ -138,8 +134,9 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
 
   // print_info(access, value, value_reg, true, false);
 
-  __ branch(lir_cond_notEqual, slow);
-  parent::store_at_resolved(access, value);
+  // __ branch(lir_cond_notEqual, slow);
+  __ branch(lir_cond_always, slow);
+
   __ branch_destination(slow->continuation());
 
 }

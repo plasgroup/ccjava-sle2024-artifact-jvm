@@ -169,26 +169,13 @@ void NVMCardTableBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob
   // _write_barrier_on_oop_field_1_runtime_stub =
   //   generate_c1_runtime_stub(blob, ON_STRONG_OOP_REF, "_write_barrier_on_oop_field_1_runtime_stub");
 
-
-  for (DecoratorSet base : {1318976ULL, 270400ULL, 270464ULL}) {
+  // (6, 13, 18, 29) (6, 13, 18, 20, 29)
+  for (DecoratorSet base : decorators_) {
     for (DecoratorSet if_static: {OURPERSIST_IS_STATIC, OURPERSIST_IS_NOT_STATIC}) {
       for (DecoratorSet if_volatile: {OURPERSIST_IS_VOLATILE, OURPERSIST_IS_NOT_VOLATILE}) {
         for (DecoratorSet if_durable: {OURPERSIST_DURABLE_ANNOTATION, OURPERSIST_NOT_DURABLE_ANNOTATION}) {
-          DecoratorSet ds = OURPERSIST_BS_ASM | base | if_static | if_volatile | if_durable;
-          // address adr;
-          // switch (type) {
-          // case T_BOOLEAN: adr = generate_c1_runtime_stub(blob, ds, jboolean, ""); break;
-          // case T_CHAR:    adr = generate_c1_runtime_stub(blob, ds, jchar   , ""); break;
-          // case T_FLOAT:   adr = generate_c1_runtime_stub(blob, ds, jfloat  , ""); break;
-          // case T_DOUBLE:  adr = generate_c1_runtime_stub(blob, ds, jdouble , ""); break;
-          // case T_BYTE:    adr = generate_c1_runtime_stub(blob, ds, jbyte   , ""); break;
-          // case T_SHORT:   adr = generate_c1_runtime_stub(blob, ds, jshort  , ""); break;
-          // case T_INT:     adr = generate_c1_runtime_stub(blob, ds, jint    , ""); break;
-          // case T_LONG:    adr = generate_c1_runtime_stub(blob, ds, jlong   , ""); break;
-          // case T_ARRAY:
-          // case T_OBJECT:  adr = generate_c1_runtime_stub(blob, ds, jobject , ""); break;
-          // default: ShouldNotReachHere();
-          // }
+          DecoratorSet ds = base | if_static | if_volatile | if_durable;
+
           for (BasicType type: {T_BOOLEAN, T_CHAR, T_FLOAT,T_DOUBLE, T_BYTE, T_SHORT, T_INT, T_LONG, T_ARRAY, T_OBJECT}) {
             insert_runtime_stub(ds, type, generate_c1_runtime_stub(buffer_blob, ds, type, ""));
           }

@@ -78,26 +78,28 @@ class NVMCardTableBarrierSetC1 : public CardTableBarrierSetC1 {
   using parent = CardTableBarrierSetC1;
 private:
   // a mark
-  address runtime_stubs[2 << 10];
+  const int decorator_base_sz_ {2};
+  const DecoratorSet decorators_[2] = {537141312ULL,538189888ULL};
+  const int runtime_stubs_sz_ {256};
+  address runtime_stubs[256];
 
   int get_runtime_stub_index(DecoratorSet decorators, BasicType type) {
-    //    base |  Our Persist |  type
-    //    3    |     3        |  4    
-    //
+    assert(((decorators & (decorators_[0])) == decorators_[0]) || 
+           ((decorators & (decorators_[1])) == decorators_[1]), " unknown decorator base");
+    //    base              |  Our Persist |  type
+    //    log2(base_sz_)    |     3        |  4    
+    //    8
     int idx = type - T_BOOLEAN;
     int i = 4;
     for (DecoratorSet bit: {OURPERSIST_DURABLE_ANNOTATION, OURPERSIST_IS_VOLATILE, OURPERSIST_IS_STATIC}) {
       if ((decorators & bit) != 0) {
-        idx &= (1 << i);
+        idx |= (1 << i);
       }
       i++;
     }
 
-    for (DecoratorSet base: {270400ULL, 270464ULL}) {
-      if ((decorators & base) == base) {
-        idx &= (1 << i);
-      }
-      i++;
+    if ((decorators & (decorators_[1])) == decorators_[1]) {
+      idx |= (1 << i);
     }
     return idx;
   }
@@ -105,52 +107,31 @@ private:
 protected:
 
   virtual void store_at_resolved(LIRAccess& access, LIR_Opr value);
-
   // virtual LIR_Opr atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value) {
   //   access.gen()->bailout("not now");return nullptr;
   //   return parent::atomic_cmpxchg_at_resolved(access, cmp_value, new_value);
   // }
-
   virtual void nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr new_val);
 
 public:
 
   NVMCardTableBarrierSetC1() {
+    for (int i = 0; i < runtime_stubs_sz_; i++) {
+      runtime_stubs[i] = nullptr; 
     }
+  }
 
   void generate_c1_runtime_stubs(BufferBlob* buffer_blob);
 
   void insert_runtime_stub(DecoratorSet decorators, BasicType type, address stub) {
-    // auto key = std::make_pair(decorators, type);
-    // runtime_stubs.insert({key, stub});
-
-    // std::map<std::pair<DecoratorSet, BasicType>, address>::value_type;
-    // runtime_stubs.insert(std::map<std::pair<DecoratorSet, BasicType>, address>::value_type{{std::make_pair(decorators, type)}, stub});
-    // const std::pair<DecoratorSet, BasicType> key {decorators,  type};
-    // const std::map<std::pair<DecoratorSet, BasicType>, address>::value_type & kv {key, stub};
-    // runtime_stubs.insert(kv);
-    // runtime_stubs.insert(std::pair{std::pair{decorators, type}, stub});
-    // const std::pair<DecoratorSet, BasicType> key {std::pair<DecoratorSet, BasicType>(decorators, type)};
-    // std::map<std::pair<DecoratorSet, BasicType>, address>::value_type kv { std::pair<const std::pair<DecoratorSet, BasicType>, address>(key, stub)};
-    // // runtime_stubs.insert(kv);
-    // runtime_stubs.insert((const std::map<std::pair<DecoratorSet, BasicType>, address>::value_type &)kv);
-    // runtime_stubs.insert(kv);
     int idx = get_runtime_stub_index(decorators, type);
     runtime_stubs[idx] = stub;
 
   }
   address get_runtime_stub(DecoratorSet decorators, BasicType type) {
     int idx = get_runtime_stub_index(decorators, type);
+    assert(runtime_stubs[idx] != nullptr, "should not be nullptr");
     return runtime_stubs[idx];
-    // auto key = std::make_pair(decorators, type);
-    // auto key = decorators;
-    // auto it = runtime_stubs.find(key);
-    // if (it == runtime_stubs.end()) {
-    //   return 0;
-    // }
-    // return it->second;
-    // return runtime_stubs[{decorators, type}];
-    // return runtime_stubs[std::make_pair(decorators, type)];
   }
   // CodeBlob* post_barrier_c1_runtime_code_blob() { return _post_barrier_c1_runtime_code_blob; }
   void print_info(LIRAccess& access, LIR_Opr new_value, LIR_Opr new_reg_value, bool needs_wupd, bool bailout) {

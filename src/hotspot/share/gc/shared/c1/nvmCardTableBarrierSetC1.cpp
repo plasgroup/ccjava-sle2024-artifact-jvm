@@ -54,24 +54,38 @@ void NVMCardTableWriteBarrierStub::emit_code(LIR_Assembler* ce) {
 }
 
 void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value) {
+  // note that 86 64 defined
+
+  assert(access.offset().opr()->is_constant() || access.offset().opr()->is_register(), "offset should be constant or register");
   DecoratorSet decorators = access.decorators();
   bool is_array = (decorators & IS_ARRAY) != 0;
   bool on_anonymous = (decorators & ON_UNKNOWN_OOP_REF) != 0;
+  bool needs_patching = (decorators & C1_NEEDS_PATCHING) != 0;
   bool needs_wupd = (decorators & OURPERSIST_NEEDS_WUPD) != 0;
+  
+  puts("= = = = = base  resolved address = = = = ");
+  printf("type = %s, %s\n", type2name(access.type()), is_array ? "array" : "");
+  access.base().item().result()->print();puts("");
+  access.offset().opr()->print();puts("");
+  access.resolved_addr()->print();puts("");
+  puts("\n");
 
-  // {T_BOOLEAN, T_CHAR, T_FLOAT,T_DOUBLE, T_BYTE, T_SHORT, T_INT, T_LONG, T_ARRAY, T_OBJECT}
-  // OK
-  // bool C1_nvm_have_implemented = 
-  //   access.type() == T_BYTE;
-  // OK
-  // bool C1_nvm_have_implemented = 
-  //   access.type() == T_FLOAT
-  //   || access.type() == T_BYTE
-  //   ;
-  // OK
-  bool C1_nvm_have_implemented = access.type() == T_OBJECT;
+  // access.gen()->bailout("not now");
+  //   return;
+  if ((decorators & MO_SEQ_CST) != 0) {
+    access.gen()->bailout("ignore MQ_SEQ_CST as it is rare");
+    return;
+  }
+
+  
+  // if (needs_patching) {
+  //   printf("%s:{decorator=%ld}\n", __func__, decorators);
+  //   assert(!needs_patching, "needs_patching shouldn't appear");
+  // }
+  bool C1_nvm_have_implemented;
+  C1_nvm_have_implemented = access.type() == T_INT && !is_array && !needs_patching;
+  // C1_nvm_have_implemented = is_subword_type(access.type()) && !is_array && !needs_patching;
     
-  // 86 64 defined
 
 
   if (!C1_nvm_have_implemented) {
@@ -89,9 +103,10 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
     // printf("value fpu regnr %d\n", value->fpu_regnr());
     // printf("value fpu regnr %d\n", ensure_in_register(access.gen(), value, is_subword_type(access.type()) ? T_INT : access.type())->fpu_regnr());
     // puts("");
-    
-    parent::store_at_resolved(access, value);
+    access.gen()->bailout("not now");
     return;
+    // parent::store_at_resolved(access, value);
+    // return;
   }
   
   
@@ -101,15 +116,16 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
 
 void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr value) {
   LIRGenerator* gen = access.gen();
-
-  BasicType flag_type = T_INT;
-  LIR_Address* mark_durable_flag_addr =
-    new LIR_Address(access.base().opr(),
-                    oopDesc::nvm_header_offset_in_bytes(),
-                    flag_type);
-  LIR_Opr flag_val = gen->new_register(T_INT);
-  __ load(mark_durable_flag_addr, flag_val);
-  __ cmp(lir_cond_notEqual, flag_val, LIR_OprFact::intConst(0));
+  bool is_array = (access.decorators() & IS_ARRAY) != 0;
+  // bool needs_patching = (access.decorators() & C1_NEEDS_PATCHING) != 0;
+  // BasicType flag_type = T_INT;
+  // LIR_Address* mark_durable_flag_addr =
+  //   new LIR_Address(access.base().opr(),
+  //                   oopDesc::nvm_header_offset_in_bytes(),
+  //                   flag_type);
+  // LIR_Opr flag_val = gen->new_register(T_INT);
+  // __ load(mark_durable_flag_addr, flag_val);
+  // __ cmp(lir_cond_notEqual, flag_val, LIR_OprFact::intConst(0));
   // BasicType flag_type = T_ADDRESS;
   // LIR_Address* mark_durable_flag_addr =
   //   new LIR_Address(access.base().opr(),
@@ -121,20 +137,48 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
 
   const address runtime_stub = get_runtime_stub(access.decorators(), access.type());
 
+  LIRItem& base = access.base().item();
+  LIR_Opr offset = access.offset().opr();
+  
+  if (is_array) {
+    int offset_in_bytes = arrayOopDesc::base_offset_in_bytes(access.type());
+    if (offset->is_constant()) {
+      int elem_size = type2aelembytes(access.type());
+      offset = LIR_OprFact::intConst(offset_in_bytes + offset->as_jint() * elem_size);
+    } else {
+      if (offset->type() == T_INT) {
+        LIR_Opr tmp = gen->new_register(T_LONG);
+        __ convert(Bytecodes::_i2l, offset, tmp);
+        offset = tmp;
+      }
+    }
+  } else {
+    if (offset->is_constant()) {
+      LIR_Const *constant = offset->as_constant_ptr();
+      jlong c;
+      if (constant->type() == T_INT) {
+        c = (jlong)(offset->as_jint());
+      } else {
+        assert(constant->type() == T_LONG, "should be long if not int");
+        c = offset->as_jlong();
+      }
+      if ((jlong)((jint)c) == c) {
+        offset = LIR_OprFact::intConst((jint)c);
+      } else {
+        LIR_Opr tmp = gen->new_register(T_LONG);
+        __ move(offset, tmp);
+        offset = tmp;
+      }
+    }
+  }
+  // if (!offset_reg->is_constant()) {
+  //   gen->bailout("not now");
+  // }
 
-  LIR_Opr offset_reg = access.offset().opr();
+  value = ensure_in_register(gen, value, is_subword_type(access.type()) ? T_INT : access.type());
 
-  LIR_Opr value_reg = ensure_in_register(gen, value, is_subword_type(access.type()) ? T_INT : access.type());
+  CodeStub* const slow = new NVMCardTableWriteBarrierStub(base.result(), offset, value, runtime_stub, access.type());
 
-  // printf("= = = = = = = = = = =\n");
-  // value->print();
-  // value_reg->print();
-  // puts("\n");
-  CodeStub* const slow = new NVMCardTableWriteBarrierStub(access.base().opr(), offset_reg, value_reg, runtime_stub, access.type());
-
-  // print_info(access, value, value_reg, true, false);
-
-  // __ branch(lir_cond_notEqual, slow);
   __ branch(lir_cond_always, slow);
 
   __ branch_destination(slow->continuation());

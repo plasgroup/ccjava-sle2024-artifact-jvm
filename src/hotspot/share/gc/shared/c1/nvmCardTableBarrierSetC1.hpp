@@ -65,6 +65,7 @@ class NVMCardTableWriteBarrierStub : public CodeStub {
     // don't pass in the code emit info since it's processed in the fast path
     visitor->do_slow_case();
     visitor->do_input(_obj);
+    visitor->do_input(_offset);
     visitor->do_input(_new_val);
   }
 #ifndef PRODUCT

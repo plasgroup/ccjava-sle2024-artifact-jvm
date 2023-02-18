@@ -63,13 +63,7 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
   bool needs_patching = (decorators & C1_NEEDS_PATCHING) != 0;
   bool needs_wupd = (decorators & OURPERSIST_NEEDS_WUPD) != 0;
   
-  puts("= = = = = base  resolved address = = = = ");
-  printf("type = %s, %s\n", type2name(access.type()), is_array ? "array" : "");
-  access.base().item().result()->print();puts("");
-  access.offset().opr()->print();puts("");
-  access.resolved_addr()->print();puts("");
-  puts("\n");
-
+  print_info(access, value);
   // access.gen()->bailout("not now");
   //   return;
   if ((decorators & MO_SEQ_CST) != 0) {

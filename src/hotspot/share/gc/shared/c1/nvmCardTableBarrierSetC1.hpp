@@ -135,65 +135,20 @@ public:
     return runtime_stubs[idx];
   }
   // CodeBlob* post_barrier_c1_runtime_code_blob() { return _post_barrier_c1_runtime_code_blob; }
-  void print_info(LIRAccess& access, LIR_Opr new_value, LIR_Opr new_reg_value, bool needs_wupd, bool bailout) {
+  void print_info(LIRAccess& access, LIR_Opr value) {
     static int cnt = 0;
-    printf("= = = = = = =  #Access Information: %d  = = = = = = = \n\
-  type = %s\n\
-  needs_wupd = %s\n\
-  bailout = %s\n\n\n",
-    cnt++,
-    type2name(access.type()), needs_wupd ? "true" : "false", bailout ? "true" : "false");
-
-    if (access.base().opr()->is_constant()) {
-      printf("base opr is constant\n");
-    }
-    if (access.base().opr()->is_register()) {
-      printf("base opr is is_register\n");
-    }
-    if (access.base().opr()->is_pointer()) {
-      printf("base opr is is_pointer\n");
-    }
-    if (access.base().opr()->is_address()) {
-      printf("base opr is is_address\n");
-    }
-    if (access.offset().opr()->is_constant()) {
-      printf("offset opr is constant\n");
-    }
-    if (access.offset().opr()->is_register()) {
-      printf("offset opr is is_register\n");
-    }
-    if (access.offset().opr()->is_pointer()) {
-      printf("offset opr is is_pointer\n");
-    }
-    if (access.offset().opr()->is_address()) {
-      printf("offset opr is is_address\n");
-    }
-    if (new_value->is_constant()) {
-      printf("new_value opr is constant\n");
-    }
-    if (new_value->is_register()) {
-      printf("new_value opr is is_register\n");
-    }
-    if (new_value->is_pointer()) {
-      printf("new_value opr is is_pointer\n");
-    }
-    if (new_value->is_address()) {
-      printf("new_value opr is is_address\n");
-    }
-    if (new_reg_value->is_constant()) {
-      printf("new_reg_value opr is constant\n");
-    }
-    if (new_reg_value->is_register()) {
-      printf("new_reg_value opr is is_register\n");
-    }
-    if (new_reg_value->is_pointer()) {
-      printf("new_reg_value opr is is_pointer\n");
-    }
-    if (new_reg_value->is_address()) {
-      printf("new_reg_value opr is is_address\n");
-    }
-
+    bool is_array = (access.decorators() & IS_ARRAY) != 0;
+    tty->print("= = = = Store at Resolved  %d = = = =\n", cnt);
+    cnt++;
+    tty->print("decorator = %ld\n", access.decorators());
+    tty->print("type = %s, %s\n", type2name(access.type()), is_array ? "array" : "");
+    
+    access.base().item().result()->print();         tty->print("\n");
+    access.offset().opr()->print();         tty->print("\n");
+    access.resolved_addr()->print();          tty->print("\n");
+    tty->print("\n\n");
   }
+    
 
 
   LIR_Opr ensure_in_register(LIRGenerator* gen, LIR_Opr opr, BasicType type) {

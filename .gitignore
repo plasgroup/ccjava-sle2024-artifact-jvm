@@ -22,5 +22,8 @@ NashornProfile.txt
 scratch/*.out.*
 scratch/jar/*.jar
 scratch/xalan/*
+
 *.txt
 hello.java
+*.py
+dacapo-2006-10-MR2.jar

@@ -23,9 +23,9 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
   template <DecoratorSet decorators, typename BarrierSetT = NVMCardTableBarrierSet>
   class AccessBarrier: public CardTableBarrierSet::AccessBarrier<decorators, BarrierSetT> {
     // parent barrierset class
-    typedef CardTableBarrierSet::AccessBarrier<decorators, BarrierSetT> Parent;
+    using Parent = CardTableBarrierSet::AccessBarrier<decorators, BarrierSetT>;
     // raw barrierset class
-    typedef BarrierSet::AccessBarrier<decorators, BarrierSetT> Raw;
+    using Raw = BarrierSet::AccessBarrier<decorators, BarrierSetT>;
 
    public:
     static void oop_store_in_heap_raw(oop base, ptrdiff_t offset, oop value) {
@@ -163,6 +163,37 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 #endif // NO_WUPD
     }
 
+    template <typename T>
+    static void store_in_heap(oop base, T* addr, T value) {
+      assert((decorators & AS_NO_KEEPALIVE) == 0, "");
+
+      // Store in DRAM.
+      auto a = static_cast<void *>(addr);
+      auto b = static_cast<void *>(base);
+      
+      // printf("%s:{addr = %p, base = %p}\n", __func__, a, b);
+      Parent::store_in_heap(addr, value);
+
+      // OrderAccess::fence();
+      // nvmOop nvm_fwd = base->nvm_header().fwd();
+      // if (nvm_fwd == NULL) {
+      //   // Store only in DRAM.
+      //   return;
+      // }
+      // assert(false, "not durable at present");
+      // assert(nvmHeader::is_fwd(nvm_fwd), "");
+
+      // Store in NVM.
+      // Raw::store_in_heap_at(oop(nvm_fwd), offset, value);
+      // NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
+    }
+    
+    static void limited_oop_store_in_heap(oop base, oop* addr, oop value) {
+      // Store in DRAM.
+      // printf("%s:{addr = %p, base = %p}\n", func, a, b);
+      Parent::template oop_store_in_heap(addr, value);
+    }
+    
     template <typename T>
     static T atomic_xchg_in_heap_at(oop base, ptrdiff_t offset, T new_value) {
 #ifdef OURPERSIST_IGNORE_ATOMIC

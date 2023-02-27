@@ -61,6 +61,8 @@ public:
   void store_parameter(Metadata* c, int offset_from_esp_in_words);
 
 #ifdef OUR_PERSIST
+  void store_parameter_byte_boolean(Register r, int offset_from_rsp_in_words);
+  void store_parameter_char_short(Register r, int offset_from_rsp_in_words);
   void store_parameter_float(XMMRegister r, int offset_from_esp_in_words);
   void store_parameter_double(XMMRegister r, int offset_from_esp_in_words);
 #endif  // OURPERSIST

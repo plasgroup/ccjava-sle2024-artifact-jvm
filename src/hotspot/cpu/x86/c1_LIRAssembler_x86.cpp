@@ -3071,6 +3071,18 @@ void LIR_Assembler::store_parameter(Register r, int offset_from_rsp_in_words) {
 }
 #ifdef OUR_PERSIST
 
+void LIR_Assembler::store_parameter_byte_boolean(Register r, int offset_from_rsp_in_words) {
+  assert(offset_from_rsp_in_words >= 0, "invalid offset from rsp");
+  int offset_from_rsp_in_bytes = offset_from_rsp_in_words * BytesPerWord;
+  assert(offset_from_rsp_in_bytes < frame_map()->reserved_argument_area_size(), "invalid offset");
+  __ movb (Address(rsp, offset_from_rsp_in_bytes), r);
+}
+void LIR_Assembler::store_parameter_char_short(Register r, int offset_from_rsp_in_words) {
+  assert(offset_from_rsp_in_words >= 0, "invalid offset from rsp");
+  int offset_from_rsp_in_bytes = offset_from_rsp_in_words * BytesPerWord;
+  assert(offset_from_rsp_in_bytes < frame_map()->reserved_argument_area_size(), "invalid offset");
+  __ movw (Address(rsp, offset_from_rsp_in_bytes), r);
+}
 void LIR_Assembler::store_parameter_float(XMMRegister r, int offset_from_rsp_in_words) {
   assert(offset_from_rsp_in_words >= 0, "invalid offset from rsp");
   int offset_from_rsp_in_bytes = offset_from_rsp_in_words * BytesPerWord;

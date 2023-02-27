@@ -35,27 +35,28 @@ class NVMCardTableWriteBarrierStub : public CodeStub {
 
  private:
   LIR_Opr _obj;
-  LIR_Opr _offset;
-  LIR_Opr _new_val;
+  LIR_Opr _addr;
+  LIR_Opr _value;
   address      _runtime_stub;
   BasicType _type;
 
  public:
-  // addr (the address of the object head) and new_val must be registers.
-  NVMCardTableWriteBarrierStub(LIR_Opr obj, LIR_Opr offset, LIR_Opr new_val,
+  // addr (the address of the object head) and value must be registers.
+  NVMCardTableWriteBarrierStub(LIR_Opr obj, LIR_Opr addr, LIR_Opr value,
                               address runtime_stub, BasicType type)
       : _obj(obj),
-        _offset(offset),
-        _new_val(new_val),
+        _addr(addr),
+        _value(value),
         _runtime_stub(runtime_stub),
         _type(type) {
-          assert(new_val->is_register(), "new_val should be register");
+          assert(value->is_register(), "value should be register");
+          assert(addr->is_register(), "addr should be register");
           assert(obj->is_register(), "obj should be register");
         }
 
   LIR_Opr obj() const { return _obj; }
-  LIR_Opr offset() const { return _offset; }
-  LIR_Opr new_val() const { return _new_val; }
+  LIR_Opr addr() const { return _addr; }
+  LIR_Opr value() const { return _value; }
   address runtime_stub() const { return _runtime_stub; }
   // DecoratorSet decorators() const { return _decorators; }
   BasicType type() const { return _type; }
@@ -65,8 +66,8 @@ class NVMCardTableWriteBarrierStub : public CodeStub {
     // don't pass in the code emit info since it's processed in the fast path
     visitor->do_slow_case();
     visitor->do_input(_obj);
-    visitor->do_input(_offset);
-    visitor->do_input(_new_val);
+    visitor->do_input(_addr);
+    visitor->do_input(_value);
   }
 #ifndef PRODUCT
   virtual void print_name(outputStream* out) const { out->print("NVMPostBarrierStub"); }
@@ -108,11 +109,11 @@ private:
 protected:
 
   virtual void store_at_resolved(LIRAccess& access, LIR_Opr value);
-  // virtual LIR_Opr atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value) {
+  // virtual LIR_Opr atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& value) {
   //   access.gen()->bailout("not now");return nullptr;
-  //   return parent::atomic_cmpxchg_at_resolved(access, cmp_value, new_value);
+  //   return parent::atomic_cmpxchg_at_resolved(access, cmp_value, value);
   // }
-  virtual void nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr new_val);
+  virtual void nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr value);
 
 public:
 

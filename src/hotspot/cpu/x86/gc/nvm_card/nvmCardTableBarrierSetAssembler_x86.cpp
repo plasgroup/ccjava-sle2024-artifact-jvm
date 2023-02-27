@@ -856,12 +856,34 @@ void NVMCardTableBarrierSetAssembler::generate_c1_write_barrier_runtime_stub(Stu
 
   // __ bind(runtime);
   __ save_live_registers_no_oop_map(true);
+
+  int offset_in_words = 0;  // 0 is obj, 1 is addr
   // Setup arguments  
-  __ load_parameter(2, c_rarg2);
-  __ load_parameter(1, c_rarg1);
-  __ load_parameter(0, c_rarg0);
+  __ load_parameter(offset_in_words, c_rarg0); offset_in_words++;
+  __ load_parameter(offset_in_words, c_rarg1); offset_in_words++;
+  switch (type) {
+    case T_FLOAT: { 
+      __ movflt(xmm0, Address(rbp, (offset_in_words + 2) * BytesPerWord));
+      break;
+    }
+    case T_DOUBLE: {
+      __ movdbl(xmm0, Address(rbp, (offset_in_words + 2) * BytesPerWord));
+      break;
+    }
+    default: {
+      __ load_parameter(offset_in_words, c_rarg2);
+      break;
+    }
+
+  }
   // Call VM
+
+  if (type == T_FLOAT || type == T_DOUBLE) {
+    __ call_VM_leaf(NVMCardTableBarrierSetRuntime::write_nvm_field_post_entry(decorators, type), c_rarg0, c_rarg1 /*xmm0*/);
+  } else {
   __ call_VM_leaf(NVMCardTableBarrierSetRuntime::write_nvm_field_post_entry(decorators, type), c_rarg0, c_rarg1, c_rarg2);
+  }
+  
   __ restore_live_registers(true);
 
   // __ bind(done);
@@ -883,11 +905,11 @@ void NVMCardTableBarrierSetAssembler::gen_write_barrier_stub(LIR_Assembler* ce, 
     type2name(stub->type()));
 
   stub->obj()->print();
-  stub->offset()->print();
-  stub->new_val()->print();
+  stub->addr()->print();
+  stub->value()->print();
   assert(stub->obj()->is_register() && !stub->obj()->is_virtual(), "obj should be in register and not virtual");
-  assert(stub->offset()->is_constant() || stub->offset()->is_register() , "offset should be in register");
-  assert(stub->new_val()->is_register(), "value should be in register");
+  assert(stub->addr()->is_constant() || stub->addr()->is_register() , "addr should be in register");
+  assert(stub->value()->is_register(), "value should be in register");
   puts("\n");
 
   //
@@ -900,50 +922,49 @@ void NVMCardTableBarrierSetAssembler::gen_write_barrier_stub(LIR_Assembler* ce, 
   __ bind(*stub->entry());
   
   int offset_in_words = 0;
-
+  // pass obj
   ce->store_parameter(stub->obj()->as_register(), offset_in_words);
   offset_in_words += T_OBJECT_size;
-
-  if (stub->offset()->is_constant()) {
-    if (stub->offset()->as_constant_ptr()->type() == T_INT) {
-      ce->store_parameter(stub->offset()->as_jint(), offset_in_words);
-      offset_in_words += T_INT_size;
-    } else if (stub->offset()->as_constant_ptr()->type() == T_LONG) {
-      ce->store_parameter(stub->offset()->as_jlong(), offset_in_words);
-      offset_in_words += T_LONG_size;
+  // pass addr
+  ce->store_parameter(stub->addr()->as_pointer_register(), offset_in_words);
+  offset_in_words += 1;
+  // pass value
+  LIR_Opr value = stub->value();
+  switch (stub->type()) {
+    case T_FLOAT: {
+      assert(value->is_single_xmm(), "stub: value is not in single xmm");
+      ce->store_parameter_float(value->as_xmm_float_reg(), offset_in_words);
+      break;
     }
-  } else if (stub->offset()->is_register()) {
-    ce->store_parameter(stub->offset()->as_register(), offset_in_words);
-    offset_in_words += (stub->offset()->is_single_word() ? 1: 2);
+    case T_DOUBLE: {
+      assert(value->is_double_xmm(), "stub: value is not in double xmm");
+      ce->store_parameter_double(value->as_xmm_double_reg(), offset_in_words);
+      break;
+    }
+    case T_BYTE:    // fall through
+    case T_BOOLEAN: {
+      assert(VM_Version::is_P6() || value->as_register()->has_byte_register(), "must use byte registers if not P6");
+      ce->store_parameter_byte_boolean(value->as_register(), offset_in_words);
+      break;
+    }
+
+    case T_CHAR:
+    case T_SHORT: {
+      ce->store_parameter_char_short(value->as_register(), offset_in_words);
+      break;
+    }
+
+    case T_LONG: {
+      ce->store_parameter(value->as_register_lo(), offset_in_words);
+      break;
+    }
+
+    default: {  // T_OBJECT, T_ARRAY, int
+      ce->store_parameter(value->as_register(), offset_in_words);
+      break;
+    }
+
   }
-
-  if (stub->type() == T_LONG) {
-    ce->store_parameter(stub->new_val()->as_register_hi(), offset_in_words);
-    ce->store_parameter(stub->new_val()->as_register_lo(), offset_in_words + 1);
-    offset_in_words += T_LONG_size;
-  } else if (stub->type() == T_FLOAT) {
-
-    // printf("fpu register= %d\n", stub->new_val()->is_fpu_register());
-    // printf("single cpu = %d\n", stub->new_val()->is_single_cpu());
-    // printf("double cpu = %d\n", stub->new_val()->is_double_cpu());
-    // printf("!isvirtual= %d\n", !stub->new_val()->is_virtual());
-    //   // ce->store_parameter(stub->new_val()->as_register_lo(), 3);
-    // ce->bailout(" xmm ");
-    ce->store_parameter_float(stub->new_val()->as_xmm_float_reg(), offset_in_words);
-    offset_in_words += T_FLOAT_size;
-  } else if (stub->type() == T_DOUBLE) {
-    ce->store_parameter_double(stub->new_val()->as_xmm_double_reg(), offset_in_words);
-    offset_in_words += T_DOUBLE_size;
-  } else {
-    ce->store_parameter(stub->new_val()->as_register(), offset_in_words);
-    offset_in_words += 1;
-  }
-
-  // if (stub->offset()->is_constant()) {
-  //   ce->store_parameter(stub->offset()->as_jint(), 1);
-  // } else {
-  //   ce->store_parameter(stub->offset()->as_register(), 1);
-  // }
 
   __ call(RuntimeAddress(stub->runtime_stub()));
 

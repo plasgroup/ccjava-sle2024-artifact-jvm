@@ -13,18 +13,19 @@
 #include "utilities/globalDefinitions.hpp"
 
 inline bool OurPersist::enable_slow() {
-  return true;
   if (UseCompressedOops) {
+    printf("Don't support UseCompressedOops\n");
     return false;
   }
 
   if (UseCompressedClassPointers) {
+    printf("UseCompressedClassPointers\n");
     return false;
   }
 
-  if (!Arguments::is_interpreter_only()) {
-    return false;
-  }
+  // if (!Arguments::is_interpreter_only()) {
+  //   return false;
+  // }
 
   return true;
 }

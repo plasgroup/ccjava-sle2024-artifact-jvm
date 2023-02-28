@@ -85,7 +85,7 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
   access.type() == T_DOUBLE ||
   access.type() == T_CHAR ||
   access.type() == T_SHORT ||
-  // access.type() == T_BYTE || 
+  access.type() == T_BYTE || 
   access.type() == T_BOOLEAN ||
   access.type() == T_LONG 
   // ||

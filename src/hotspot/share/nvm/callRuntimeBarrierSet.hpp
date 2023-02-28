@@ -27,7 +27,7 @@ class CallRuntimeBarrierSet : AllStatic {
   };
 
   template <DecoratorSet ds, typename T>
-  inline static void call_runtime_store_in_heap(oop obj, T* addr, T value) {
+  inline static void call_runtime_store_in_heap(oopDesc* obj, T* addr, T value) {
     NVMCardTableBarrierSet::AccessBarrier<ds>::template store_in_heap<T>(obj, addr, value);
   };
 

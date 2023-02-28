@@ -189,8 +189,10 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
     }
     
     static void limited_oop_store_in_heap(oop base, oop* addr, oop value) {
-      // Store in DRAM.
-      // printf("%s:{addr = %p, base = %p}\n", func, a, b);
+      auto a = static_cast<void *>(addr);
+      auto b = static_cast<void *>(base);
+      
+      // printf("%s:{addr = %p, base = %p}\n", __func__, a, b);
       Parent::template oop_store_in_heap(addr, value);
     }
     

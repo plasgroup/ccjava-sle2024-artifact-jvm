@@ -61,7 +61,7 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
   bool on_anonymous = (decorators & ON_UNKNOWN_OOP_REF) != 0;
   bool needs_patching = (decorators & C1_NEEDS_PATCHING) != 0;
   bool needs_wupd = (decorators & OURPERSIST_NEEDS_WUPD) != 0;
-  
+  int patchCnt=0;
   // print_info(access, value);
   // access.gen()->bailout("not now");
   //   return;
@@ -72,8 +72,7 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
 
   
   if (needs_patching) {
-    printf("%s:{decorator=%ld}\n", __func__, decorators);
-    assert(false, "needs_patching shouldn't appear");
+    printf("%s:{decorator=%ld}  %d\n", __func__, decorators, patchCnt++);
   }
 
   bool C1_nvm_have_implemented;
@@ -87,12 +86,10 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
   access.type() == T_SHORT ||
   access.type() == T_BYTE || 
   access.type() == T_BOOLEAN ||
-  access.type() == T_LONG 
-  // ||
-  // access.type() == T_OBJECT  ||
-  // access.type() == T_ARRAY) 
-  )
-
+  access.type() == T_LONG ||
+  access.type() == T_OBJECT  ||
+  access.type() == T_ARRAY) 
+  
   && !needs_patching;
     
 

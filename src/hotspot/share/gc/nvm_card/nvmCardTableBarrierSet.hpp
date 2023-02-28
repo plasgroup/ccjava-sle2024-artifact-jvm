@@ -165,35 +165,58 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
     template <typename T>
     static void store_in_heap(oop base, T* addr, T value) {
-      assert((decorators & AS_NO_KEEPALIVE) == 0, "");
 
       // Store in DRAM.
-      auto a = static_cast<void *>(addr);
-      auto b = static_cast<void *>(base);
-      
-      // printf("%s:{addr = %p, base = %p}\n", __func__, a, b);
+      // this also works: Parent::store_in_heap_at(base, offset, value);
       Parent::store_in_heap(addr, value);
 
-      // OrderAccess::fence();
-      // nvmOop nvm_fwd = base->nvm_header().fwd();
-      // if (nvm_fwd == NULL) {
-      //   // Store only in DRAM.
-      //   return;
-      // }
-      // assert(false, "not durable at present");
-      // assert(nvmHeader::is_fwd(nvm_fwd), "");
-
+      if (base == nullptr) {
+        return;
+      }
+      OrderAccess::fence();
+      nvmOop replica = base->nvm_header().fwd();
+      if (replica == nullptr) {
+        return;
+      }
+      assert(false, "no durable at present");
       // Store in NVM.
-      // Raw::store_in_heap_at(oop(nvm_fwd), offset, value);
-      // NVM_WRITEBACK(AccessInternal::field_addr(oop(nvm_fwd), offset));
+      ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
+      Raw::store_in_heap_at(oop(replica), offset, value);
+      NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
+
     }
     
     static void limited_oop_store_in_heap(oop base, oop* addr, oop value) {
-      auto a = static_cast<void *>(addr);
-      auto b = static_cast<void *>(base);
-      
-      // printf("%s:{addr = %p, base = %p}\n", __func__, a, b);
+      // Store in DRAM.
       Parent::template oop_store_in_heap(addr, value);
+
+      if (base == nullptr) {
+        return;
+      }
+      ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
+
+      if (OurPersist::needs_wupd(base, offset, decorators, true)) {
+        OrderAccess::fence();
+        
+        
+        // return; // not durable now
+
+        nvmOop before_fwd = base->nvm_header().fwd();
+
+        if (before_fwd != nullptr) {
+          assert(false, "don't support now");
+          assert(nvmHeader::is_fwd(before_fwd), "");
+
+          // Store in NVM.
+          oop nvm_val = NULL;
+          if (value != NULL && OurPersist::is_target(value->klass())) {
+            OurPersist::ensure_recoverable(value);
+            nvm_val = oop(value->nvm_header().fwd());
+          }
+          Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
+          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+        }
+      }
     }
     
     template <typename T>

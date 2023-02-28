@@ -898,15 +898,15 @@ void NVMCardTableBarrierSetAssembler::gen_write_barrier_stub(LIR_Assembler* ce, 
   //  
   //  debug information
   //
-  static int cnt = 0;
-    printf("= = = = = = =  #Stub Information: %d  = = = = = = = \n\
-  type = %s\n",
-    cnt++,
-    type2name(stub->type()));
+  // static int cnt = 0;
+  //   printf("= = = = = = =  #Stub Information: %d  = = = = = = = \n\
+  // type = %s\n",
+  //   cnt++,
+  //   type2name(stub->type()));
 
-  stub->obj()->print();
-  stub->addr()->print();
-  stub->value()->print();
+  // stub->obj()->print();
+  // stub->addr()->print();
+  // stub->value()->print();
   assert(stub->obj()->is_register() && !stub->obj()->is_virtual(), "obj should be in register and not virtual");
   assert(stub->addr()->is_constant() || stub->addr()->is_register() , "addr should be in register");
   assert(stub->value()->is_register(), "value should be in register");

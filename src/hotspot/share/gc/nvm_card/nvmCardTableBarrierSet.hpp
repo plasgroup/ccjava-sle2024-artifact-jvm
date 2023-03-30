@@ -168,7 +168,6 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
       // Store in DRAM.
       // this also works: Parent::store_in_heap_at(base, offset, value);
-      Parent::store_in_heap(addr, value);
 
       if (base == nullptr) {
         return;
@@ -188,7 +187,6 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
     
     static void limited_oop_store_in_heap(oop base, oop* addr, oop value) {
       // Store in DRAM.
-      Parent::template oop_store_in_heap(addr, value);
 
       if (base == nullptr) {
         return;

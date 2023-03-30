@@ -99,7 +99,7 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
     return;
   }
   
-  
+  parent::store_at_resolved(access, value);
   nvm_write_barrier(access, access.resolved_addr(), value);
  
 }

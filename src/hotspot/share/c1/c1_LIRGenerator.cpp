@@ -1590,6 +1590,12 @@ void LIRGenerator::do_StoreField(StoreField* x) {
   bool is_durable = x->field()->is_durable();
   bool is_static = x->is_static();
   bool is_mirror = x->field()->holder()->is_mirror();
+
+  {
+    ciMethod* method = compilation()->method();
+    const char* name = method->name()->as_utf8();
+    printf("%s %d\n", name, x->printable_bci());
+  }
   // puts("#class name");
   // puts(x->field()->holder()->name()->as_utf8());
   BasicType field_type = x->field_type();
@@ -1628,9 +1634,6 @@ void LIRGenerator::do_StoreField(StoreField* x) {
   }
 
   set_no_result(x);
-
-  tty->print_cr("   store_%s bci %d",
-                  x->is_static() ?  "static" : "field", x->printable_bci());
 #ifndef PRODUCT
   if (PrintNotLoaded && needs_patching) {
     tty->print_cr("   ###class not loaded at store_%s bci %d",

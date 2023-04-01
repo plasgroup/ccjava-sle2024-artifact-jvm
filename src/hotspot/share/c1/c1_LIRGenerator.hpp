@@ -33,7 +33,11 @@
 #include "jfr/support/jfrIntrinsics.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/sizes.hpp"
-
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <string>
+#include "memory/allocation.hpp"
 class BarrierSetC1;
 
 // The classes responsible for code emission and register allocation
@@ -160,7 +164,59 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
   void* operator new[](size_t size) throw();
   void operator delete(void* p) { ShouldNotReachHere(); }
   void operator delete[](void* p) { ShouldNotReachHere(); }
+#ifdef OUR_PERSIST
+  template <typename T>
+  class HotSpotAllocator {
+  public:
+      using value_type = T;
+      using size_type = std::size_t;
 
+      HotSpotAllocator() = default;
+      template <typename U>
+      HotSpotAllocator(const HotSpotAllocator<U>&) noexcept {}
+
+      T* allocate(size_type n) {
+          return static_cast<T*>(AllocateHeap(n * sizeof(T), mtInternal));
+      }
+
+      void deallocate(T* p, size_type) {
+          FreeHeap(p);
+      }
+
+      template <typename U>
+      bool operator==(const HotSpotAllocator<U>&) const {
+          return true;
+      }
+
+      template <typename U>
+      bool operator!=(const HotSpotAllocator<U>&) const {
+          return false;
+      } 
+  };
+
+  using value_type = int;
+  static inline std::unordered_set<value_type, std::hash<value_type>, std::equal_to<value_type>, HotSpotAllocator<value_type>>
+   m{};
+
+  // using value_type = std::pair<const std::string, std::vector<int, HotSpotAllocator<int> > >;
+  // static inline std::unordered_map<std::string, std::hash<std::string>, std::equal_to<std::string>, HotSpotAllocator<value_type>>
+  //  m{};
+
+  // using txt_key_type = int;
+  // using txt_value_type = std::pair<const int, int>;
+  // static inline std::unordered_map<txt_key_type, std::hash<txt_key_type>, std::equal_to<txt_key_type>, HotSpotAllocator<txt_value_type>>
+  //  m{};
+
+
+  // using value_type = int;
+  // static inline std::unordered_set<value_type, std::hash<value_type>, std::equal_to<value_type>, HotSpotAllocator<value_type>>
+  // s{};
+
+  // using value_type = std::basic_string<char, std::char_traits<char>, HotSpotAllocator<char>>;
+  // static inline std::unordered_set<value_type, std::hash<value_type>, std::equal_to<value_type>, HotSpotAllocator<value_type>> 
+  // s{};
+
+#endif
   Compilation*  _compilation;
   ciMethod*     _method;    // method that we are compiling
   PhiResolverState  _resolver_state;
@@ -513,6 +569,7 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
     , _virtual_register_number(LIR_OprDesc::vreg_base)
     , _vreg_flags(num_vreg_flags)
     , _barrier_set(BarrierSet::barrier_set()->barrier_set_c1()) {
+      printf("LIRGenerator generated!");
   }
 
   // for virtual registers, maps them back to Phi's or Local's

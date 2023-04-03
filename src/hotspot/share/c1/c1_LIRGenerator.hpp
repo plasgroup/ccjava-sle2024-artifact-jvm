@@ -160,11 +160,12 @@ class PhiResolver: public CompilationResourceObj {
 #ifdef OUR_PERSIST
 class EscapeInfo{
   public:
-  EscapeInfo() = default;
+  EscapeInfo() {
+    printf("successfully created");
+  };
 
   private:
-  ResourceHashtable<const char*, GrowableArray<int>, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> h3{
-  }; 
+  ResourceHashtable<const char*, GrowableArray<int>, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _table{}; 
 };
 #endif
 
@@ -177,7 +178,9 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
   void operator delete(void* p) { ShouldNotReachHere(); }
   void operator delete[](void* p) { ShouldNotReachHere(); }
 
-
+#ifdef OUR_PERSIST
+  static inline EscapeInfo _escape_info{};
+#endif
   Compilation*  _compilation;
   ciMethod*     _method;    // method that we are compiling
   PhiResolverState  _resolver_state;

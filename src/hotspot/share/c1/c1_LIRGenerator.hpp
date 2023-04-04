@@ -177,33 +177,42 @@ class EscapeInfo{
     for (auto method_name: method_names) {
       int index = _names->append(method_name);
 
+
+      GrowableArray<int> * bcis = [&method_indice, &bytecode_indice, l = size_name_index_pair, &cur_method_index](int index) -> GrowableArray<int>* {
+        if (cur_method_index == l) {
+          return nullptr;
+        }
+        if (method_indice[cur_method_index] > index) {
+          return nullptr;
+        }
+        // printf("%d %d %d\n", cur_method_index, method_indice[cur_method_index], index);
+        assert(cur_method_index < l && method_indice[cur_method_index] == index, "must be");
+
+        GrowableArray<int> * bcis = new (ResourceObj::C_HEAP, mtCode) GrowableArray<int>(2, mtCode);
+
+        while (cur_method_index < l && method_indice[cur_method_index] == index) {
+          bcis->append(bytecode_indice[cur_method_index]);
+          cur_method_index++;
+        }
+
+        return bcis;
+      }(index);  // immediately invoked lambda
+
+      _indice->append(bcis);
+
       // test
       printf("method_name inserted: [%d] = %s\n", index, _names->at(index));
-
-      if ((cur_method_index == size_name_index_pair) || (method_indice[cur_method_index] != index)) {
-        assert(method_indice[cur_method_index] > index, "should be, since ascending order && some skipped");
-        _indice->append(nullptr);
+      if (bcis != nullptr) {
+        for (auto it = bcis->begin(); it != bcis->end(); ++it) {
+          printf("Append bci = %d for %s\n", *it, _names->at(index));
+        }
+      } else {
         printf("No bytecode index for %s\n", _names->at(index));
-
-        continue;
       }
 
-      GrowableArray<int> * bcis = new (ResourceObj::C_HEAP, mtCode) GrowableArray<int>(2, mtCode);
-
-      while (cur_method_index < size_name_index_pair && method_indice[cur_method_index] == index) {
-        bcis->append(bytecode_indice[cur_method_index]);
-        cur_method_index++;
-      }
-
-      // test
-      for (auto it = bcis->begin(); it != bcis->end(); ++it) {
-        printf("Append bci = %d for %s\n", *it, _names->at(index));
-      }
-      
-      _indice->append(bcis);
     }
 
-    assert(false, " ");
+    assert(false, "break point");
   };
 
 

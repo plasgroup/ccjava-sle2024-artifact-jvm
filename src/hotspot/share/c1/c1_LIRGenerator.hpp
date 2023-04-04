@@ -161,11 +161,28 @@ class PhiResolver: public CompilationResourceObj {
 class EscapeInfo{
   public:
   EscapeInfo() {
-    printf("successfully created");
+    _names = new (ResourceObj::C_HEAP, mtCode) GrowableArray<const char *>(128, mtCode);
+    _indice = new (ResourceObj::C_HEAP, mtCode) GrowableArray<GrowableArray<int> *>(128, mtCode);
+    
+    puts("");
+    const char* method_names[2] = {"method one", "method two"};
+    int method_indice[3] = {1, 1, 2};
+    int bytecode_indice[3] = {4, 8, 12};
+
+    for (auto method_name: method_names) {
+      int index = _names->append(method_name);
+      printf("method_name inserted: [%d] = %s\n", index, _names->at(index));
+    }
+
+    assert(false, " ");
   };
 
+
+
   private:
-  ResourceHashtable<const char*, GrowableArray<int>, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _table{}; 
+  // ResourceHashtable<const char*, GrowableArray<int>, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _table{}; 
+  GrowableArray<const char *>* _names;
+  GrowableArray<GrowableArray<int> *>* _indice;
 };
 #endif
 

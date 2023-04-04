@@ -168,7 +168,7 @@ class EscapeInfo{
     const int size_method = 5;
     const int size_name_index_pair = 9;
     // analyzed methods
-    const char* method_names[size_method] = {"one", "two", "three", "four", "five"};
+    const char* method_names[size_method + 1] = {"", "one", "two", "three", "four", "five"};
     // methodindex -- bytecodeindex pairs
     int method_indice[size_name_index_pair] = {2, 2, 2, 4, 5};
     int bytecode_indice[size_name_index_pair] = {1, 2, 3, 4, 5};
@@ -180,7 +180,7 @@ class EscapeInfo{
       // test
       printf("method_name inserted: [%d] = %s\n", index, _names->at(index));
 
-      if ((cur_method_index == size_name_index_pair) || (method_indice[cur_method_index] != index + 1)) {
+      if ((cur_method_index == size_name_index_pair) || (method_indice[cur_method_index] != index)) {
         assert(method_indice[cur_method_index] > index, "should be, since ascending order && some skipped");
         _indice->append(nullptr);
         printf("No bytecode index for %s\n", _names->at(index));
@@ -190,7 +190,7 @@ class EscapeInfo{
 
       GrowableArray<int> * bcis = new (ResourceObj::C_HEAP, mtCode) GrowableArray<int>(2, mtCode);
 
-      while (cur_method_index < size_name_index_pair && method_indice[cur_method_index] == index + 1) {
+      while (cur_method_index < size_name_index_pair && method_indice[cur_method_index] == index) {
         bcis->append(bytecode_indice[cur_method_index]);
         cur_method_index++;
       }

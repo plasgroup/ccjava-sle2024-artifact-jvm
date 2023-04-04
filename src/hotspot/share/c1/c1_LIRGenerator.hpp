@@ -165,13 +165,42 @@ class EscapeInfo{
     _indice = new (ResourceObj::C_HEAP, mtCode) GrowableArray<GrowableArray<int> *>(128, mtCode);
     
     puts("");
-    const char* method_names[2] = {"method one", "method two"};
-    int method_indice[3] = {1, 1, 2};
-    int bytecode_indice[3] = {4, 8, 12};
+    const int size_method = 5;
+    const int size_name_index_pair = 9;
+    // analyzed methods
+    const char* method_names[size_method] = {"one", "two", "three", "four", "five"};
+    // methodindex -- bytecodeindex pairs
+    int method_indice[size_name_index_pair] = {2, 2, 2, 4, 5};
+    int bytecode_indice[size_name_index_pair] = {1, 2, 3, 4, 5};
+    int cur_method_index {};
 
     for (auto method_name: method_names) {
       int index = _names->append(method_name);
+
+      // test
       printf("method_name inserted: [%d] = %s\n", index, _names->at(index));
+
+      if ((cur_method_index == size_name_index_pair) || (method_indice[cur_method_index] != index + 1)) {
+        assert(method_indice[cur_method_index] > index, "should be, since ascending order && some skipped");
+        _indice->append(nullptr);
+        printf("No bytecode index for %s\n", _names->at(index));
+
+        continue;
+      }
+
+      GrowableArray<int> * bcis = new (ResourceObj::C_HEAP, mtCode) GrowableArray<int>(2, mtCode);
+
+      while (cur_method_index < size_name_index_pair && method_indice[cur_method_index] == index + 1) {
+        bcis->append(bytecode_indice[cur_method_index]);
+        cur_method_index++;
+      }
+
+      // test
+      for (auto it = bcis->begin(); it != bcis->end(); ++it) {
+        printf("Append bci = %d for %s\n", *it, _names->at(index));
+      }
+      
+      _indice->append(bcis);
     }
 
     assert(false, " ");

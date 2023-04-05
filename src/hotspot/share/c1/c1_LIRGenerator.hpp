@@ -161,6 +161,7 @@ class PhiResolver: public CompilationResourceObj {
 class EscapeInfo{
   public:
   EscapeInfo() {
+    read_method_names();
     _names = new (ResourceObj::C_HEAP, mtCode) GrowableArray<const char *>(128, mtCode);
     _indice = new (ResourceObj::C_HEAP, mtCode) GrowableArray<GrowableArray<int> *>(128, mtCode);
     
@@ -255,6 +256,45 @@ class EscapeInfo{
 
 
   private:
+  void read_method_names() {
+    // The text file should have the following format:
+    // name1\n
+    // name2\n
+    // name3
+    //
+    // Each line must end with a newline character, except for the last one
+    // No other whilespace character should be present
+
+    const char* filename = "method_names.txt";
+
+    FILE* file = fopen(filename, "r");
+    int filesize = [file]{
+      fseek(file, 0, SEEK_END);
+      int sz = ftell(file);
+      fseek(file, 0, SEEK_SET);
+      return sz;
+    }();  // invoke immediately
+
+    // lifetime: whole program
+    char* chararray = static_cast<char *>(malloc((filesize + 1) * sizeof(char)));
+    int readsize = fread(chararray, sizeof(char), filesize, file);
+    assert(readsize == filesize, "should be");
+    chararray[filesize] = '\0';
+
+    auto* res = new (ResourceObj::C_HEAP, mtCode) GrowableArray<const char *>(128, mtCode);
+
+    res->append(chararray);
+    for (int i = 1; i< filesize; i++) {
+      if (chararray[i] == '\n') {
+        chararray[i] = '\0';
+        res->append(chararray + i + 1);
+      }
+    }
+    for (auto it = res->begin(); it != res->end(); ++it) {
+      printf("\n\nmethod name: %s\n\n", *it);
+    }
+    fclose(file);
+  }
   // ResourceHashtable<const char*, GrowableArray<int>, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _table{}; 
   GrowableArray<const char *>* _names;
   GrowableArray<GrowableArray<int> *>* _indice;

@@ -162,23 +162,17 @@ class EscapeInfo{
   public:
   EscapeInfo() {
     read_method_names();
-    _names = new (ResourceObj::C_HEAP, mtCode) GrowableArray<const char *>(128, mtCode);
     _indice = new (ResourceObj::C_HEAP, mtCode) GrowableArray<GrowableArray<int> *>(128, mtCode);
     
     puts("");
     const int size_method = 5;
     const int size_name_index_pair = 9;
-    // analyzed methods
-    const char* method_names[size_method + 1] = {"", "one", "two", "three", "four", "five"};
     // methodindex -- bytecodeindex pairs
     int method_indice[size_name_index_pair] = {2, 2, 2, 4, 5};
     int bytecode_indice[size_name_index_pair] = {1, 2, 3, 4, 5};
     int cur_method_index {};
 
-    for (auto method_name: method_names) {
-      int index = _names->append(method_name);
-
-
+    for (int index = 0; index < _names->length(); index++) {
       GrowableArray<int> * bcis = [&method_indice, &bytecode_indice, l = size_name_index_pair, &cur_method_index](int index) -> GrowableArray<int>* {
         if (cur_method_index == l) {
           return nullptr;
@@ -281,16 +275,16 @@ class EscapeInfo{
     assert(readsize == filesize, "should be");
     chararray[filesize] = '\0';
 
-    auto* res = new (ResourceObj::C_HEAP, mtCode) GrowableArray<const char *>(128, mtCode);
+    _names = new (ResourceObj::C_HEAP, mtCode) GrowableArray<const char *>(128, mtCode);
 
-    res->append(chararray);
+    _names->append(chararray);
     for (int i = 1; i< filesize; i++) {
       if (chararray[i] == '\n') {
         chararray[i] = '\0';
-        res->append(chararray + i + 1);
+        _names->append(chararray + i + 1);
       }
     }
-    for (auto it = res->begin(); it != res->end(); ++it) {
+    for (auto it = _names->begin(); it != _names->end(); ++it) {
       printf("\n\nmethod name: %s\n\n", *it);
     }
     fclose(file);

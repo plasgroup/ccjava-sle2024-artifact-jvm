@@ -209,12 +209,49 @@ class EscapeInfo{
       } else {
         printf("No bytecode index for %s\n", _names->at(index));
       }
-
     }
+    // test
+    assert(need_wupd("two", 1), "need");
+    assert(need_wupd("two", 2), "need");
+    assert(need_wupd("two", 3), "need");
+    assert(need_wupd("notexist", 1), "need");
+  
+    assert(!need_wupd("one", 1), "don't need");
+    assert(!need_wupd("one", 2), "don't need");
+    assert(!need_wupd("one", 3), "don't need");
+    assert(!need_wupd("five", 3), "don't need");
 
     assert(false, "break point");
-  };
+  }
 
+  auto need_wupd(const char* const name, const int bci) -> bool {
+    // index of bcis
+    int index = [_names = this->_names](const char * const target) -> int {
+      for (int i = 0; i < _names->length(); i++) {
+        if (strcmp(target, _names->at(i)) == 0) {
+          return i;
+        }
+      }
+      return -1;  // OpenJDK style
+    }(name);  // invoke immediately
+    
+    // bcis not found, meaning method not analyzed
+    // need barrier conservatively
+    if (index == -1) {
+      return true;
+    }
+    
+    assert(index >= 0 && index < _indice->length(), "index invalid");
+
+    GrowableArray<int> * bcis = _indice->at(index);
+    // method is analyzed
+    // no write barrier for all putfields 
+    if (bcis == nullptr) {
+      return false;
+    }
+    
+    return bcis->contains(bci);
+  }
 
 
   private:

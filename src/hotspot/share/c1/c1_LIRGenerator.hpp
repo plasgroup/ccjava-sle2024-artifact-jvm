@@ -162,49 +162,8 @@ class EscapeInfo{
   public:
   EscapeInfo() {
     read_method_names();
-    _indice = new (ResourceObj::C_HEAP, mtCode) GrowableArray<GrowableArray<int> *>(128, mtCode);
+    read_pair();
     
-    puts("");
-    const int size_method = 5;
-    const int size_name_index_pair = 9;
-    // methodindex -- bytecodeindex pairs
-    int method_indice[size_name_index_pair] = {2, 2, 2, 4, 5};
-    int bytecode_indice[size_name_index_pair] = {1, 2, 3, 4, 5};
-    int cur_method_index {};
-
-    for (int index = 0; index < _names->length(); index++) {
-      GrowableArray<int> * bcis = [&method_indice, &bytecode_indice, l = size_name_index_pair, &cur_method_index](int index) -> GrowableArray<int>* {
-        if (cur_method_index == l) {
-          return nullptr;
-        }
-        if (method_indice[cur_method_index] > index) {
-          return nullptr;
-        }
-        // printf("%d %d %d\n", cur_method_index, method_indice[cur_method_index], index);
-        assert(cur_method_index < l && method_indice[cur_method_index] == index, "must be");
-
-        GrowableArray<int> * bcis = new (ResourceObj::C_HEAP, mtCode) GrowableArray<int>(2, mtCode);
-
-        while (cur_method_index < l && method_indice[cur_method_index] == index) {
-          bcis->append(bytecode_indice[cur_method_index]);
-          cur_method_index++;
-        }
-
-        return bcis;
-      }(index);  // immediately invoked lambda
-
-      _indice->append(bcis);
-
-      // test
-      printf("method_name inserted: [%d] = %s\n", index, _names->at(index));
-      if (bcis != nullptr) {
-        for (auto it = bcis->begin(); it != bcis->end(); ++it) {
-          printf("Append bci = %d for %s\n", *it, _names->at(index));
-        }
-      } else {
-        printf("No bytecode index for %s\n", _names->at(index));
-      }
-    }
     // test
     assert(need_wupd("two", 1), "need");
     assert(need_wupd("two", 2), "need");
@@ -288,6 +247,65 @@ class EscapeInfo{
       printf("\n\nmethod name: %s\n\n", *it);
     }
     fclose(file);
+  }
+
+  void read_pair() {
+    // The text file should have the following format:
+    // a b\n
+    // a b\n
+    // a b
+    //
+    // Each line must end with a newline character, except for the last one
+    // No other whilespace character should be presen
+    
+    class FileReader {
+      public:
+        FileReader(const char* filename) {
+          _file = fopen(filename, "r");
+          readNext();
+        }
+        ~FileReader() {
+          fclose(_file);
+        }
+        auto operator ()(int index) -> GrowableArray<int>* {
+          if (_method_idx > index) {
+            return nullptr;
+          }
+          if (!_has_next) {
+            return nullptr;
+          }
+
+          assert(_method_idx == index, "must");
+
+          GrowableArray<int> * bcis = new (ResourceObj::C_HEAP, mtCode) GrowableArray<int>(2, mtCode);
+
+          do {
+            bcis->append(_bytecode_idx);
+          } while (readNext() && _method_idx == index);
+          
+          return bcis;
+        } 
+
+      private:
+        auto readNext() -> bool {
+          if (!_has_next) {
+            return false;
+          }
+          _has_next = (fscanf(_file, "%d %d", &_method_idx, &_bytecode_idx) == 2);
+          return _has_next;
+        }
+        int _method_idx{-1};
+        int _bytecode_idx{-1};
+        bool _has_next{true};
+        FILE* _file{nullptr};
+    };
+    FileReader BCIs_of_method{"methodname_bytecodeindex.txt"};
+    _indice = new (ResourceObj::C_HEAP, mtCode) GrowableArray<GrowableArray<int> *>(128, mtCode);
+
+    for (int index = 0; index < _names->length(); index++) {
+      GrowableArray<int> * bcis = BCIs_of_method(index);
+      _indice->append(bcis);
+    }
   }
   // ResourceHashtable<const char*, GrowableArray<int>, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _table{}; 
   GrowableArray<const char *>* _names;

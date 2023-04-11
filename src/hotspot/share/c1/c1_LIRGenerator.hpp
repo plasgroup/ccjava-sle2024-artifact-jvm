@@ -174,8 +174,6 @@ class EscapeInfo{
     assert(!need_wupd("one", 2), "don't need");
     assert(!need_wupd("one", 3), "don't need");
     assert(!need_wupd("five", 3), "don't need");
-
-    assert(false, "break point");
   }
 
   auto need_wupd(const char* const name, const int bci) -> bool {
@@ -677,7 +675,6 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
     , _virtual_register_number(LIR_OprDesc::vreg_base)
     , _vreg_flags(num_vreg_flags)
     , _barrier_set(BarrierSet::barrier_set()->barrier_set_c1()) {
-      printf("LIRGenerator generated!");
   }
 
   // for virtual registers, maps them back to Phi's or Local's

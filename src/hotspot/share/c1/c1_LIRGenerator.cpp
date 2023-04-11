@@ -1587,19 +1587,7 @@ void LIRGenerator::do_CompareAndSwap(Intrinsic* x, ValueType* type) {
 void LIRGenerator::do_StoreField(StoreField* x) {
   bool needs_patching = x->needs_patching();
   bool is_volatile = x->field()->is_volatile();
-  bool is_durable = x->field()->is_durable();
-  bool is_static = x->is_static();
-  bool is_mirror = x->field()->holder()->is_mirror();
-
-  {
-    ciMethod* method = compilation()->method();
-    const char* method_name = method->name()->as_utf8();
-
-    const char* class_name = x->field()->holder()->name()->as_utf8();
-    printf("%s::%s %d\n", class_name, method_name, x->printable_bci());
-  }
   BasicType field_type = x->field_type();
-  bool is_oop = is_reference_type(field_type);
 
   CodeEmitInfo* info = NULL;
   if (needs_patching) {
@@ -1657,11 +1645,27 @@ void LIRGenerator::do_StoreField(StoreField* x) {
   if (needs_patching) {
     decorators |= C1_NEEDS_PATCHING;
   }
-  if ((!is_mirror) || 
-      (is_oop && is_static && is_durable)) {
-    decorators |= OURPERSIST_NEEDS_WUPD;
-  }
 
+  // check if we need double update write barrier
+  // if yes, set the decorator
+  [x, this, &decorators] {
+    bool is_mirror = x->field()->holder()->is_mirror();
+    bool is_durable = x->field()->is_durable();
+    // no need to double update
+    if (is_mirror && !is_durable) {
+      return;
+    }
+
+    ciMethod* method = this->compilation()->method();
+    const char* method_name = method->name()->as_utf8();
+    const char* class_name = x->field()->holder()->name()->as_utf8();
+    printf("%s::%s %d\n", class_name, method_name, x->printable_bci());
+    
+    if (this->_escape_info.need_wupd(class_name, x->printable_bci())) {
+      decorators |= OURPERSIST_NEEDS_WUPD;
+    }
+  }();  // invoke immediately
+  
   access_store_at(decorators, field_type, object, LIR_OprFact::intConst(x->offset()),
                   value.result(), info != NULL ? new CodeEmitInfo(info) : NULL, info);
 }

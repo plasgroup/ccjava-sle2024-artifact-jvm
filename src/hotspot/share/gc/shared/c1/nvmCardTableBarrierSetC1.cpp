@@ -60,39 +60,10 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
   bool is_array = (decorators & IS_ARRAY) != 0;
   bool on_anonymous = (decorators & ON_UNKNOWN_OOP_REF) != 0;
   bool needs_patching = (decorators & C1_NEEDS_PATCHING) != 0;
+  bool needs_seq = (decorators & MO_SEQ_CST) != 0;
   bool needs_wupd = (decorators & OURPERSIST_NEEDS_WUPD) != 0;
-  int patchCnt=0;
-  // print_info(access, value);
-  // access.gen()->bailout("not now");
-  //   return;
-  if ((decorators & MO_SEQ_CST) != 0) {
-    access.gen()->bailout("ignore MQ_SEQ_CST as it is rare");
-    return;
-  }
 
-  
-  if (needs_patching) {
-    printf("%s:{decorator=%ld}  %d\n", __func__, decorators, patchCnt++);
-  }
-
-  bool C1_nvm_have_implemented;
-  C1_nvm_have_implemented = (access.type() == T_INT) && !is_array && !needs_patching;
-  C1_nvm_have_implemented = (access.type() == T_INT) && !needs_patching;
-  C1_nvm_have_implemented = (
-    access.type() == T_INT || 
-  access.type() == T_FLOAT ||
-  access.type() == T_DOUBLE ||
-  access.type() == T_CHAR ||
-  access.type() == T_SHORT ||
-  access.type() == T_BYTE || 
-  access.type() == T_BOOLEAN ||
-  access.type() == T_LONG ||
-  access.type() == T_OBJECT  ||
-  access.type() == T_ARRAY) 
-  
-  && !needs_patching;
-    
-
+  bool C1_nvm_have_implemented = !needs_seq && !needs_patching;
 
   if (!C1_nvm_have_implemented) {
     access.gen()->bailout("not now");
@@ -100,7 +71,10 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
   }
   
   parent::store_at_resolved(access, value);
-  nvm_write_barrier(access, access.resolved_addr(), value);
+
+  if (needs_wupd) {
+    nvm_write_barrier(access, access.resolved_addr(), value);
+  }
  
 }
 

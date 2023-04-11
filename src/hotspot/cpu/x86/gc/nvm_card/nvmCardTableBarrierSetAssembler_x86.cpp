@@ -895,26 +895,10 @@ void NVMCardTableBarrierSetAssembler::generate_c1_write_barrier_runtime_stub(Stu
 #undef __
 #define __ ce->masm()->
 void NVMCardTableBarrierSetAssembler::gen_write_barrier_stub(LIR_Assembler* ce, NVMCardTableWriteBarrierStub* stub) {
-  //  
-  //  debug information
-  //
-  // static int cnt = 0;
-  //   printf("= = = = = = =  #Stub Information: %d  = = = = = = = \n\
-  // type = %s\n",
-  //   cnt++,
-  //   type2name(stub->type()));
-
-  // stub->obj()->print();
-  // stub->addr()->print();
-  // stub->value()->print();
   assert(stub->obj()->is_register() && !stub->obj()->is_virtual(), "obj should be in register and not virtual");
   assert(stub->addr()->is_constant() || stub->addr()->is_register() , "addr should be in register");
   assert(stub->value()->is_register(), "value should be in register");
-  puts("\n");
 
-  //
-  //
-  //
   NVMCardTableBarrierSetC1* bs =
       reinterpret_cast<NVMCardTableBarrierSetC1*>(BarrierSet::barrier_set()->barrier_set_c1());
 

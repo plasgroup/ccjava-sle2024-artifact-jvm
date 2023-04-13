@@ -163,20 +163,12 @@ class EscapeInfo{
   EscapeInfo() {
     read_method_names();
     read_pair();
-    
-    // test
-    assert(need_wupd("two", 1), "need");
-    assert(need_wupd("two", 2), "need");
-    assert(need_wupd("two", 3), "need");
-    assert(need_wupd("notexist", 1), "need");
-  
-    assert(!need_wupd("one", 1), "don't need");
-    assert(!need_wupd("one", 2), "don't need");
-    assert(!need_wupd("one", 3), "don't need");
-    assert(!need_wupd("five", 3), "don't need");
   }
 
-  auto need_wupd(const char* const name, const int bci) -> bool {
+  auto need_wupd(const char* const class_name, const char* const method_name, const int bci) -> bool {
+    strcpy(_buf, class_name);
+    strcat(_buf, ".");
+    strcat(_buf, method_name);
     // index of bcis
     int index = [_names = this->_names](const char * const target) -> int {
       for (int i = 0; i < _names->length(); i++) {
@@ -185,7 +177,7 @@ class EscapeInfo{
         }
       }
       return -1;  // OpenJDK style
-    }(name);  // invoke immediately
+    }(_buf);  // invoke immediately
     
     // bcis not found, meaning method not analyzed
     // need barrier conservatively
@@ -308,6 +300,7 @@ class EscapeInfo{
   // ResourceHashtable<const char*, GrowableArray<int>, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _table{}; 
   GrowableArray<const char *>* _names;
   GrowableArray<GrowableArray<int> *>* _indice;
+  char _buf[256];
 };
 #endif
 

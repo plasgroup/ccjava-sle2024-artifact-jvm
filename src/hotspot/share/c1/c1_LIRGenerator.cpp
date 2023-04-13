@@ -1657,12 +1657,14 @@ void LIRGenerator::do_StoreField(StoreField* x) {
     }
 
     ciMethod* method = this->compilation()->method();
-    const char* method_name = method->name()->as_utf8();
     const char* class_name = method->holder()->name()->as_utf8();
-    printf("%s::%s %d\n", class_name, method_name, x->printable_bci());
+    const char* method_name = method->name()->as_utf8();
     
-    if (this->_escape_info.need_wupd(class_name, x->printable_bci())) {
+    if (this->_escape_info.need_wupd(class_name, method_name, x->printable_bci())) {
       decorators |= OURPERSIST_NEEDS_WUPD;
+      printf("%s.%s %d: T\n", class_name, method_name, x->printable_bci());
+    } else {
+      printf("%s.%s %d: F\n", class_name, method_name, x->printable_bci());
     }
   }();  // invoke immediately
   

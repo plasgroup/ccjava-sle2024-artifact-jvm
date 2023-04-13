@@ -1658,7 +1658,7 @@ void LIRGenerator::do_StoreField(StoreField* x) {
 
     ciMethod* method = this->compilation()->method();
     const char* method_name = method->name()->as_utf8();
-    const char* class_name = x->field()->holder()->name()->as_utf8();
+    const char* class_name = method->holder()->name()->as_utf8();
     printf("%s::%s %d\n", class_name, method_name, x->printable_bci());
     
     if (this->_escape_info.need_wupd(class_name, x->printable_bci())) {

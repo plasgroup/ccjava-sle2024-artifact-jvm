@@ -1698,7 +1698,11 @@ void GraphBuilder::access_field(Bytecodes::Code code) {
         Value mask = append(new Constant(new IntConstant(1)));
         val = append(new LogicOp(Bytecodes::_iand, val, mask));
       }
+#ifdef OUR_PERSIST
+      append(check(new StoreField(append(obj), offset, field, val, true, state_before, needs_patching)));
+#else
       append(new StoreField(append(obj), offset, field, val, true, state_before, needs_patching));
+#endif
       break;
     }
     case Bytecodes::_getfield: {
@@ -1770,7 +1774,11 @@ void GraphBuilder::access_field(Bytecodes::Code code) {
       StoreField* store = new StoreField(obj, offset, field, val, false, state_before, needs_patching);
       if (!needs_patching) store = _memory->store(store);
       if (store != NULL) {
+#ifdef OUR_PERSIST        
+        append(check(store));
+#else
         append(store);
+#endif
       }
       break;
     }

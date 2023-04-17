@@ -170,7 +170,16 @@ class GraphBuilder {
     bool ignore_return() const                     { return _ignore_return;          }
     void set_ignore_return(bool ignore_return)     { _ignore_return = ignore_return; }
   };
+#ifdef OUR_PERSIST
+  // notice it's private
+  // to code easier, return the parameter itself
 
+    auto check(StoreField* sf) const -> StoreField* {
+      printf("GraphBuilder: %s.%s %s %d\n", method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), sf->is_static() ? "putstatic" : "putfield", bci());
+
+      return sf;
+    }
+#endif
   // for all GraphBuilders
   static bool       _can_trap[Bytecodes::number_of_java_codes];
 

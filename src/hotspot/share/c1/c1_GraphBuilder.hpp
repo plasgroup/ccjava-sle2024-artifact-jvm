@@ -35,6 +35,152 @@
 
 class MemoryBuffer;
 
+#ifdef OUR_PERSIST
+class EscapeInfo{
+  public:
+  EscapeInfo() {
+    read_method_names();
+    read_pair();
+  }
+
+  auto need_wupd(const char* const class_name, const char* const method_name, const int bci) -> bool {
+    strcpy(_buf, class_name);
+    strcat(_buf, ".");
+    strcat(_buf, method_name);
+    // index of bcis
+    int index = [_names = this->_names](const char * const target) -> int {
+      for (int i = 0; i < _names->length(); i++) {
+        if (strcmp(target, _names->at(i)) == 0) {
+          return i;
+        }
+      }
+      return -1;  // OpenJDK style
+    }(_buf);  // invoke immediately
+    
+    // bcis not found, meaning method not analyzed
+    // need barrier conservatively
+    if (index == -1) {
+      return true;
+    }
+    
+    assert(index >= 0 && index < _indice->length(), "index invalid");
+
+    GrowableArray<int> * bcis = _indice->at(index);
+    // method is analyzed
+    // no write barrier for all putfields 
+    if (bcis == nullptr) {
+      return false;
+    }
+    
+    return bcis->contains(bci);
+  }
+
+
+  private:
+  void read_method_names() {
+    // The text file should have the following format:
+    // name1\n
+    // name2\n
+    // name3
+    //
+    // Each line must end with a newline character, except for the last one
+    // No other whilespace character should be present
+
+    const char* filename = "method_names.txt";
+
+    FILE* file = fopen(filename, "r");
+    int filesize = [file]{
+      fseek(file, 0, SEEK_END);
+      int sz = ftell(file);
+      fseek(file, 0, SEEK_SET);
+      return sz;
+    }();  // invoke immediately
+
+    // lifetime: whole program
+    char* chararray = static_cast<char *>(malloc((filesize + 1) * sizeof(char)));
+    int readsize = fread(chararray, sizeof(char), filesize, file);
+    assert(readsize == filesize, "should be");
+    chararray[filesize] = '\0';
+
+    _names = new (ResourceObj::C_HEAP, mtCode) GrowableArray<const char *>(128, mtCode);
+
+    _names->append(chararray);
+    for (int i = 1; i< filesize; i++) {
+      if (chararray[i] == '\n') {
+        chararray[i] = '\0';
+        _names->append(chararray + i + 1);
+      }
+    }
+    for (auto it = _names->begin(); it != _names->end(); ++it) {
+      printf("\n\nmethod name: %s\n\n", *it);
+    }
+    fclose(file);
+  }
+
+  void read_pair() {
+    // The text file should have the following format:
+    // a b\n
+    // a b\n
+    // a b
+    //
+    // Each line must end with a newline character, except for the last one
+    // No other whilespace character should be presen
+    
+    class FileReader {
+      public:
+        FileReader(const char* filename) {
+          _file = fopen(filename, "r");
+          readNext();
+        }
+        ~FileReader() {
+          fclose(_file);
+        }
+        auto operator ()(int index) -> GrowableArray<int>* {
+          if (_method_idx > index) {
+            return nullptr;
+          }
+          if (!_has_next) {
+            return nullptr;
+          }
+
+          assert(_method_idx == index, "must");
+
+          GrowableArray<int> * bcis = new (ResourceObj::C_HEAP, mtCode) GrowableArray<int>(2, mtCode);
+
+          do {
+            bcis->append(_bytecode_idx);
+          } while (readNext() && _method_idx == index);
+          
+          return bcis;
+        } 
+
+      private:
+        auto readNext() -> bool {
+          if (!_has_next) {
+            return false;
+          }
+          _has_next = (fscanf(_file, "%d %d", &_method_idx, &_bytecode_idx) == 2);
+          return _has_next;
+        }
+        int _method_idx{-1};
+        int _bytecode_idx{-1};
+        bool _has_next{true};
+        FILE* _file{nullptr};
+    };
+    FileReader BCIs_of_method{"methodname_bytecodeindex.txt"};
+    _indice = new (ResourceObj::C_HEAP, mtCode) GrowableArray<GrowableArray<int> *>(128, mtCode);
+
+    for (int index = 0; index < _names->length(); index++) {
+      GrowableArray<int> * bcis = BCIs_of_method(index);
+      _indice->append(bcis);
+    }
+  }
+  // ResourceHashtable<const char*, GrowableArray<int>, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _table{}; 
+  GrowableArray<const char *>* _names;
+  GrowableArray<GrowableArray<int> *>* _indice;
+  char _buf[256];
+};
+#endif
 class GraphBuilder {
  private:
   // Per-scope data. These are pushed and popped as we descend into
@@ -174,11 +320,17 @@ class GraphBuilder {
   // notice it's private
   // to code easier, return the parameter itself
 
-    auto check(StoreField* sf) const -> StoreField* {
-      printf("GraphBuilder: %s.%s %s %d\n", method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), sf->is_static() ? "putstatic" : "putfield", bci());
+  static inline EscapeInfo _escape_info{};
 
-      return sf;
+  auto check(StoreField* sf) const -> StoreField* {
+    // printf("GraphBuilder: %s.%s %s %d\n", method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), sf->is_static() ? "putstatic" : "putfield", bci());
+
+    if (_escape_info.need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), bci())) {
+      sf->set_needs_wupd_true();
     }
+
+    return sf;
+  } 
 #endif
   // for all GraphBuilders
   static bool       _can_trap[Bytecodes::number_of_java_codes];

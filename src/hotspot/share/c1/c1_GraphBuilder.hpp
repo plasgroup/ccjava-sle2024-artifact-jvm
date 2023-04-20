@@ -86,7 +86,7 @@ class EscapeInfo{
     // Each line must end with a newline character, except for the last one
     // No other whilespace character should be present
 
-    const char* filename = "method_names.txt";
+    const char* filename = "./NVMTest3/mi.txt";
 
     FILE* file = fopen(filename, "r");
     int filesize = [file]{
@@ -119,9 +119,9 @@ class EscapeInfo{
 
   void read_pair() {
     // The text file should have the following format:
-    // a b\n
-    // a b\n
-    // a b
+    // a-b\n
+    // a-b\n
+    // a-b
     //
     // Each line must end with a newline character, except for the last one
     // No other whilespace character should be presen
@@ -159,7 +159,10 @@ class EscapeInfo{
           if (!_has_next) {
             return false;
           }
-          _has_next = (fscanf(_file, "%d %d", &_method_idx, &_bytecode_idx) == 2);
+          _has_next = (fscanf(_file, "%d-%d", &_method_idx, &_bytecode_idx) == 2);
+          // the txt file is 1-indexed
+          // but the array is 0-indexed
+          _method_idx -= 1;
           return _has_next;
         }
         int _method_idx{-1};
@@ -167,7 +170,8 @@ class EscapeInfo{
         bool _has_next{true};
         FILE* _file{nullptr};
     };
-    FileReader BCIs_of_method{"methodname_bytecodeindex.txt"};
+
+    FileReader BCIs_of_method{"./NVMTest3/escapeInfo.txt"};
     _indice = new (ResourceObj::C_HEAP, mtCode) GrowableArray<GrowableArray<int> *>(128, mtCode);
 
     for (int index = 0; index < _names->length(); index++) {

@@ -184,15 +184,11 @@ void NVMCardTableBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob
 
   // (6, 13, 18, 29) (6, 13, 18, 20, 29)
   for (DecoratorSet base : decorators_) {
-    for (DecoratorSet if_static: {OURPERSIST_IS_STATIC, OURPERSIST_IS_NOT_STATIC}) {
-      for (DecoratorSet if_volatile: {OURPERSIST_IS_VOLATILE, OURPERSIST_IS_NOT_VOLATILE}) {
-        for (DecoratorSet if_durable: {OURPERSIST_DURABLE_ANNOTATION, OURPERSIST_NOT_DURABLE_ANNOTATION}) {
-          DecoratorSet ds = base | if_static | if_volatile | if_durable;
+    for (DecoratorSet if_volatile: {OURPERSIST_IS_VOLATILE, OURPERSIST_IS_NOT_VOLATILE}) {
+      DecoratorSet ds = base | if_volatile;
 
-          for (BasicType type: {T_BOOLEAN, T_CHAR, T_FLOAT,T_DOUBLE, T_BYTE, T_SHORT, T_INT, T_LONG, T_ARRAY, T_OBJECT}) {
-            insert_runtime_stub(ds, type, generate_c1_runtime_stub(buffer_blob, ds, type, ""));
-          }
-        }
+      for (BasicType type: {T_BOOLEAN, T_CHAR, T_FLOAT,T_DOUBLE, T_BYTE, T_SHORT, T_INT, T_LONG, T_ARRAY, T_OBJECT}) {
+        insert_runtime_stub(ds, type, generate_c1_runtime_stub(buffer_blob, ds, type, ""));
       }
     }
   }

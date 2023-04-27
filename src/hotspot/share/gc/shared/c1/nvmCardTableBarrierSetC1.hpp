@@ -93,7 +93,7 @@ private:
     //    8
     int idx = type - T_BOOLEAN;
     int i = 4;
-    for (DecoratorSet bit: {OURPERSIST_DURABLE_ANNOTATION, OURPERSIST_IS_VOLATILE, OURPERSIST_IS_STATIC}) {
+    for (DecoratorSet bit: {OURPERSIST_IS_VOLATILE}) {
       if ((decorators & bit) != 0) {
         idx |= (1 << i);
       }

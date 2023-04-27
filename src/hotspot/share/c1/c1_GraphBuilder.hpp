@@ -86,7 +86,7 @@ class EscapeInfo{
     // Each line must end with a newline character, except for the last one
     // No other whilespace character should be present
 
-    const char* filename = "./NVMTest3/mi.txt";
+    const char* filename = "./NVMTest4/mi.txt";
 
     FILE* file = fopen(filename, "r");
     int filesize = [file]{
@@ -111,9 +111,11 @@ class EscapeInfo{
         _names->append(chararray + i + 1);
       }
     }
+    #ifdef ASSERT  // debug info
     for (auto it = _names->begin(); it != _names->end(); ++it) {
       printf("\n\nmethod name: %s\n\n", *it);
     }
+    #endif
     fclose(file);
   }
 
@@ -171,7 +173,7 @@ class EscapeInfo{
         FILE* _file{nullptr};
     };
 
-    FileReader BCIs_of_method{"./NVMTest3/escapeInfo.txt"};
+    FileReader BCIs_of_method{"./NVMTest4/escapeInfo.txt"};
     _indice = new (ResourceObj::C_HEAP, mtCode) GrowableArray<GrowableArray<int> *>(128, mtCode);
 
     for (int index = 0; index < _names->length(); index++) {
@@ -327,9 +329,10 @@ class GraphBuilder {
   static inline EscapeInfo _escape_info{};
 
   auto check(StoreField* sf) const -> StoreField* {
-    // printf("GraphBuilder: %s.%s %s %d\n", method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), sf->is_static() ? "putstatic" : "putfield", bci());
+    // printf("GraphBuilder: %s.%s %s %d -> %s\n", method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), sf->is_static() ? "putstatic" : "putfield", bci(), _escape_info.need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), bci()) ? "True" : "False");
 
-    if (_escape_info.need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), bci())) {
+    // put field only
+    if (!sf->is_static() && _escape_info.need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), bci())) {
       sf->set_needs_wupd_true();
     }
 

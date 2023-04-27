@@ -1661,9 +1661,9 @@ void LIRGenerator::do_StoreField(StoreField* x) {
     const char* method_name = method->name()->as_utf8();
     if (x->needs_wupd()) {
       decorators |= OURPERSIST_NEEDS_WUPD;
-      printf("%s.%s %d: T\n", class_name, method_name, x->printable_bci());
+      // printf("%s.%s %d: T\n", class_name, method_name, x->printable_bci());
     } else {
-      printf("%s.%s %d: F\n", class_name, method_name, x->printable_bci());
+      // printf("%s.%s %d: F\n", class_name, method_name, x->printable_bci());
     }
   }();  // invoke immediately
   

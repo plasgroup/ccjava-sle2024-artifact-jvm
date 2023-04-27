@@ -28,3 +28,4 @@ hello.java
 *.py
 dacapo-2006-10-MR2.jar
 /scratch
+NVMTest*/*

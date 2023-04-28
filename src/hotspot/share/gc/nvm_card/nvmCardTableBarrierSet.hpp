@@ -195,28 +195,22 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       }
       ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
 
-      if (OurPersist::needs_wupd(base, offset, decorators, true)) {
-        OrderAccess::fence();
-        
-        
-        // return; // not durable now
+      nvmOop before_fwd = base->nvm_header().fwd();
 
-        nvmOop before_fwd = base->nvm_header().fwd();
+      if (before_fwd != nullptr) {
+        assert(false, "don't support now");
+        assert(nvmHeader::is_fwd(before_fwd), "");
 
-        if (before_fwd != nullptr) {
-          assert(false, "don't support now");
-          assert(nvmHeader::is_fwd(before_fwd), "");
-
-          // Store in NVM.
-          oop nvm_val = NULL;
-          if (value != NULL && OurPersist::is_target(value->klass())) {
-            OurPersist::ensure_recoverable(value);
-            nvm_val = oop(value->nvm_header().fwd());
-          }
-          Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+        // Store in NVM.
+        oop nvm_val = NULL;
+        if (value != NULL && OurPersist::is_target(value->klass())) {
+          OurPersist::ensure_recoverable(value);
+          nvm_val = oop(value->nvm_header().fwd());
         }
+        Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
       }
+      
     }
     
     template <typename T>

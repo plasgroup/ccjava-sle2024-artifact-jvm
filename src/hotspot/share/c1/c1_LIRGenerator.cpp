@@ -1646,6 +1646,7 @@ void LIRGenerator::do_StoreField(StoreField* x) {
     decorators |= C1_NEEDS_PATCHING;
   }
 
+#ifdef OUR_PERSIST
   // check if we need double update write barrier
   // if yes, set the decorator
   [x, this, &decorators] {
@@ -1666,7 +1667,8 @@ void LIRGenerator::do_StoreField(StoreField* x) {
       // printf("%s.%s %d: F\n", class_name, method_name, x->printable_bci());
     }
   }();  // invoke immediately
-  
+#endif
+
   access_store_at(decorators, field_type, object, LIR_OprFact::intConst(x->offset()),
                   value.result(), info != NULL ? new CodeEmitInfo(info) : NULL, info);
 }

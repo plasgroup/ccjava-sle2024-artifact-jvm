@@ -21,6 +21,7 @@
  * questions.
  *
  */
+#ifdef OUR_PERSIST
 
 #include "precompiled.hpp"
 #include "gc/shared/c1/nvmCardTableBarrierSetC1.hpp"
@@ -175,3 +176,5 @@ void NVMCardTableBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob
   // _post_barrier_c1_runtime_code_blob->print();
   // puts("exit NVMCardTableBarrierSetC1::generate_c1_runtime_stubs");
 }
+
+#endif

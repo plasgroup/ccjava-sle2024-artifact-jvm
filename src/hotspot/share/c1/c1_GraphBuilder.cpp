@@ -1017,7 +1017,11 @@ void GraphBuilder::store_indexed(BasicType type) {
     check_boolean = true;
   }
   StoreIndexed* result = new StoreIndexed(array, index, length, type, value, state_before, check_boolean);
+#ifdef OUR_PERSIST
+  append(check(result));
+#else
   append(result);
+#endif
   _memory->store_value(value);
 
   if (type == T_OBJECT && is_profiling()) {
@@ -4322,7 +4326,11 @@ void GraphBuilder::append_char_access(ciMethod* callee, bool is_store) {
   Value index = args->at(1);
   if (is_store) {
     Value value = args->at(2);
+  #ifdef OUR_PERSIST
+    Instruction* store = append(check(new StoreIndexed(array, index, NULL, T_CHAR, value, state_before, false, true)));
+  #else
     Instruction* store = append(new StoreIndexed(array, index, NULL, T_CHAR, value, state_before, false, true));
+  #endif
     store->set_flag(Instruction::NeedsRangeCheckFlag, false);
     _memory->store_value(value);
   } else {

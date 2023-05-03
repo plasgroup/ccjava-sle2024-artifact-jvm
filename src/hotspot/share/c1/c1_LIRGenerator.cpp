@@ -1735,7 +1735,13 @@ void LIRGenerator::do_StoreIndexed(StoreIndexed* x) {
   if (x->check_boolean()) {
     decorators |= C1_MASK_BOOLEAN;
   }
-
+#ifdef OUR_PERSIST
+  // check if we need double update write barrier
+  // if yes, set the decorator
+  if (x->needs_wupd()) {
+    decorators |= OURPERSIST_NEEDS_WUPD;
+  }
+#endif
   access_store_at(decorators, x->elt_type(), array, index.result(), value.result(),
                   NULL, null_check_info);
 }

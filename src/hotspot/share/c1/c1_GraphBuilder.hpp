@@ -338,6 +338,13 @@ class GraphBuilder {
 
     return sf;
   } 
+  auto check(StoreIndexed* si) const -> StoreIndexed* {
+    if (_escape_info.need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), bci())) {
+      si->set_needs_wupd_true();
+    }
+
+    return si;
+  } 
 #endif
   // for all GraphBuilders
   static bool       _can_trap[Bytecodes::number_of_java_codes];

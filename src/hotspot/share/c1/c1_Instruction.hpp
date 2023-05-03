@@ -1016,6 +1016,17 @@ LEAF(StoreIndexed, AccessIndexed)
   int       profiled_bci() const                     { return _profiled_bci;        }
   // generic
   virtual void input_values_do(ValueVisitor* f)   { AccessIndexed::input_values_do(f); f->visit(&_value); }
+#ifdef OUR_PERSIST
+ private:
+  bool _needs_wupd{false};
+
+ public:
+  void set_needs_wupd_true()                  { 
+    assert(!_needs_wupd, "must be false");
+    _needs_wupd = true; 
+  }
+  auto needs_wupd() -> bool                   { return _needs_wupd; }
+#endif
 };
 
 

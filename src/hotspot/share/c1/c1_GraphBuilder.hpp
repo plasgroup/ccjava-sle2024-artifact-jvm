@@ -39,6 +39,14 @@ class MemoryBuffer;
 class EscapeInfo{
   public:
   EscapeInfo() {
+    const char* dir = "./NVMTest6/";
+    strcpy(_mi_file, dir);
+    strcpy(_escape_info_file, dir);
+    strcat(_mi_file, "mi.txt");
+    strcat(_escape_info_file, "escapeInfo.txt");
+    #ifdef ASSERT
+    printf("%s\n%s\n", _mi_file, _escape_info_file);
+    #endif
     read_method_names();
     read_pair();
   }
@@ -86,9 +94,7 @@ class EscapeInfo{
     // Each line must end with a newline character, except for the last one
     // No other whilespace character should be present
 
-    const char* filename = "./NVMTest4/mi.txt";
-
-    FILE* file = fopen(filename, "r");
+    FILE* file = fopen(_mi_file, "r");
     int filesize = [file]{
       fseek(file, 0, SEEK_END);
       int sz = ftell(file);
@@ -173,7 +179,7 @@ class EscapeInfo{
         FILE* _file{nullptr};
     };
 
-    FileReader BCIs_of_method{"./NVMTest4/escapeInfo.txt"};
+    FileReader BCIs_of_method{_escape_info_file};
     _indice = new (ResourceObj::C_HEAP, mtCode) GrowableArray<GrowableArray<int> *>(128, mtCode);
 
     for (int index = 0; index < _names->length(); index++) {
@@ -185,6 +191,8 @@ class EscapeInfo{
   GrowableArray<const char *>* _names;
   GrowableArray<GrowableArray<int> *>* _indice;
   char _buf[256];
+  char _mi_file[64];
+  char _escape_info_file[64];
 };
 #endif
 class GraphBuilder {

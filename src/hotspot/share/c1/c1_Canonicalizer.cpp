@@ -223,8 +223,14 @@ void Canonicalizer::do_StoreField     (StoreField*      x) {
     }
     // limit this optimization to current block
     if (value != NULL && in_current_block(conv)) {
+      bool nw = x->needs_wupd();
       set_canonical(new StoreField(x->obj(), x->offset(), x->field(), value, x->is_static(),
                                    x->state_before(), x->needs_patching()));
+
+      if (nw) {
+        canonical()->as_StoreField()->set_needs_wupd_true();
+      }
+      // assert(nw == canonical()->as_StoreField()->needs_wupd(), "should be");
       return;
     }
   }

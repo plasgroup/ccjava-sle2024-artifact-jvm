@@ -341,19 +341,15 @@ class GraphBuilder {
   auto check(StoreField* sf) const -> StoreField* {
     // printf("GraphBuilder: %s.%s %s %d -> %s\n", method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), sf->is_static() ? "putstatic" : "putfield", bci(), _escape_info.need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), bci()) ? "True" : "False");
 
-    if (sf->is_static()) {
-      sf->set_needs_wupd_true();
-    } else if (_escape_info.need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), method()->signature()->as_symbol()->as_utf8(), bci())) {
+    if (_escape_info.need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), method()->signature()->as_symbol()->as_utf8(), bci())) {
       sf->set_needs_wupd_true();
     }
-
     return sf;
   } 
   auto check(StoreIndexed* si) const -> StoreIndexed* {
     if (_escape_info.need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), method()->signature()->as_symbol()->as_utf8(), bci())) {
       si->set_needs_wupd_true();
     }
-
     return si;
   } 
 #endif

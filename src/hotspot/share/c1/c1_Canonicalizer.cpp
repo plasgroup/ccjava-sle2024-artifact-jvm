@@ -323,9 +323,13 @@ void Canonicalizer::do_StoreIndexed   (StoreIndexed*    x) {
     }
     // limit this optimization to current block
     if (value != NULL && in_current_block(conv)) {
+      bool nw {x->needs_wupd()};
       set_canonical(new StoreIndexed(x->array(), x->index(), x->length(),
                                      x->elt_type(), value, x->state_before(),
                                      x->check_boolean()));
+      if (nw) {
+        canonical()->as_StoreIndexed()->set_needs_wupd_true();
+      }
       return;
     }
   }

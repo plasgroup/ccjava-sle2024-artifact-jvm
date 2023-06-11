@@ -32,14 +32,18 @@
 #include "ci/ciMethodData.hpp"
 #include "ci/ciStreams.hpp"
 #include "compiler/compileLog.hpp"
+#include "utilities/hashtable.hpp"
+#include "jvmci/jvmciCompilerToVM.hpp"
+#include <variant>
+#include <type_traits>
 
 class MemoryBuffer;
-
+class CompilerToVM;
 #ifdef OUR_PERSIST
 class EscapeInfo{
   public:
   EscapeInfo() {
-    const char* dir = "./NVMTest6/";
+    const char* dir = "./luindex/";
     strcpy(_mi_file, dir);
     strcpy(_escape_info_file, dir);
     strcat(_mi_file, "mi.txt");
@@ -58,31 +62,24 @@ class EscapeInfo{
     strcat(_buf, signature);
     // puts(_buf);
     // index of bcis
-    int index = [_names = this->_names](const char * const target) -> int {
-      for (int i = 0; i < _names->length(); i++) {
-        if (strcmp(target, _names->at(i)) == 0) {
-          return i;
-        }
-      }
-      return -1;  // OpenJDK style
-    }(_buf);  // invoke immediately
-    
-    // bcis not found, meaning method not analyzed
-    // need barrier conservatively
-    if (index == -1) {
+    std::variant<bool, GrowableArray<int>*> *pvalue = _table.lookup(_buf);
+
+    // method is not analyzed
+    if (pvalue == nullptr) {
       return true;
     }
-    
-    assert(index >= 0 && index < _indice->length(), "index invalid");
 
-    GrowableArray<int> * bcis = _indice->at(index);
-    // method is analyzed
-    // no write barrier for all putfields 
-    if (bcis == nullptr) {
-      return false;
-    }
+    return std::visit([bci](auto&& arg) {
+      using T = std::decay_t<decltype(arg)>;
+      // no bci or 'G'
+      if constexpr (std::is_same_v<T, bool>) {
+          return arg;
+      } else if constexpr (std::is_same_v<T, GrowableArray<int>*>) {
+          assert(arg != nullptr, "must be");
+          return arg->contains(bci);
+      }
+    }, *pvalue);
     
-    return bcis->contains(bci);
   }
 
 
@@ -110,7 +107,7 @@ class EscapeInfo{
     assert(readsize == filesize, "should be");
     chararray[filesize] = '\0';
 
-    _names = new (ResourceObj::C_HEAP, mtCode) GrowableArray<const char *>(128, mtCode);
+    _names = new (ResourceObj::C_HEAP, mtCode) GrowableArray<const char *>(1024, mtCode);
 
     _names->append(chararray);
     for (int i = 1; i< filesize; i++) {
@@ -129,9 +126,10 @@ class EscapeInfo{
 
   void read_pair() {
     // The text file should have the following format:
-    // a-b\n
-    // a-b\n
-    // a-b
+    // methodindex-bytecodeindex_or_G\n
+    // methodindex-bytecodeindex_or_G\n
+    // methodindex-bytecodeindex_or_G
+    // methodindex-bytecodeindex_or_G
     //
     // Each line must end with a newline character, except for the last one
     // No other whilespace character should be presen
@@ -145,15 +143,19 @@ class EscapeInfo{
         ~FileReader() {
           fclose(_file);
         }
-        auto operator ()(int index) -> GrowableArray<int>* {
+        auto operator ()(int index) -> std::variant<bool, GrowableArray<int> *> {
           if (_method_idx > index) {
-            return nullptr;
+            return false;
           }
           if (!_has_next) {
-            return nullptr;
+            return false;
           }
-
           assert(_method_idx == index, "must");
+          
+          if (_g) {
+            readNext();
+            return true;
+          }
 
           GrowableArray<int> * bcis = new (ResourceObj::C_HEAP, mtCode) GrowableArray<int>(2, mtCode);
 
@@ -169,7 +171,10 @@ class EscapeInfo{
           if (!_has_next) {
             return false;
           }
-          _has_next = (fscanf(_file, "%d-%d", &_method_idx, &_bytecode_idx) == 2);
+          _has_next = (fgets(_line, sizeof(_line), _file) != nullptr);
+          if (sscanf(_line, "%d-%d", &_method_idx, &_bytecode_idx) != 2) {
+            sscanf(_line, "%d-G", &_method_idx);
+          }
           // the txt file is 1-indexed
           // but the array is 0-indexed
           _method_idx -= 1;
@@ -178,20 +183,19 @@ class EscapeInfo{
         int _method_idx{-1};
         int _bytecode_idx{-1};
         bool _has_next{true};
+        char _g{false};
+        char _line[256];
         FILE* _file{nullptr};
     };
 
     FileReader BCIs_of_method{_escape_info_file};
-    _indice = new (ResourceObj::C_HEAP, mtCode) GrowableArray<GrowableArray<int> *>(128, mtCode);
 
     for (int index = 0; index < _names->length(); index++) {
-      GrowableArray<int> * bcis = BCIs_of_method(index);
-      _indice->append(bcis);
+      _table.add(_names->at(index), BCIs_of_method(index));
     }
   }
-  // ResourceHashtable<const char*, GrowableArray<int>, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _table{}; 
+  KVHashtable<const char*, std::variant<bool, GrowableArray<int> *>, mtCode, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _table {1024}; 
   GrowableArray<const char *>* _names;
-  GrowableArray<GrowableArray<int> *>* _indice;
   char _buf[256];
   char _mi_file[64];
   char _escape_info_file[64];
@@ -347,7 +351,7 @@ class GraphBuilder {
     return sf;
   } 
   auto check(StoreIndexed* si) const -> StoreIndexed* {
-    if (_escape_info.need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), method()->signature()->as_symbol()->as_utf8(), bci())) {
+    if (!si->needs_wupd() && _escape_info.need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), method()->signature()->as_symbol()->as_utf8(), bci())) {
       si->set_needs_wupd_true();
     }
     return si;

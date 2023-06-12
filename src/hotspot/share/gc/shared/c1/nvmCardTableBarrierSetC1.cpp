@@ -57,16 +57,11 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
   // note that 86 64 defined
 
   DecoratorSet decorators = access.decorators();
-  bool is_array = (decorators & IS_ARRAY) != 0;
-  bool on_anonymous = (decorators & ON_UNKNOWN_OOP_REF) != 0;
-  bool needs_patching = (decorators & C1_NEEDS_PATCHING) != 0;
-  bool needs_wupd = (decorators & OURPERSIST_NEEDS_WUPD) != 0;
+  bool needs_patching {(decorators & C1_NEEDS_PATCHING) != 0};
+  bool needs_wupd = {(decorators & OURPERSIST_NEEDS_WUPD) != 0};
 
-  bool C1_nvm_have_implemented = !needs_patching;
-  C1_nvm_have_implemented = (decorators & MO_SEQ_CST) != 0 && !needs_patching;
-
-  if (!C1_nvm_have_implemented) {
-    access.gen()->bailout("not now");
+  if (needs_patching) {
+    access.gen()->bailout("unsupported");
     return;
   }
   
@@ -74,34 +69,14 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
     parent::store_at_resolved(access, value);
     return;
   }
+
   nvm_write_barrier(access, access.resolved_addr(), value);
  
 }
 
 void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr value) {
-  #ifdef ASSERT
-  static int cnt = 0;
-  printf("%dth write barrier genearted\n", ++cnt);
-  #endif
   LIRGenerator* gen = access.gen();
   bool is_array = (access.decorators() & IS_ARRAY) != 0;
-  // bool needs_patching = (access.decorators() & C1_NEEDS_PATCHING) != 0;
-  // BasicType flag_type = T_INT;
-  // LIR_Address* mark_durable_flag_addr =
-  //   new LIR_Address(access.base().opr(),
-  //                   oopDesc::nvm_header_offset_in_bytes(),
-  //                   flag_type);
-  // LIR_Opr flag_val = gen->new_register(T_INT);
-  // __ load(mark_durable_flag_addr, flag_val);
-  // __ cmp(lir_cond_notEqual, flag_val, LIR_OprFact::intConst(0));
-  // BasicType flag_type = T_ADDRESS;
-  // LIR_Address* mark_durable_flag_addr =
-  //   new LIR_Address(access.base().opr(),
-  //                   oopDesc::nvm_header_offset_in_bytes(),
-  //                   flag_type);
-  // LIR_Opr flag_val = gen->new_register(T_ADDRESS);
-  // __ load(mark_durable_flag_addr, flag_val);
-  // __ cmp(lir_cond_notEqual, flag_val, LIR_OprFact::intptrConst((void*)0));
 
   const address runtime_stub = get_runtime_stub(access.decorators(), access.type());
   // object
@@ -109,8 +84,7 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
   // field address
   if (addr->is_address()) {
     LIR_Address* address = addr->as_address_ptr();
-    // ptr cannot be an object because we use this barrier for array card marks
-    // and addr can point in the middle of an array.
+
     LIR_Opr ptr = gen->new_pointer_register();
     if (!address->index()->is_valid() && address->disp() == 0) {
       __ move(address->base(), ptr);
@@ -156,18 +130,9 @@ static address generate_c1_runtime_stub(BufferBlob* blob, DecoratorSet decorator
 }
 
 void NVMCardTableBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob) {
-  // printf("enter NVMCardTableBarrierSetC1::generate_c1_runtime_stubs\n");
-  // _write_barrier_on_oop_field_1_runtime_stub =
-  //   generate_c1_runtime_stub(blob, ON_STRONG_OOP_REF, "_write_barrier_on_oop_field_1_runtime_stub");
-
   for (DecoratorSet base : decorators_) {
     for (BasicType type: {T_BOOLEAN, T_CHAR, T_FLOAT,T_DOUBLE, T_BYTE, T_SHORT, T_INT, T_LONG, T_ARRAY, T_OBJECT}) {
       insert_runtime_stub(base, type, generate_c1_runtime_stub(buffer_blob, base, type, ""));
     }
-  
   }
-
-
-  // _post_barrier_c1_runtime_code_blob->print();
-  // puts("exit NVMCardTableBarrierSetC1::generate_c1_runtime_stubs");
 }

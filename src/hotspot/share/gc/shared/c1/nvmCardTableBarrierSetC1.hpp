@@ -109,12 +109,8 @@ private:
 protected:
 
   virtual void store_at_resolved(LIRAccess& access, LIR_Opr value);
-  // virtual LIR_Opr atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& value) {
-  //   access.gen()->bailout("not now");return nullptr;
-  //   return parent::atomic_cmpxchg_at_resolved(access, cmp_value, value);
-  // }
+  
   virtual void nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr value);
-  void nvm_write_barrier_volatile(LIRAccess& access, LIR_Opr addr, LIR_Opr value);
 
 public:
 

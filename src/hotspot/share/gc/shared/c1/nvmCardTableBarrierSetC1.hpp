@@ -80,30 +80,30 @@ class NVMCardTableBarrierSetC1 : public CardTableBarrierSetC1 {
   using parent = CardTableBarrierSetC1;
 private:
   // a mark
-  const int decorator_base_sz_ {2};
-  const DecoratorSet decorators_[2] = {537141312ULL,538189888ULL};
+  constexpr static int decorator_base_sz_ {4};
+  // ['10, 13, 18, 29', '6, 13, 18, 29', '10, 13, 17, 18, 29', '6, 13, 18, 20, 29']
+  // [537142272, 537141312, 537273344, 538189888]
+  const DecoratorSet decorators_[decorator_base_sz_] = {537141312ULL,538189888ULL, 537142272ULL, 537273344ULL};
   const int runtime_stubs_sz_ {256};
   address runtime_stubs[256];
 
   int get_runtime_stub_index(DecoratorSet decorators, BasicType type) {
     assert(((decorators & (decorators_[0])) == decorators_[0]) || 
-           ((decorators & (decorators_[1])) == decorators_[1]), " unknown decorator base");
-    //    base              |  Our Persist |  type
-    //    log2(base_sz_)    |     3        |  4    
+           ((decorators & (decorators_[1])) == decorators_[1]) || 
+           ((decorators & (decorators_[2])) == decorators_[2]) || 
+           ((decorators & (decorators_[3])) == decorators_[3]), " unknown decorator base");
+    //    base               |  type
+    //    log2(base_sz_)     |  4    
     //    8
     int idx = type - T_BOOLEAN;
-    int i = 4;
-    for (DecoratorSet bit: {OURPERSIST_IS_VOLATILE}) {
-      if ((decorators & bit) != 0) {
-        idx |= (1 << i);
+    
+    for (int i = 0; i < decorator_base_sz_; i++) {
+      if ((decorators & (decorators_[i])) == decorators_[i]) {
+        return idx | (i << 4);
       }
-      i++;
     }
-
-    if ((decorators & (decorators_[1])) == decorators_[1]) {
-      idx |= (1 << i);
-    }
-    return idx;
+    assert(false, "should not reach here");
+    return -1;
   }
 
 protected:
@@ -114,6 +114,7 @@ protected:
   //   return parent::atomic_cmpxchg_at_resolved(access, cmp_value, value);
   // }
   virtual void nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr value);
+  void nvm_write_barrier_volatile(LIRAccess& access, LIR_Opr addr, LIR_Opr value);
 
 public:
 

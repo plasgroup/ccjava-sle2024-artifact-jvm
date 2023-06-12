@@ -61,50 +61,28 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
   bool on_anonymous = (decorators & ON_UNKNOWN_OOP_REF) != 0;
   bool needs_patching = (decorators & C1_NEEDS_PATCHING) != 0;
   bool needs_wupd = (decorators & OURPERSIST_NEEDS_WUPD) != 0;
-  int patchCnt=0;
-  // print_info(access, value);
-  // access.gen()->bailout("not now");
-  //   return;
-  if ((decorators & MO_SEQ_CST) != 0) {
-    access.gen()->bailout("ignore MQ_SEQ_CST as it is rare");
-    return;
-  }
 
-  
-  if (needs_patching) {
-    printf("%s:{decorator=%ld}  %d\n", __func__, decorators, patchCnt++);
-  }
-
-  bool C1_nvm_have_implemented;
-  C1_nvm_have_implemented = (access.type() == T_INT) && !is_array && !needs_patching;
-  C1_nvm_have_implemented = (access.type() == T_INT) && !needs_patching;
-  C1_nvm_have_implemented = (
-    access.type() == T_INT || 
-  access.type() == T_FLOAT ||
-  access.type() == T_DOUBLE ||
-  access.type() == T_CHAR ||
-  access.type() == T_SHORT ||
-  access.type() == T_BYTE || 
-  access.type() == T_BOOLEAN ||
-  access.type() == T_LONG ||
-  access.type() == T_OBJECT  ||
-  access.type() == T_ARRAY) 
-  
-  && !needs_patching;
-    
-
+  bool C1_nvm_have_implemented = !needs_patching;
+  C1_nvm_have_implemented = (decorators & MO_SEQ_CST) != 0 && !needs_patching;
 
   if (!C1_nvm_have_implemented) {
     access.gen()->bailout("not now");
     return;
   }
   
-  
+  if (!needs_wupd) {
+    parent::store_at_resolved(access, value);
+    return;
+  }
   nvm_write_barrier(access, access.resolved_addr(), value);
  
 }
 
 void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr value) {
+  #ifdef ASSERT
+  static int cnt = 0;
+  printf("%dth write barrier genearted\n", ++cnt);
+  #endif
   LIRGenerator* gen = access.gen();
   bool is_array = (access.decorators() & IS_ARRAY) != 0;
   // bool needs_patching = (access.decorators() & C1_NEEDS_PATCHING) != 0;
@@ -182,15 +160,11 @@ void NVMCardTableBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob
   // _write_barrier_on_oop_field_1_runtime_stub =
   //   generate_c1_runtime_stub(blob, ON_STRONG_OOP_REF, "_write_barrier_on_oop_field_1_runtime_stub");
 
-  // (6, 13, 18, 29) (6, 13, 18, 20, 29)
   for (DecoratorSet base : decorators_) {
-    for (DecoratorSet if_volatile: {OURPERSIST_IS_VOLATILE, OURPERSIST_IS_NOT_VOLATILE}) {
-      DecoratorSet ds = base | if_volatile;
-
-      for (BasicType type: {T_BOOLEAN, T_CHAR, T_FLOAT,T_DOUBLE, T_BYTE, T_SHORT, T_INT, T_LONG, T_ARRAY, T_OBJECT}) {
-        insert_runtime_stub(ds, type, generate_c1_runtime_stub(buffer_blob, ds, type, ""));
-      }
+    for (BasicType type: {T_BOOLEAN, T_CHAR, T_FLOAT,T_DOUBLE, T_BYTE, T_SHORT, T_INT, T_LONG, T_ARRAY, T_OBJECT}) {
+      insert_runtime_stub(base, type, generate_c1_runtime_stub(buffer_blob, base, type, ""));
     }
+  
   }
 
 

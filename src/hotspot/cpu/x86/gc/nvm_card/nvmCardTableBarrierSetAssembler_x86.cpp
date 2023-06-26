@@ -847,14 +847,7 @@ void NVMCardTableBarrierSetAssembler::runtime_needs_wupd(MacroAssembler* masm, R
     #define __ sasm->
 void NVMCardTableBarrierSetAssembler::generate_c1_write_barrier_runtime_stub(StubAssembler* sasm, DecoratorSet decorators, BasicType type) const {
   __ prologue("nvm_write_barrier", false);
-  // __ push(rax);
-  // __ push(rcx);
-  // const Register thread = NOT_LP64(rax) LP64_ONLY(r15_thread);
 
-  // Label done;
-  // Label runtime;
-
-  // __ bind(runtime);
   __ save_live_registers_no_oop_map(true);
 
   int offset_in_words = 0;  // 0 is obj, 1 is addr
@@ -886,9 +879,6 @@ void NVMCardTableBarrierSetAssembler::generate_c1_write_barrier_runtime_stub(Stu
   
   __ restore_live_registers(true);
 
-  // __ bind(done);
-  // __ pop(rcx);
-  // __ pop(rax);
   __ epilogue();
 }
 
@@ -896,7 +886,7 @@ void NVMCardTableBarrierSetAssembler::generate_c1_write_barrier_runtime_stub(Stu
 #define __ ce->masm()->
 void NVMCardTableBarrierSetAssembler::gen_write_barrier_stub(LIR_Assembler* ce, NVMCardTableWriteBarrierStub* stub) {
   assert(stub->obj()->is_register() && !stub->obj()->is_virtual(), "obj should be in register and not virtual");
-  assert(stub->addr()->is_constant() || stub->addr()->is_register() , "addr should be in register");
+  assert(stub->addr()->is_register() , "addr should be in register");
   assert(stub->value()->is_register(), "value should be in register");
 
   NVMCardTableBarrierSetC1* bs =

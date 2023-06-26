@@ -1659,19 +1659,8 @@ void LIRGenerator::do_StoreField(StoreField* x) {
     if (x->needs_wupd()) {
       decorators |= OURPERSIST_NEEDS_WUPD;
     }
-    // ciMethod* method = this->compilation()->method();
-    // const char* class_name = method->holder()->name()->as_utf8();
-    // const char* method_name = method->name()->as_utf8();
-      // printf("%s.%s %d: T\n", class_name, method_name, x->printable_bci());
-      // printf("%s.%s %d: F\n", class_name, method_name, x->printable_bci());
   }();  // invoke immediately
 #endif
-  // if ((decorators & OURPERSIST_NEEDS_WUPD) == 0) {
-  //   ciMethod* method = this->compilation()->method();
-  //   const char* class_name = method->holder()->name()->as_utf8();
-  //   const char* method_name = method->name()->as_utf8();
-  //     printf("%s.%s: NO mf\n", class_name, method_name);
-  // }
   access_store_at(decorators, field_type, object, LIR_OprFact::intConst(x->offset()),
                   value.result(), info != NULL ? new CodeEmitInfo(info) : NULL, info);
 }

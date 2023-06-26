@@ -57,12 +57,18 @@ void NVMCardTableWriteBarrierStub::emit_code(LIR_Assembler* ce) {
 void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value) {
   // note that 86 64 defined
 
-  DecoratorSet decorators = access.decorators();
+  const DecoratorSet decorators = access.decorators();
   bool needs_patching {(decorators & C1_NEEDS_PATCHING) != 0};
-  bool needs_wupd = {(decorators & OURPERSIST_NEEDS_WUPD) != 0};
+  bool needs_wupd {(decorators & OURPERSIST_NEEDS_WUPD) != 0};
 
   if (needs_patching) {
     access.gen()->bailout("unsupported");
+
+    #ifdef ASSERT
+    static int count{0};
+    printf("%d th needs_patching\n", ++count);
+    #endif
+    
     return;
   }
   

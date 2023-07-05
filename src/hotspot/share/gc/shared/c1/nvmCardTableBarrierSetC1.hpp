@@ -87,6 +87,21 @@ private:
 protected:
 
   virtual void store_at_resolved(LIRAccess& access, LIR_Opr value);
+
+  virtual LIR_Opr atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value) {
+    access.gen()->bailout("not now");
+    return nullptr;
+  }
+
+  virtual LIR_Opr atomic_xchg_at_resolved(LIRAccess& access, LIRItem& value) {
+    access.gen()->bailout("not now");
+    return nullptr;
+  }
+
+  virtual LIR_Opr atomic_add_at_resolved(LIRAccess& access, LIRItem& value) {
+    access.gen()->bailout("not now");
+    return nullptr;
+  }
   
   virtual void nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr value);
 

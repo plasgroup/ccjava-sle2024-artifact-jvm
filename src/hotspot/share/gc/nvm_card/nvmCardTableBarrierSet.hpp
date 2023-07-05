@@ -198,7 +198,6 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         if (replica == nullptr) {
           return;
         }
-        assert(false, "no durable at present");
         // Store in NVM.
         Raw::store_in_heap_at(oop(replica), offset, value);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
@@ -221,7 +220,6 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
         nvmOop before_fwd = base->nvm_header().fwd();
         if (before_fwd != nullptr) {
-          assert(false, "unimplemented");
           assert(nvmHeader::is_fwd(before_fwd), "");
 
           // Store in NVM.
@@ -243,7 +241,6 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         nvmOop before_fwd = base->nvm_header().fwd();
 
         if (before_fwd != nullptr) {
-          assert(false, "don't support now");
           assert(nvmHeader::is_fwd(before_fwd), "");
 
           // Store in NVM.

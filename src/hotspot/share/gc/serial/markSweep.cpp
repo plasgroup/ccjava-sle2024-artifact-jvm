@@ -151,7 +151,9 @@ template <class T> inline void MarkSweep::follow_root(T* p) {
 #ifdef ASSERT
       assert(!obj->nvm_header().is_locked(), "");
 #ifdef CMP_OBJ
-      assert(NVMDebug::cmp_dram_and_nvm_obj_during_gc(obj), "");
+      assert(NVMDebug::cmp_dram_and_nvm_obj_during_gc(obj), "Two copies in DRAM and NVM are not the same");
+      static int check_cnt = 0;
+      printf("checked %d times\n", ++check_cnt);
 #endif // CMP_OBJ
 #endif // ASSERT
 #endif // OUR_PERSIST

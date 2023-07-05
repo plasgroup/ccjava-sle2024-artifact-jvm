@@ -74,8 +74,8 @@ void NVMAllocator::init(const char* nvm_path, const char* nvm_path_for_size) {
 
   // initialize the NVM headers.
 #ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
-  NvmMeta::meta()->_state_flag = 0;
-  NvmMeta::meta()->_mirrors_head = NULL;
+  NVMMetaData::meta()->_state_flag = 0;
+  NVMMetaData::meta()->_mirrors_head = NULL;
 #endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
   if (NVMMetaData::meta()->_state_flag == 1) {
     NVMAllocator::nvm_head = NVMMetaData::meta()->_nvm_head;

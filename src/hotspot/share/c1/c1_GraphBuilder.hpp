@@ -43,7 +43,7 @@ class CompilerToVM;
 class EscapeInfo{
   public:
   EscapeInfo() {
-    const char* dir = "./luindex/";
+    const char* dir = "./evaluation/luindex/";
     strcpy(_mi_file, dir);
     strcpy(_escape_info_file, dir);
     strcat(_mi_file, "mi.txt");
@@ -196,7 +196,7 @@ class EscapeInfo{
   }
   KVHashtable<const char*, std::variant<bool, GrowableArray<int> *>, mtCode, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _table {1024}; 
   GrowableArray<const char *>* _names;
-  char _buf[256];
+  char _buf[1024];
   char _mi_file[64];
   char _escape_info_file[64];
 };

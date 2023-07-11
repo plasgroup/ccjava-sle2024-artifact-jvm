@@ -43,12 +43,17 @@ class CompilerToVM;
 class EscapeInfo{
   public:
   EscapeInfo() {
-    const char* dir = "./evaluation/luindex/";
+    const char* dir = "/home/zhang/openjdk16u-nvm/evaluation/luindex/";
+
     strcpy(_mi_file, dir);
     strcpy(_escape_info_file, dir);
     strcat(_mi_file, "mi.txt");
     strcat(_escape_info_file, "escapeInfo.txt");
     #ifdef ASSERT
+    char cwd[256];
+    if (getcwd(cwd, sizeof(cwd)) != nullptr) {
+      printf("current working dir: %s\n", cwd);
+    }
     printf("%s\n%s\n", _mi_file, _escape_info_file);
     #endif
     read_method_names();
@@ -94,6 +99,10 @@ class EscapeInfo{
     // No other whilespace character should be present
 
     FILE* file = fopen(_mi_file, "r");
+    if (file == nullptr) {
+      perror("Error opening file while reading method names");
+      exit(EXIT_FAILURE);
+    }
     int filesize = [file]{
       fseek(file, 0, SEEK_END);
       int sz = ftell(file);
@@ -138,6 +147,10 @@ class EscapeInfo{
       public:
         FileReader(const char* filename) {
           _file = fopen(filename, "r");
+          if (_file == nullptr) {
+            perror("Error opening file while reading escape info");
+            exit(EXIT_FAILURE);
+          }
           readNext();
         }
         ~FileReader() {

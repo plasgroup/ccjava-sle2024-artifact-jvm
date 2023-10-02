@@ -557,6 +557,8 @@ const intx ObjectAlignmentInBytes = 8;
                                                                             \
   product(ccstr, NativeMemoryTracking, "off",                               \
           "Native memory tracking options")                                 \
+  product(ccstr, AnalysisPath, "./",                                        \
+          "directory of the analysis results")                                 \
                                                                             \
   product(bool, PrintNMTStatistics, false, DIAGNOSTIC,                      \
           "Print native memory tracking summary data if it is on")          \

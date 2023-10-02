@@ -42,23 +42,16 @@ class CompilerToVM;
 #ifdef OUR_PERSIST
 class EscapeInfo{
   public:
-  EscapeInfo() {
-    const char* dir = "/home/zhang/openjdk16u-nvm/evaluation/luindex/";
 
-    strcpy(_mi_file, dir);
-    strcpy(_escape_info_file, dir);
-    strcat(_mi_file, "mi.txt");
-    strcat(_escape_info_file, "escapeInfo.txt");
-    #ifdef ASSERT
-    char cwd[256];
-    if (getcwd(cwd, sizeof(cwd)) != nullptr) {
-      printf("current working dir: %s\n", cwd);
-    }
-    printf("%s\n%s\n", _mi_file, _escape_info_file);
-    #endif
-    read_method_names();
-    read_pair();
+  // meyer's singleton
+  // one reason to do this: we should deley the construction
+  // of this class after the parse of the JVM flags
+  static EscapeInfo& getInstance() {
+    static EscapeInfo instance;
+    return instance;
   }
+  EscapeInfo(const EscapeInfo&) = delete;
+  EscapeInfo& operator=(const EscapeInfo&) = delete;
 
   auto need_wupd(const char* const class_name, const char* const method_name, const char* const signature, const int bci) -> bool {
     strcpy(_buf, class_name);
@@ -86,9 +79,24 @@ class EscapeInfo{
     }, *pvalue);
     
   }
+private:
+  // constructor is private
+  EscapeInfo() {
+    const char* dir = AnalysisPath;
 
-
-  private:
+    strcpy(_mi_file, dir);
+    strcpy(_escape_info_file, dir);
+    strcat(_mi_file, "mi.txt");
+    strcat(_escape_info_file, "escapeInfo.txt");
+    #ifdef ASSERT
+    printf("mi file == %s\nescapeInfo file == %s\n", _mi_file, _escape_info_file);
+    #endif
+    read_method_names();
+    read_pair();
+  }
+  ~EscapeInfo() {
+    // TODO: fill the function
+  }
   void read_method_names() {
     // The text file should have the following format:
     // name1\n
@@ -210,8 +218,8 @@ class EscapeInfo{
   KVHashtable<const char*, std::variant<bool, GrowableArray<int> *>, mtCode, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _table {1024}; 
   GrowableArray<const char *>* _names;
   char _buf[1024];
-  char _mi_file[64];
-  char _escape_info_file[64];
+  char _mi_file[256];
+  char _escape_info_file[256];
 };
 #endif
 class GraphBuilder {
@@ -353,18 +361,16 @@ class GraphBuilder {
   // notice it's private
   // to code easier, return the parameter itself
 
-  static inline EscapeInfo _escape_info{};
-
   auto check(StoreField* sf) const -> StoreField* {
     if (sf->is_static()) {
       sf->set_needs_wupd_true();
-    } else if (_escape_info.need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), method()->signature()->as_symbol()->as_utf8(), bci())) {
+    } else if (EscapeInfo::getInstance().need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), method()->signature()->as_symbol()->as_utf8(), bci())) {
       sf->set_needs_wupd_true();
     }
     return sf;
   } 
   auto check(StoreIndexed* si) const -> StoreIndexed* {
-    if (_escape_info.need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), method()->signature()->as_symbol()->as_utf8(), bci())) {
+    if (EscapeInfo::getInstance().need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), method()->signature()->as_symbol()->as_utf8(), bci())) {
       si->set_needs_wupd_true();
     }
     return si;

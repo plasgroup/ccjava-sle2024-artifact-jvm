@@ -82,6 +82,9 @@ class EscapeInfo{
 private:
   // constructor is private
   EscapeInfo() {
+    if (strcmp(AnalysisPath, "") == 0) {
+      return;
+    }
     const char* dir = AnalysisPath;
 
     strcpy(_mi_file, dir);
@@ -89,7 +92,7 @@ private:
     strcat(_mi_file, "mi.txt");
     strcat(_escape_info_file, "escapeInfo.txt");
     #ifdef ASSERT
-    printf("mi file == %s\nescapeInfo file == %s\n", _mi_file, _escape_info_file);
+    printf("methodIndex file == %s\nescapeInfo file == %s\n", _mi_file, _escape_info_file);
     #endif
     read_method_names();
     read_pair();
@@ -216,7 +219,7 @@ private:
     }
   }
   KVHashtable<const char*, std::variant<bool, GrowableArray<int> *>, mtCode, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _table {1024}; 
-  GrowableArray<const char *>* _names;
+  GrowableArray<const char *>* _names {nullptr};
   char _buf[1024];
   char _mi_file[256];
   char _escape_info_file[256];

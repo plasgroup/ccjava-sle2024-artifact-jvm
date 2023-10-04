@@ -137,9 +137,9 @@ private:
       }
     }
     #ifdef ASSERT  // debug info
-    for (auto it = _names->begin(); it != _names->end(); ++it) {
-      printf("\n\nmethod name: %s\n\n", *it);
-    }
+    // for (auto it = _names->begin(); it != _names->end(); ++it) {
+    //   printf("\n\nmethod name: %s\n\n", *it);
+    // }
     #endif
     fclose(file);
   }

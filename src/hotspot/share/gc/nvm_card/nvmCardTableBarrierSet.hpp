@@ -167,7 +167,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
     static void c1_store_in_heap(oop base, T* addr, T value) {
       if (base == nullptr) {
         #ifdef ASSERT
-        puts("empty base");
+        // puts("empty base");
         #endif
         Parent::template store_in_heap(addr, value);
         return;
@@ -208,7 +208,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
     static void c1_limited_oop_store_in_heap(oop base, oop* addr, oop value) {
       if (base == nullptr) {
         #ifdef ASSERT
-        puts("empty base");
+        // puts("empty base");
         #endif
         Parent::template oop_store_in_heap(addr, value);
         return;

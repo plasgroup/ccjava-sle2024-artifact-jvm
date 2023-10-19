@@ -196,9 +196,17 @@ private:
             return false;
           }
           _has_next = (fgets(_line, sizeof(_line), _file) != nullptr);
+          if (!_has_next) {
+            return false;
+          }
+
           if (sscanf(_line, "%d-%d", &_method_idx, &_bytecode_idx) != 2) {
             sscanf(_line, "%d-G", &_method_idx);
+            _g = true;
+          } else {
+            _g = false;
           }
+          // printf("readNext: %d  %d  %d\n", _method_idx, _bytecode_idx, _g);
           // the txt file is 1-indexed
           // but the array is 0-indexed
           _method_idx -= 1;

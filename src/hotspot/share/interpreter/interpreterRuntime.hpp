@@ -123,6 +123,11 @@ class InterpreterRuntime: AllStatic {
   static void post_method_entry(JavaThread *thread);
   static void post_method_exit (JavaThread *thread);
   static int  interpreter_contains(address pc);
+#ifdef OUR_PERSIST
+
+  static void ensure_recoverable(JavaThread *thread, oopDesc* obj);
+
+#endif
 
   // Native signature handlers
   static void prepare_native_call(JavaThread* thread, Method* method);

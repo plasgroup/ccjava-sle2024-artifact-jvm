@@ -77,6 +77,9 @@
 #include "opto/runtime.hpp"
 #endif
 
+#ifdef OUR_PERSIST
+#include "nvm/ourPersist.hpp"
+#endif
 // Helper class to access current interpreter state
 class LastFrameAccessor : public StackObj {
   frame _last_frame;
@@ -1277,7 +1280,15 @@ JRT_LEAF(int, InterpreterRuntime::interpreter_contains(address pc))
 }
 JRT_END
 
+#ifdef OUR_PERSIST
 
+JRT_ENTRY_NO_ASYNC(void, InterpreterRuntime::ensure_recoverable(JavaThread* thread, oopDesc* obj))
+{
+  OurPersist::ensure_recoverable(obj);
+}
+JRT_END
+
+#endif
 // Implementation of SignatureHandlerLibrary
 
 #ifndef SHARING_FAST_NATIVE_FINGERPRINTS

@@ -16,6 +16,8 @@
 #include "gc/nvm_card/nvmCardTableBarrierSetRuntime.hpp"
 #endif
 
+#include "interpreter/interpreterRuntime.hpp"
+
 #define __ ((InterpreterMacroAssembler*)masm)->
 
 void NVMCardTableBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
@@ -784,14 +786,14 @@ void NVMCardTableBarrierSetAssembler::runtime_load_at(MacroAssembler* masm, Deco
 void NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(MacroAssembler* masm, Register obj,
                                                                  Register tmp1, Register tmp2, Register tmp3, Register tmp4) {
   assert(obj != noreg, "");
-
+  assert(obj != LP64_ONLY(r15_thread) NOT_LP64(rcx), "must be");
   // push all
   NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, true, false, false, tmp1, tmp2, tmp3, tmp4);
 
   // call
-  address ensure_recoverable_func = CAST_FROM_FN_PTR(address, CallRuntimeBarrierSet::ensure_recoverable_ptr());
-  __ call_VM_leaf(ensure_recoverable_func, obj);
 
+  address ensure_recoverable_entry = CAST_FROM_FN_PTR(address, InterpreterRuntime::ensure_recoverable);
+  __ call_VM(noreg, ensure_recoverable_entry, obj);
   // pop all
   NVMCardTableBarrierSetAssembler::push_or_pop_all(masm, false, false, false, tmp1, tmp2, tmp3, tmp4);
 }

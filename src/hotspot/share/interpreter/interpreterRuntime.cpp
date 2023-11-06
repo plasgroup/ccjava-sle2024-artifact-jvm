@@ -1284,6 +1284,14 @@ JRT_END
 
 JRT_ENTRY_NO_ASYNC(void, InterpreterRuntime::ensure_recoverable(JavaThread* thread, oopDesc* obj))
 {
+  assert(Thread::current() == thread, "must be");
+  assert(oopDesc::is_oop(obj, true), "must be");
+  
+  // Not sure if the Handle really necessary
+  // but let's keep it for now
+  HandleMark hm(thread);
+  Handle h_obj = Handle(thread, obj);
+
   OurPersist::ensure_recoverable(obj);
 }
 JRT_END

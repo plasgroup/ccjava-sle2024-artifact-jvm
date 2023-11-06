@@ -26,6 +26,9 @@
 #include "nvm/nvmDebug.hpp"
 #endif // ASSERT
 
+#include "runtime/handshake.hpp"
+#include "runtime/interfaceSupport.inline.hpp" // thread_block_invm
+#include "runtime/threadSMR.hpp" // java thread iterator
 int OurPersist::_enable = our_persist_unknown;
 #ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
 int OurPersist::_started = our_persist_true;
@@ -33,7 +36,37 @@ int OurPersist::_started = our_persist_true;
 int OurPersist::_started = our_persist_unknown;
 #endif // OURPERSIST_DURABLEROOTS_ALL_TRUE
 
+class ReplicateNotifyClosure : public HandshakeClosure {
+protected:
+  static inline int next_id{0};
+  int _id;
+public:
+  ReplicateNotifyClosure(): 
+    HandshakeClosure("Replicate notify"), _id (next_id++) {}
+
+  void do_thread(Thread* target) {
+    printf("  sync %d (thread = %p)\n", _id, target);
+  }
+  int get_id() {
+    return _id;
+  }
+};
+
+
 void OurPersist::ensure_recoverable(oop obj) {
+  static int cnt = 0;
+  
+  assert(Thread::current()->is_Java_thread(), "must be");
+
+  {
+    JavaThread* self = Thread::current()->as_Java_thread();
+
+    // see JRT_ENTRY
+    assert(self->thread_state() == _thread_in_vm, "Thread not in expected state");
+    ReplicateNotifyClosure rnc{};
+    Handshake::execute(&rnc);  // requires state == _thread_in_vm
+  }
+  return;
 #ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
   ShouldNotReachHere();
 #endif // OURPERSIST_DURABLEROOTS_ALL_FALSE

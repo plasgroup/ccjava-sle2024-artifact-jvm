@@ -49,6 +49,8 @@ class NVMAllocator : AllStatic {
   static void* allocate(size_t _word_size);
 
   static void* allocate_chunksize();
+
+  static bool  is_in(void* addr);
 };
 
 #endif // NVM_NVMALLOCATOR_HPP

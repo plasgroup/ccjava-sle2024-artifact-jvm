@@ -223,5 +223,7 @@ void* NVMAllocator::allocate_chunksize() {
   return nvm_next;  // not ptr
 }
 
-
+bool NVMAllocator::is_in(void* addr) {
+  return addr >= map_addr() && addr <= nvm_tail;
+}
 #endif // OUR_PERSIST

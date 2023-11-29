@@ -45,7 +45,7 @@ public:
     HandshakeClosure("Replicate notify"), _id (next_id++) {}
 
   void do_thread(Thread* target) {
-    printf("  sync %d (thread = %p)\n", _id, target);
+    // printf("  sync %d (thread = %p)\n", _id, target);
   }
   int get_id() {
     return _id;
@@ -53,20 +53,17 @@ public:
 };
 
 
-void OurPersist::ensure_recoverable(oop obj) {
-  static int cnt = 0;
-  
+void OurPersist::handshake() {
   assert(Thread::current()->is_Java_thread(), "must be");
 
-  {
-    JavaThread* self = Thread::current()->as_Java_thread();
+  JavaThread* self = Thread::current()->as_Java_thread();
+  assert(self->thread_state() == _thread_in_vm, "Thread not in expected state");
 
-    // see JRT_ENTRY
-    assert(self->thread_state() == _thread_in_vm, "Thread not in expected state");
-    ReplicateNotifyClosure rnc{};
-    Handshake::execute(&rnc);  // requires state == _thread_in_vm
-  }
-  return;
+  ReplicateNotifyClosure rnc{};
+  Handshake::execute(&rnc);  // requires state == _thread_in_vm
+}
+
+void OurPersist::ensure_recoverable(oop obj) {
 #ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
   ShouldNotReachHere();
 #endif // OURPERSIST_DURABLEROOTS_ALL_FALSE

@@ -1282,17 +1282,31 @@ JRT_END
 
 #ifdef OUR_PERSIST
 
-JRT_ENTRY_NO_ASYNC(void, InterpreterRuntime::ensure_recoverable(JavaThread* thread, oopDesc* obj))
+JRT_BLOCK_ENTRY(void, InterpreterRuntime::ensure_recoverable(JavaThread* thread, oopDesc* obj))
 {
   assert(Thread::current() == thread, "must be");
   assert(oopDesc::is_oop(obj, true), "must be");
   
-  // Not sure if the Handle really necessary
-  // but let's keep it for now
+  // In case obj is adjusted in GC
   HandleMark hm(thread);
   Handle h_obj = Handle(thread, obj);
 
-  OurPersist::ensure_recoverable(obj);
+  {
+    auto mark = h_obj();
+    OurPersist::ensure_recoverable(h_obj());
+    if (h_obj() != mark) {
+      puts("GC in copying");
+    }
+  }
+
+  {
+    auto mark = h_obj();
+    ThreadInVMForHandshake th{thread};
+    OurPersist::handshake();
+    if (h_obj() != mark) {
+      puts("GC in handshaking");
+    }
+  }
 }
 JRT_END
 

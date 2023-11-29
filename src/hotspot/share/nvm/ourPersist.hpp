@@ -62,6 +62,8 @@ class OurPersist : AllStatic {
   inline static bool needs_wupd(oop obj, ptrdiff_t offset, DecoratorSet ds, bool is_oop);
 
   static void ensure_recoverable(oop obj);
+  static void handshake();
+
   static void mirror_create(Klass* klass, oop mirror);
 
   // TODO: move to new file

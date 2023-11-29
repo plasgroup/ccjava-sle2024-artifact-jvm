@@ -55,8 +55,9 @@ class NVMCardTableBarrierSetAssembler: public CardTableBarrierSetAssembler {
                         Address dst, Register val, Register tmp1, Register tmp2);
   void runtime_load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                        Register dst, Address src, Register tmp1, Register tmp_thread);
-  void runtime_ensure_recoverable(MacroAssembler* masm, Register val,
-                                  Register tmp1, Register tmp2, Register tmp3, Register tmp4);
+  void runtime_ensure_recoverable(MacroAssembler* masm, Register value,
+                                                                 Register base,
+                                                                 Register index);
   // NOTE: set EFLAGS
   void runtime_is_target(MacroAssembler* masm, Register dst, Register obj,
                          Register tmp1, Register tmp2, Register tmp3, Register tmp4);

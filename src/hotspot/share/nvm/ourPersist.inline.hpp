@@ -13,21 +13,31 @@
 #include "utilities/globalDefinitions.hpp"
 
 inline bool OurPersist::enable_slow() {
+
+#ifdef ASSERT
+
   if (UseCompressedOops) {
     printf("Don't support UseCompressedOops\n");
     return false;
   }
 
   if (UseCompressedClassPointers) {
-    printf("UseCompressedClassPointers\n");
+    printf("Don't support UseCompressedClassPointers\n");
     return false;
   }
 
-  // if (!Arguments::is_interpreter_only()) {
-  //   return false;
-  // }
-
+  #ifdef CMP_OBJ
+    puts("compare objects enabled");
+  #else
+    puts("compare objects disabled");
+  #endif // cmp obj
   return true;
+
+  
+#else
+  return !(UseCompressedOops || UseCompressedClassPointers);
+
+#endif // ASSERT
 }
 
 inline bool OurPersist::enable() {

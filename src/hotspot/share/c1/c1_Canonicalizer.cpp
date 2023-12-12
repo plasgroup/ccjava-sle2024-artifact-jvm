@@ -223,13 +223,19 @@ void Canonicalizer::do_StoreField     (StoreField*      x) {
     }
     // limit this optimization to current block
     if (value != NULL && in_current_block(conv)) {
+      #ifdef OUR_PERSIST
       bool nw = x->needs_wupd();
       set_canonical(new StoreField(x->obj(), x->offset(), x->field(), value, x->is_static(),
                                    x->state_before(), x->needs_patching()));
 
+
       if (nw) {
         canonical()->as_StoreField()->set_needs_wupd_true();
       }
+      #else
+      set_canonical(new StoreField(x->obj(), x->offset(), x->field(), value, x->is_static(),
+                                   x->state_before(), x->needs_patching()));
+      #endif
       // assert(nw == canonical()->as_StoreField()->needs_wupd(), "should be");
       return;
     }
@@ -323,6 +329,7 @@ void Canonicalizer::do_StoreIndexed   (StoreIndexed*    x) {
     }
     // limit this optimization to current block
     if (value != NULL && in_current_block(conv)) {
+      #ifdef OUR_PERSIST
       bool nw {x->needs_wupd()};
       set_canonical(new StoreIndexed(x->array(), x->index(), x->length(),
                                      x->elt_type(), value, x->state_before(),
@@ -330,6 +337,11 @@ void Canonicalizer::do_StoreIndexed   (StoreIndexed*    x) {
       if (nw) {
         canonical()->as_StoreIndexed()->set_needs_wupd_true();
       }
+      #else
+      set_canonical(new StoreIndexed(x->array(), x->index(), x->length(),
+                                     x->elt_type(), value, x->state_before(),
+                                     x->check_boolean()));
+      #endif
       return;
     }
   }

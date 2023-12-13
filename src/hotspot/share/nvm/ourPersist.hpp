@@ -25,10 +25,8 @@ class OurPersist : AllStatic {
   static int _started;
 
  private:
-  inline static void clear_responsible_thread(Thread* cur_thread);
-  inline static void add_dependent_obj_list(nvmOop nvm_obj, Thread* cur_thread);
 
-  inline static void copy_dram_to_nvm(oop from, oop to, ptrdiff_t offset, BasicType type, bool is_array = false);
+
   inline static bool cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, BasicType type, bool is_array = false);
 
   inline static nvmOop allocate_nvm(int size, Thread* thr = NULL);
@@ -38,7 +36,6 @@ class OurPersist : AllStatic {
                                     NVMWorkListStack* worklist, NVMBarrierSync* barrier_sync,
                                     Thread* cur_thread);
   static bool copy_object_verify_step(oop obj, nvmOop nvm_obj, Klass* klass);
-  static bool shade(oop obj, Thread* cur_thread);
 
 #ifdef ASSERT
   inline static bool is_target_slow(Klass* klass);
@@ -51,6 +48,13 @@ class OurPersist : AllStatic {
   inline static bool enable_slow();
 
  public:
+  inline static void copy_dram_to_nvm(oop from, oop to, ptrdiff_t offset, BasicType type, bool is_array = false);
+
+  inline static void clear_responsible_thread(Thread* cur_thread);
+  inline static void add_dependent_obj_list(nvmOop nvm_obj, Thread* cur_thread);
+  // static void make_persistent(Handle h_obj);
+  static bool shade(oop obj, Thread* cur_thread);
+
   inline static bool enable();
   inline static bool started();
   inline static void set_started();
@@ -62,6 +66,7 @@ class OurPersist : AllStatic {
   inline static bool needs_wupd(oop obj, ptrdiff_t offset, DecoratorSet ds, bool is_oop);
 
   static void ensure_recoverable(oop obj);
+  static void ensure_recoverable(Handle obj);
   static void handshake();
 
   static void mirror_create(Klass* klass, oop mirror);

@@ -29,6 +29,9 @@
 #include "runtime/handshake.hpp"
 #include "runtime/interfaceSupport.inline.hpp" // thread_block_invm
 #include "runtime/threadSMR.hpp" // java thread iterator
+#include "utilities/hashtable.inline.hpp" // stack
+#include "utilities/stack.inline.hpp" // stack
+
 int OurPersist::_enable = our_persist_unknown;
 #ifdef OURPERSIST_DURABLEROOTS_ALL_TRUE
 int OurPersist::_started = our_persist_true;
@@ -57,21 +60,412 @@ void OurPersist::handshake() {
   assert(Thread::current()->is_Java_thread(), "must be");
 
   JavaThread* self = Thread::current()->as_Java_thread();
+
+  ThreadInVMForHandshake th{self};
   assert(self->thread_state() == _thread_in_vm, "Thread not in expected state");
 
   ReplicateNotifyClosure rnc{};
   Handshake::execute(&rnc);  // requires state == _thread_in_vm
+  // JavaThreadIteratorWithHandle jtiwh;
+  // int number_of_threads_issued = 0;
+  // for (JavaThread* target = jtiwh.next(); target != NULL; target = jtiwh.next()) {
+  //   if (target->is_exiting() ||
+  //       target->is_hidden_from_external_view())  {
+  //     // skip terminating threads and hidden threads
+  //     continue;
+  //   }
+
+  //   if (target == self) {
+  //     continue;
+  //   }
+
+  //   assert(target->is_Java_thread(), "must be");
+  //   assert(!target->is_exiting(), "must be");
+  //   assert(!target->is_hidden_from_external_view(), "must be");
+  //   ReplicateNotifyClosure rnc{};
+  //   Handshake::execute(&rnc, target);
+  // }
 }
 
+unsigned hash_for_oop(const oop& k) {
+  // Specialized implementation for oop
+  unsigned hash = (unsigned)(cast_from_oop<uintptr_t>(k));
+  return hash ^ (hash >> 3);
+}
+
+class OopSet : public KVHashtable<oop, bool, mtInternal, hash_for_oop> {
+private:
+  int current_size = 0;  // Counter for the add() calls
+
+public:
+  OopSet(int table_size) : KVHashtable<oop, bool, mtInternal, hash_for_oop>(table_size) {}
+
+  bool contains(oop key) {
+    return KVHashtable<oop, bool, mtInternal, hash_for_oop>::lookup(key) != nullptr;
+  }
+
+  void insert(oop key) {
+    assert(!contains(key), "only called in this case");
+    KVHashtable<oop, bool, mtInternal, hash_for_oop>::add(key, true);
+    current_size++;  // Increment the counter
+  }
+
+  int size() const {
+    return current_size;
+  }
+};
+
+class MakePersistentBase {
+
+public:
+  MakePersistentBase() = delete;
+  MakePersistentBase(Thread* thread, int round):
+    _thr{thread},
+    _barrier_sync{thread->nvm_barrier_sync()},
+    _round{round},
+    _st{nullptr} {
+    }
+
+  int round() {
+    return _round;
+  }
+
+protected:
+  void try_push(oop v) {
+    assert(_st != nullptr, "must be");
+    if (v == nullptr || v->nvm_header().recoverable() || !OurPersist::is_target(v->klass())) {
+      return;
+    }
+
+    // already pushed in this round
+    if (_st->contains(v)) {
+      return;
+    }
+
+    _worklist.push(Handle(_thr, v));
+    _st->insert(v);
+
+    assert(_st->contains(v), "must be");
+  } 
+
+  Stack<Handle, mtInternal> _worklist;
+  Thread*  _thr;
+  NVMBarrierSync* _barrier_sync;
+  int _round;
+  OopSet* _st;
+
+};
+
+
+class MakePersistentMarkPhase: public MakePersistentBase {
+public:
+  MakePersistentMarkPhase(): 
+    MakePersistentBase{Thread::current(), 0} {
+    }
+  int process(oop obj) {
+    OopSet _has_been_visited {1024 * 8};
+    _st = &_has_been_visited;
+    _round++;
+    assert(_round < 6, "too many rounds");
+    _n_shaded = 0;
+    
+    try_push(obj);
+    while (!_worklist.is_empty()) {
+        oop v = _worklist.pop()();
+        visit(v);
+    }
+    assert(_worklist.is_empty() && _n_shaded >= 0, "must be");
+
+    return _n_shaded;
+  }
+
+private:
+  // shade and push oop fields of this obj
+  void visit(oop obj)  {
+    if (!try_shade(obj)) {
+      return;
+    }
+
+    Klass* klass = obj->klass();
+    if (klass->is_instance_klass()) {
+      iterate_instance_class(obj, klass);
+    } else if (klass->is_objArray_klass()) {
+      iterate_obj_array(obj, klass);
+    } else if (klass->is_typeArray_klass()) {
+      // no oop field
+    } else {
+      assert(false, "modify code");
+    }
+  }
+  
+  // true if v is gray and shaded by this thread, 
+  // where its children need to be pushed
+  bool try_shade(oop v) {
+    
+    // not persistent
+    nvmOop replica = v->nvm_header().fwd();
+    if (replica == nullptr) {
+      // not marked yet, mark it
+      if (OurPersist::shade(v, _thr)) {
+        // success
+        _n_shaded++;
+        replica = v->nvm_header().fwd();
+        assert(replica != nullptr && replica->responsible_thread() == _thr, "must be");
+        OurPersist::add_dependent_obj_list(replica, _thr);
+        return true;
+      } else {
+        // fail
+        replica = v->nvm_header().fwd();
+        assert(replica != nullptr && replica->responsible_thread() != _thr, "must be");
+        _barrier_sync->add(v, replica, _thr);
+        return false;
+      }
+    } else {
+      // already marked
+      if (replica->responsible_thread() == _thr) {
+        return true;
+      } else {
+        _barrier_sync->add(v, replica, _thr);
+        return false;
+      }
+    }
+  }
+
+
+  // Iterate function for instance classes
+  // TODO: try obj->iterate_oop
+  void iterate_instance_class(oop obj, Klass* klass) {
+    using Parent =  CardTableBarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP, NVMCardTableBarrierSet>;
+
+    for (InstanceKlass* ik = (InstanceKlass*)klass; ik != nullptr; ik = (InstanceKlass*)ik->super()) {
+      int field_count = ik->java_fields_count();
+      for (int i = 0; i < field_count; i++) {
+        if (accessFlags_from(ik->field_access_flags(i)).is_static()) {
+          continue;
+        }
+        Symbol* field_signature = ik->field_signature(i);
+        BasicType field_type = Signature::basic_type(field_signature);
+
+        if (is_reference_type(field_type)) {
+          int field_offset = ik->field_offset(i);
+
+          oop child = Parent::oop_load_in_heap_at(obj, field_offset);
+          assert(oopDesc::is_oop_or_null(child, true), "must be");
+          try_push(child);
+        }
+      }
+    }
+  }
+
+    // Iterate function for arrays
+  void iterate_obj_array(oop obj, Klass* klass) {
+    using Parent =  CardTableBarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP | IS_ARRAY, NVMCardTableBarrierSet>;
+
+    auto array_klass = static_cast<ObjArrayKlass*>(klass);
+    BasicType array_type = array_klass->element_type();
+    assert(is_reference_type(array_type), "must be");
+    auto array_obj = static_cast<objArrayOop>(obj);
+    int array_length = array_obj->length();
+
+    for (int i = 0; i < array_length; i++) {
+      ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
+      oop child = Parent::oop_load_in_heap_at(obj, field_offset);
+      // Handle h(_thr, child);
+      assert(oopDesc::is_oop_or_null(child, true), "must be");
+      try_push(child);
+    }
+  }
+
+  private:
+  int _n_shaded;
+
+};
+
+
+class MakePersistentCopyPhase: public MakePersistentBase {
+public:
+  MakePersistentCopyPhase() = delete;
+  MakePersistentCopyPhase(int marker_round):
+    MakePersistentBase{Thread::current(), marker_round + 1} {
+    }
+
+  void process(oop obj) {
+    OopSet _has_been_visited {1024 * 8};
+    _st = &_has_been_visited;
+
+    visit(obj);
+
+    while (!_worklist.is_empty()) {
+      oop v = _worklist.pop()();
+      visit(v);
+    }
+    assert(_worklist.is_empty(), "must be");
+
+  }
+
+private:
+  // copying all fields and pushing all oop fields
+  void visit(oop obj)  {
+    assert(obj->nvm_header().fwd() != nullptr, "must be");
+    
+    Klass* klass = obj->klass();
+    if (klass->is_instance_klass()) {
+      iterate_instance_class(obj, klass);
+    } else if (klass->is_objArray_klass()) {
+      iterate_obj_array(obj, klass);
+    } else if (klass->is_typeArray_klass()) {
+      copy_type_array(obj, klass);
+    } else {
+      assert(false, "modify code");
+    }
+  }
+
+  void copy_type_array(oop obj, Klass* klass) {
+    TypeArrayKlass* ak = (TypeArrayKlass*)klass;
+    typeArrayOop ao = (typeArrayOop)obj;
+    BasicType array_type = ((ArrayKlass*)ak)->element_type();
+    int array_length = ao->length();
+
+    nvmOop o_rep = obj->nvm_header().fwd();
+    assert(o_rep != nullptr, "must be");
+    typeArrayOop(o_rep)->set_length(array_length);
+
+    void* obj_ptr = OOP_TO_VOID(obj);
+    int base_offset_in_bytes = typeArrayOopDesc::base_offset_in_bytes(array_type);
+    int base_offset_in_words = base_offset_in_bytes / HeapWordSize;
+    assert(base_offset_in_bytes % HeapWordSize == 0, "");
+    HeapWord* to   = (HeapWord*)((char*)o_rep + base_offset_in_bytes);
+    HeapWord* from = (HeapWord*)((char*)obj_ptr + base_offset_in_bytes);
+    Copy::aligned_disjoint_words(from, to, obj->size() - base_offset_in_words);
+  }
+
+  void copy_oop_and_push(oop obj, oop o_rep, int offset, oop v, bool is_array) {
+
+    nvmOop v_rep = [](oop v) -> nvmOop {
+      if (v == nullptr || !OurPersist::is_target(v->klass())) {
+        return nullptr;
+      }
+      // v shouldn't be white for a long time
+      nvmOop replica = v->nvm_header().fwd();
+      while (replica == nullptr) {
+        replica = v->nvm_header().fwd();
+      }
+      assert(replica != nullptr, "must be");
+      return replica;
+    }(v);
+
+    
+    if (is_array) {
+      using Raw = BarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP | IS_ARRAY, NVMCardTableBarrierSet>;
+      Raw::oop_store_in_heap_at((oop)o_rep, offset, (oop)v_rep);
+    } else {
+      using Raw = BarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP, NVMCardTableBarrierSet>;
+      Raw::oop_store_in_heap_at((oop)o_rep, offset, (oop)v_rep);
+    }
+
+    if (v_rep != nullptr) {
+      if(v_rep->responsible_thread() == _thr) {
+        try_push(v);
+      } else if (v_rep->responsible_thread() != _thr) {
+        _barrier_sync->add(v, v_rep, _thr);
+      }
+    }
+  } 
+
+  // Iterate function for instance classes
+  // TODO: use obj->iterate_oop
+  void iterate_instance_class(oop obj, Klass* klass) {
+    using Parent =  CardTableBarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP, NVMCardTableBarrierSet>;
+
+    nvmOop o_rep = obj->nvm_header().fwd();
+    assert(o_rep != nullptr, "must be");
+
+    for (InstanceKlass* ik = (InstanceKlass*)klass; ik != nullptr; ik = (InstanceKlass*)ik->super()) {
+      int field_count = ik->java_fields_count();
+      for (int i = 0; i < field_count; i++) {
+        if (accessFlags_from(ik->field_access_flags(i)).is_static()) {
+          continue;
+        }
+        Symbol* field_signature = ik->field_signature(i);
+        BasicType field_type = Signature::basic_type(field_signature);
+        int field_offset = ik->field_offset(i);
+
+        
+        if (is_reference_type(field_type)) {
+          oop child = Parent::oop_load_in_heap_at(obj, field_offset);
+          assert(oopDesc::is_oop_or_null(child, true), "must be");
+          copy_oop_and_push(obj, (oop)o_rep, field_offset, child, false);
+        } else {
+          // copy this field
+          OurPersist::copy_dram_to_nvm(obj, (oop)o_rep, field_offset, field_type);
+        }
+      }
+    }
+  }
+
+    // Iterate object array
+  void iterate_obj_array(oop obj, Klass* klass) {
+    using Parent =  CardTableBarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP | IS_ARRAY, NVMCardTableBarrierSet>;
+
+    auto array_klass = static_cast<ObjArrayKlass*>(klass);
+    BasicType array_type = array_klass->element_type();
+    assert(is_reference_type(array_type), "must be");
+    auto array_obj = static_cast<objArrayOop>(obj);
+    int array_length = array_obj->length();
+
+    nvmOop o_rep = obj->nvm_header().fwd();
+    assert(o_rep != nullptr, "must be");
+    objArrayOop(o_rep)->set_length(array_length);
+
+    for (int i = 0; i < array_length; i++) {
+      ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
+      oop child = Parent::oop_load_in_heap_at(obj, field_offset);
+      assert(oopDesc::is_oop_or_null(child, true), "must be");
+      copy_oop_and_push(obj, (oop)o_rep, field_offset, child, true);
+    }
+  }
+
+};
+
+class BarrierSyncMark {
+  public:
+  static inline int cnt = 0;
+  BarrierSyncMark() {
+    printf("enter %d\n", ++cnt);
+    _thr->nvm_barrier_sync()->init();
+  }
+  ~BarrierSyncMark() {
+    _thr->nvm_barrier_sync()->sync();
+    OurPersist::clear_responsible_thread(_thr);
+    printf("exit %d\n", cnt);
+  }
+
+  private:
+  Thread* _thr{Thread::current()};
+
+};
+
+void OurPersist::ensure_recoverable(Handle h_obj) {
+  assert(!h_obj()->nvm_header().recoverable() && OurPersist::is_target(h_obj()->klass()), "condition to enter the function");
+  
+  BarrierSyncMark bsm;
+
+  MakePersistentMarkPhase marker;
+  int n_marked = marker.process(h_obj());
+  if (n_marked == 0) {
+    return;
+  }
+
+  do {
+    handshake();
+  } while (marker.process(h_obj()) > 0);
+
+  MakePersistentCopyPhase copier{marker.round()};
+  copier.process(h_obj());
+}
+
+
 void OurPersist::ensure_recoverable(oop obj) {
-#ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
-  ShouldNotReachHere();
-#endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
-
-#ifdef NO_ENSURE_RECOVERABLE
-  return;
-#endif // NO_ENSURE_RECOVERABLE
-
   if (obj->nvm_header().recoverable()) {
     return;
   }
@@ -79,44 +473,66 @@ void OurPersist::ensure_recoverable(oop obj) {
     return;
   }
 
-  Thread* cur_thread = Thread::current();
-  NVMWorkListStack* worklist = cur_thread->nvm_work_list();
-  NVMBarrierSync* barrier_sync = cur_thread->nvm_barrier_sync();
-  barrier_sync->init();
+  auto thread = Thread::current();
 
-  bool success = OurPersist::shade(obj, cur_thread);
-  nvmOop nvm_obj = obj->nvm_header().fwd();
-  assert(nvm_obj != NULL, "");
-  if (!success) {
-    assert(nvm_obj->responsible_thread() != cur_thread, "");
-    barrier_sync->add(obj, nvm_obj, cur_thread);
-    barrier_sync->sync();
-    return;
-  }
+  HandleMark hm(thread);
+  Handle h_obj = Handle(thread, obj);
 
-  assert(nvm_obj == obj->nvm_header().fwd(),
-         "nvm_obj: %p, fwd: %p", nvm_obj, obj->nvm_header().fwd());
-  assert(nvm_obj->responsible_thread() == Thread::current(),
-         "fwd: %p", obj->nvm_header().fwd());
-  worklist->add(obj);
+  OurPersist::ensure_recoverable(h_obj);
 
-  NVM_COUNTER_ONLY(cur_thread->nvm_counter()->inc_call_ensure_recoverable();)
+// #ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
+//   ShouldNotReachHere();
+// #endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
 
-  while (worklist->empty() == false) {
-    oop cur_obj = worklist->remove();
-    nvmOop cur_nvm_obj = cur_obj->nvm_header().fwd();
+// #ifdef NO_ENSURE_RECOVERABLE
+//   return;
+// #endif // NO_ENSURE_RECOVERABLE
 
-    NVM_COUNTER_ONLY(cur_thread->nvm_counter()->inc_persistent_obj(cur_obj->size());)
+//   if (obj->nvm_header().recoverable()) {
+//     return;
+//   }
+//   if (!OurPersist::is_target(obj->klass())) {
+//     return;
+//   }
 
-    OurPersist::add_dependent_obj_list(cur_nvm_obj, cur_thread);
-    OurPersist::copy_object(cur_obj);
-  }
+//   Thread* cur_thread = Thread::current();
+//   NVMWorkListStack* worklist = cur_thread->nvm_work_list();
+//   NVMBarrierSync* barrier_sync = cur_thread->nvm_barrier_sync();
+//   barrier_sync->init();
 
-  // sfence
-  NVM_FENCE
+//   bool success = OurPersist::shade(obj, cur_thread);
+//   nvmOop nvm_obj = obj->nvm_header().fwd();
+//   assert(nvm_obj != NULL, "");
+//   if (!success) {
+//     assert(nvm_obj->responsible_thread() != cur_thread, "");
+//     barrier_sync->add(obj, nvm_obj, cur_thread);
+//     barrier_sync->sync();
+//     return;
+//   }
 
-  barrier_sync->sync();
-  OurPersist::clear_responsible_thread(cur_thread);
+//   assert(nvm_obj == obj->nvm_header().fwd(),
+//          "nvm_obj: %p, fwd: %p", nvm_obj, obj->nvm_header().fwd());
+//   assert(nvm_obj->responsible_thread() == Thread::current(),
+//          "fwd: %p", obj->nvm_header().fwd());
+//   worklist->add(obj);
+
+//   NVM_COUNTER_ONLY(cur_thread->nvm_counter()->inc_call_ensure_recoverable();)
+
+//   while (worklist->empty() == false) {
+//     oop cur_obj = worklist->remove();
+//     nvmOop cur_nvm_obj = cur_obj->nvm_header().fwd();
+
+//     NVM_COUNTER_ONLY(cur_thread->nvm_counter()->inc_persistent_obj(cur_obj->size());)
+
+//     OurPersist::add_dependent_obj_list(cur_nvm_obj, cur_thread);
+//     OurPersist::copy_object(cur_obj);
+//   }
+
+//   // sfence
+//   NVM_FENCE
+
+//   barrier_sync->sync();
+//   OurPersist::clear_responsible_thread(cur_thread);
 }
 
 void OurPersist::copy_object_copy_step(oop obj, nvmOop nvm_obj, Klass* klass,

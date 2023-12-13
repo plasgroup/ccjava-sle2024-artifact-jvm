@@ -114,8 +114,6 @@ void NVMCardTableBarrierSetAssembler::interpreter_store_at(MacroAssembler* masm,
                                                       noreg, noreg, noreg, noreg);
   __ jcc(Assembler::zero, done);
   if (needs_wupd) {
-    // fence
-    __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
     // tmp1 = obj->nvm_header().fwd()
     NVMCardTableBarrierSetAssembler::load_nvm_fwd(masm, tmp1, dst.base());
 
@@ -176,8 +174,6 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
                                                       noreg, noreg, noreg, noreg);
   __ jcc(Assembler::zero, done);
   if (needs_wupd) {
-    // fence
-    __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
     // tmp2 == base
     // tmp1 = obj->nvm_header().fwd()
     NVMCardTableBarrierSetAssembler::load_nvm_fwd(masm, tmp1, tmp2);
@@ -300,8 +296,8 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
     tmp4 = _tmp2;
   }
 
-//   // lock
-//   NVMCardTableBarrierSetAssembler::lock_nvmheader(masm, dst.base(), tmp1, tmp2);
+  // lock
+  NVMCardTableBarrierSetAssembler::lock_nvmheader(masm, dst.base(), tmp1, tmp2);
 
   // DEBUG:
   // bool needs_wupd = NVMCardTableBarrierSetAssembler::needs_wupd(decorators, type);
@@ -310,8 +306,6 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
                                                       noreg, noreg, noreg, noreg);
   __ jcc(Assembler::zero, dram_only);
   if (needs_wupd) {
-    // fence
-    __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
     // tmp1 = obj->nvm_header().fwd()
     NVMCardTableBarrierSetAssembler::load_nvm_fwd(masm, tmp1, dst.base());
     __ jcc(Assembler::zero, dram_only);
@@ -362,7 +356,7 @@ void NVMCardTableBarrierSetAssembler::interpreter_volatile_oop_store_at(MacroAss
   Parent::store_at(masm, decorators, type, dst, val, tmp3, noreg);
 
   // unlock
-  // NVMCardTableBarrierSetAssembler::unlock_nvmheader(masm, tmp1, tmp2);
+  NVMCardTableBarrierSetAssembler::unlock_nvmheader(masm, tmp1, tmp2);
 }
 
 // utilities

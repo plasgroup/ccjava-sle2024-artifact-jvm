@@ -1284,6 +1284,13 @@ JRT_END
 
 JRT_BLOCK_ENTRY(void, InterpreterRuntime::ensure_recoverable(JavaThread* thread, oopDesc* obj))
 {
+  if (obj->nvm_header().recoverable()) {
+    return;
+  }
+  if (!OurPersist::is_target(obj->klass())) {
+    return;
+  }
+  
   assert(Thread::current() == thread, "must be");
   assert(oopDesc::is_oop(obj, true), "must be");
   
@@ -1291,22 +1298,7 @@ JRT_BLOCK_ENTRY(void, InterpreterRuntime::ensure_recoverable(JavaThread* thread,
   HandleMark hm(thread);
   Handle h_obj = Handle(thread, obj);
 
-  {
-    auto mark = h_obj();
-    OurPersist::ensure_recoverable(h_obj());
-    if (h_obj() != mark) {
-      puts("GC in copying");
-    }
-  }
-
-  {
-    auto mark = h_obj();
-    ThreadInVMForHandshake th{thread};
-    OurPersist::handshake();
-    if (h_obj() != mark) {
-      puts("GC in handshaking");
-    }
-  }
+  OurPersist::ensure_recoverable(h_obj);
 }
 JRT_END
 

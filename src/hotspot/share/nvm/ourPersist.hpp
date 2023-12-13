@@ -35,7 +35,6 @@ class OurPersist : AllStatic {
   static void copy_object_copy_step(oop obj, nvmOop nvm_obj, Klass* klass,
                                     NVMWorkListStack* worklist, NVMBarrierSync* barrier_sync,
                                     Thread* cur_thread);
-  static bool copy_object_verify_step(oop obj, nvmOop nvm_obj, Klass* klass);
 
 #ifdef ASSERT
   inline static bool is_target_slow(Klass* klass);
@@ -48,6 +47,8 @@ class OurPersist : AllStatic {
   inline static bool enable_slow();
 
  public:
+  static bool copy_object_verify_step(oop obj, nvmOop nvm_obj, Klass* klass);
+
   inline static void copy_dram_to_nvm(oop from, oop to, ptrdiff_t offset, BasicType type, bool is_array = false);
 
   inline static void clear_responsible_thread(Thread* cur_thread);

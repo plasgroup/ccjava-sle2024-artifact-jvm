@@ -165,6 +165,7 @@ public:
   int process(oop obj) {
     OopSet _has_been_visited {1024 * 8};
     _st = &_has_been_visited;
+    
     _round++;
     assert(_round < 6, "too many rounds");
     _n_shaded = 0;
@@ -308,16 +309,27 @@ private:
   void visit(oop obj)  {
     assert(obj->nvm_header().fwd() != nullptr, "must be");
     
+    // repeat copying till success
     Klass* klass = obj->klass();
-    if (klass->is_instance_klass()) {
-      iterate_instance_class(obj, klass);
-    } else if (klass->is_objArray_klass()) {
-      iterate_obj_array(obj, klass);
-    } else if (klass->is_typeArray_klass()) {
-      copy_type_array(obj, klass);
-    } else {
-      assert(false, "modify code");
-    }
+    do {
+      if (klass->is_instance_klass()) {
+        iterate_instance_class(obj, klass);
+      } else if (klass->is_objArray_klass()) {
+        iterate_obj_array(obj, klass);
+      } else if (klass->is_typeArray_klass()) {
+        copy_type_array(obj, klass);
+      } else {
+        assert(false, "modify code");
+      }
+
+      OrderAccess::fence();
+
+      // write back & sfence
+      NVM_FLUSH_LOOP(obj->nvm_header().fwd(), obj->size() * HeapWordSize);
+
+    } while (!OurPersist::copy_object_verify_step(obj, obj->nvm_header().fwd(), klass));
+
+    assert(OurPersist::copy_object_verify_step(obj, obj->nvm_header().fwd(), klass), "sanity check");
   }
 
   void copy_type_array(oop obj, Klass* klass) {

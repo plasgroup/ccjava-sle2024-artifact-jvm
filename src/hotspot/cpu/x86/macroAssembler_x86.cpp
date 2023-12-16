@@ -1665,6 +1665,13 @@ void MacroAssembler::get_vm_result(Register oop_result, Register java_thread) {
   movptr(Address(java_thread, JavaThread::vm_result_offset()), NULL_WORD);
   verify_oop_msg(oop_result, "broken oop in call_VM_base");
 }
+#ifdef OUR_PERSIST
+void MacroAssembler::get_target_obj(Register target_obj, Register java_thread) {
+  movptr(target_obj, Address(java_thread, JavaThread::target_obj_offset()));
+  movptr(Address(java_thread, JavaThread::target_obj_offset()), NULL_WORD);
+  verify_oop_msg(target_obj, "broken oop in target obj");
+}
+#endif
 
 void MacroAssembler::get_vm_result_2(Register metadata_result, Register java_thread) {
   movptr(metadata_result, Address(java_thread, JavaThread::vm_result_2_offset()));

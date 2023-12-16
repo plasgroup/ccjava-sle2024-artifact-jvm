@@ -1145,6 +1145,10 @@ class JavaThread: public Thread {
 
   // Used to pass back results to the interpreter or generated code running Java code.
   oop           _vm_result;    // oop result is GC-preserved
+  #ifdef OUR_PERSIST
+  // Used to preserve base object due to presence of GC
+  oop           _target_obj;
+  #endif
   Metadata*     _vm_result_2;  // non-oop result
 
   // See ReduceInitialCardMarks: this holds the precise space interval of
@@ -1578,6 +1582,11 @@ class JavaThread: public Thread {
   // Oop results of vm runtime calls
   oop  vm_result() const                         { return _vm_result; }
   void set_vm_result  (oop x)                    { _vm_result   = x; }
+  #ifdef OUR_PERSIST
+  void set_target_obj  (oop x)                    { 
+    assert(_target_obj == nullptr, "must be");
+    _target_obj   = x; }
+  #endif
 
   Metadata*    vm_result_2() const               { return _vm_result_2; }
   void set_vm_result_2  (Metadata* x)          { _vm_result_2   = x; }
@@ -1645,6 +1654,9 @@ class JavaThread: public Thread {
   }
   static ByteSize callee_target_offset()         { return byte_offset_of(JavaThread, _callee_target); }
   static ByteSize vm_result_offset()             { return byte_offset_of(JavaThread, _vm_result); }
+  #ifdef OUR_PERSIST
+  static ByteSize target_obj_offset()             { return byte_offset_of(JavaThread, _target_obj); }
+  #endif
   static ByteSize vm_result_2_offset()           { return byte_offset_of(JavaThread, _vm_result_2); }
   static ByteSize thread_state_offset()          { return byte_offset_of(JavaThread, _thread_state); }
   static ByteSize saved_exception_pc_offset()    { return byte_offset_of(JavaThread, _saved_exception_pc); }

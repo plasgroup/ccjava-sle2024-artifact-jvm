@@ -252,6 +252,9 @@ class MacroAssembler: public Assembler {
                bool check_exceptions = true);
 
   void get_vm_result  (Register oop_result, Register thread);
+  #ifdef OUR_PERSIST
+  void get_target_obj (Register target_obj, Register java_thread);
+  #endif
   void get_vm_result_2(Register metadata_result, Register thread);
 
   // These always tightly bind to MacroAssembler::call_VM_base

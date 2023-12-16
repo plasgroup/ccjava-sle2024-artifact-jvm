@@ -65,6 +65,7 @@ void OurPersist::handshake() {
   assert(self->thread_state() == _thread_in_vm, "Thread not in expected state");
 
   ReplicateNotifyClosure rnc{};
+  printf("thread %p sends handshake\n", (void*)self);
   Handshake::execute(&rnc);  // requires state == _thread_in_vm
   // JavaThreadIteratorWithHandle jtiwh;
   // int number_of_threads_issued = 0;
@@ -165,7 +166,7 @@ public:
   int process(oop obj) {
     OopSet _has_been_visited {1024 * 8};
     _st = &_has_been_visited;
-    
+
     _round++;
     assert(_round < 6, "too many rounds");
     _n_shaded = 0;
@@ -443,13 +444,13 @@ class BarrierSyncMark {
   public:
   static inline int cnt = 0;
   BarrierSyncMark() {
-    printf("enter %d\n", ++cnt);
+    // printf("enter %d\n", ++cnt);
     _thr->nvm_barrier_sync()->init();
   }
   ~BarrierSyncMark() {
     _thr->nvm_barrier_sync()->sync();
     OurPersist::clear_responsible_thread(_thr);
-    printf("exit %d\n", cnt);
+    // printf("exit %d\n", cnt);
   }
 
   private:

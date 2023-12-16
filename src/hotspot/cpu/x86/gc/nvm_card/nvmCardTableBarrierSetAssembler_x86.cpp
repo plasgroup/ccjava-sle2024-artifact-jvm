@@ -800,13 +800,10 @@ void NVMCardTableBarrierSetAssembler::runtime_ensure_recoverable(MacroAssembler*
   assert(value == rax, "must be");
 
   __ movl(r12_heapbase, index);
-  __ push(base);
-  __ push(value);
   // call
   address ensure_recoverable_entry = CAST_FROM_FN_PTR(address, InterpreterRuntime::ensure_recoverable);
-  __ call_VM(noreg, ensure_recoverable_entry, value);
-  __ pop(value);
-  __ pop(base);
+  __ call_VM(value, ensure_recoverable_entry, base, value);
+  __ get_target_obj(base, r15_thread);
   __ movl(index, r12_heapbase);
 }
 

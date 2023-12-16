@@ -1282,23 +1282,39 @@ JRT_END
 
 #ifdef OUR_PERSIST
 
-JRT_BLOCK_ENTRY(void, InterpreterRuntime::ensure_recoverable(JavaThread* thread, oopDesc* obj))
+JRT_BLOCK_ENTRY(void, InterpreterRuntime::ensure_recoverable(JavaThread* thread, oopDesc* obj, oopDesc* value))
 {
-  if (obj->nvm_header().recoverable()) {
+  if (value->nvm_header().recoverable()) {
+    thread->set_vm_result(value);
+    thread->set_target_obj(obj);
     return;
   }
-  if (!OurPersist::is_target(obj->klass())) {
+  if (!OurPersist::is_target(value->klass())) {
+    thread->set_vm_result(value);
+    thread->set_target_obj(obj);
     return;
   }
   
   assert(Thread::current() == thread, "must be");
   assert(oopDesc::is_oop(obj, true), "must be");
+  assert(oopDesc::is_oop(value, true), "must be");
   
   // In case obj is adjusted in GC
   HandleMark hm(thread);
   Handle h_obj = Handle(thread, obj);
+  Handle h_value = Handle(thread, value);
 
-  OurPersist::ensure_recoverable(h_obj);
+  auto mark = h_obj();
+  OurPersist::ensure_recoverable(h_value);
+
+  if (h_obj() != mark) {
+    puts("GC!!");
+  }
+  if (thread->vm_result() != nullptr) {
+    puts("vm result occupied!");
+  }
+  thread->set_vm_result(h_value());
+  thread->set_target_obj(h_obj());
 }
 JRT_END
 

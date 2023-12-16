@@ -1545,6 +1545,9 @@ JavaThread::JavaThread() :
   _jvmti_deferred_updates(nullptr),
   _callee_target(nullptr),
   _vm_result(nullptr),
+  #ifdef OUR_PERSIST
+  _target_obj(nullptr),
+  #endif
   _vm_result_2(nullptr),
 
   _monitor_chunks(nullptr),
@@ -2683,6 +2686,9 @@ void JavaThread::oops_do_no_frames(OopClosure* f, CodeBlobClosure* cf) {
   // Traverse instance variables at the end since the GC may be moving things
   // around using this function
   f->do_oop((oop*) &_vm_result);
+  #ifdef OUR_PERSIST
+  f->do_oop((oop*) &_target_obj);
+  #endif
   f->do_oop((oop*) &_exception_oop);
   f->do_oop((oop*) &_pending_async_exception);
 

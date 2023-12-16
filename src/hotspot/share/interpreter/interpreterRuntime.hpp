@@ -125,7 +125,7 @@ class InterpreterRuntime: AllStatic {
   static int  interpreter_contains(address pc);
 #ifdef OUR_PERSIST
 
-  static void ensure_recoverable(JavaThread *thread, oopDesc* obj);
+  static void ensure_recoverable(JavaThread *thread, oopDesc* obj, oopDesc* value);
 
 #endif
 

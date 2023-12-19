@@ -57,6 +57,7 @@ class NVMBarrierSync : public CHeapObj<mtNone> {
   inline void dec_ref_count();
 
  public:
+  inline static bool is_same_group(JavaThread* a, JavaThread* b);
   inline void init();
   inline void add(oop obj, nvmOop nvm_obj, Thread* cur_thread);
   inline void sync();

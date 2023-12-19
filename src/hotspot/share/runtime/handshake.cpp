@@ -38,6 +38,9 @@
 #include "utilities/filterQueue.inline.hpp"
 #include "utilities/preserveException.hpp"
 
+#ifdef OUR_PERSIST
+#include "nvm/nvmBarrierSync.inline.hpp"
+#endif
 class HandshakeOperation : public CHeapObj<mtThread> {
   friend class HandshakeState;
  protected:
@@ -273,6 +276,86 @@ class VM_HandshakeAllThreads: public VM_Handshake {
 
   VMOp_Type type() const { return VMOp_HandshakeAllThreads; }
 };
+#ifdef OUR_PERSIST
+// Skip some threads based on VM_HandshakeAllThreads
+class VM_HandshakeLiveThreads: public VM_Handshake {
+ public:
+  VM_HandshakeLiveThreads(HandshakeOperation* op) : VM_Handshake(op) {}
+
+  void doit() {
+    jlong start_time_ns = os::javaTimeNanos();
+
+    ThreadsListHandle tlh;
+    GrowableArray<uint> indice;
+    JavaThread* caller = calling_thread()->as_Java_thread();
+    int number_of_threads_issued = 0;
+    for (uint i = 0; i < tlh.length(); i++) {
+      JavaThread *target = tlh.thread_at(i);
+      if (target == caller) {
+        continue;
+      }
+      if (target->threadObj() == nullptr ||
+        target->is_exiting() ||
+        target->is_hidden_from_external_view())  {
+        // skip unlive, terminating threads and hidden threads
+        continue;
+      }
+
+
+      if (NVMBarrierSync::is_same_group(target, caller)) {
+        // threads in the same group will sync later
+        continue;
+      }
+      target->handshake_state()->add_operation(_op);
+      number_of_threads_issued++;
+      indice.append(i);
+    }
+
+    if (number_of_threads_issued < 1) {
+      log_handshake_info(start_time_ns, _op->name(), 0, 0, "no threads alive");
+      return;
+    }
+    // _op was created with a count == 1 so don't double count.
+    _op->add_target_count(number_of_threads_issued - 1);
+
+    log_trace(handshake)("Threads signaled, begin processing blocked threads by VMThread");
+    HandshakeSpinYield hsy(start_time_ns);
+    // Keeps count on how many of own emitted handshakes
+    // this thread execute.
+    int emitted_handshakes_executed = 0;
+    do {
+      // Check if handshake operation has timed out
+      if (handshake_has_timed_out(start_time_ns)) {
+        handle_timeout();
+      }
+
+      for (GrowableArrayIterator<uint> index = indice.begin();
+           index != indice.end();
+           ++index) {
+        // A new thread on the ThreadsList will not have an operation,
+        // hence it is skipped in handshake_try_process.
+        JavaThread *target = tlh.thread_at(*index);
+        HandshakeState::ProcessResult pr = target->handshake_state()->try_process(_op);
+        hsy.add_result(pr);
+        if (pr == HandshakeState::_succeeded) {
+          emitted_handshakes_executed++;
+        }
+      }
+      hsy.process();
+    } while (!_op->is_completed());
+
+    // This pairs up with the release store in do_handshake(). It prevents future
+    // loads from floating above the load of _pending_threads in is_completed()
+    // and thus prevents reading stale data modified in the handshake closure
+    // by the Handshakee.
+    OrderAccess::acquire();
+
+    log_handshake_info(start_time_ns, _op->name(), number_of_threads_issued, emitted_handshakes_executed);
+  }
+
+  VMOp_Type type() const { return VMOp_HandshakeLiveThreads; }
+};
+#endif
 
 void HandshakeOperation::do_handshake(JavaThread* thread) {
   jlong start_time_ns = 0;
@@ -307,6 +390,14 @@ void Handshake::execute(HandshakeClosure* hs_cl) {
   VM_HandshakeAllThreads handshake(&cto);
   VMThread::execute(&handshake);
 }
+
+#ifdef OUR_PERSIST
+void Handshake::execute_live(HandshakeClosure* hs_cl) {
+  HandshakeOperation cto(hs_cl, NULL);
+  VM_HandshakeLiveThreads handshake(&cto);
+  VMThread::execute(&handshake);
+}
+#endif
 
 void Handshake::execute(HandshakeClosure* hs_cl, JavaThread* target) {
   JavaThread* self = JavaThread::current();

@@ -63,6 +63,15 @@ inline NVMBarrierSync* NVMBarrierSync::leader() {
   return prev;
 }
 
+inline bool NVMBarrierSync::is_same_group(JavaThread* thread_a, JavaThread* thread_b) {
+  NVMBarrierSync *node_a = thread_a->nvm_barrier_sync();
+  NVMBarrierSync *node_b = thread_b->nvm_barrier_sync();
+  NVMBarrierSync::lock();
+  bool result = node_a->_parent != nullptr && node_b->_parent != nullptr && node_a->leader() == node_b->leader();
+  NVMBarrierSync::unlock();
+  return result;
+}
+
 inline NVMBarrierSync* NVMBarrierSync::parent() {
   assert(NVMBarrierSync::is_locked(), "");
   return _parent;

@@ -60,6 +60,9 @@ class Handshake : public AllStatic {
  public:
   // Execution of handshake operation
   static void execute(HandshakeClosure*       hs_cl);
+  #ifdef OUR_PERSIST
+  static void execute_live(HandshakeClosure*       hs_cl);
+  #endif
   static void execute(HandshakeClosure*       hs_cl, JavaThread* target);
   static void execute(AsyncHandshakeClosure* hs_cl, JavaThread* target);
 };

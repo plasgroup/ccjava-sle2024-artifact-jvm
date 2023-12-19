@@ -69,6 +69,7 @@
   template(ZRelocateStart)                        \
   template(ZVerify)                               \
   template(HandshakeOneThread)                    \
+  OUR_PERSIST_ONLY(template(HandshakeLiveThreads)) \
   template(HandshakeAllThreads)                   \
   template(HandshakeFallback)                     \
   template(EnableBiasedLocking)                   \

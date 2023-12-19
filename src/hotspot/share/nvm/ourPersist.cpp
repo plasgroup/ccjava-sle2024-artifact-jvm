@@ -65,27 +65,10 @@ void OurPersist::handshake() {
   assert(self->thread_state() == _thread_in_vm, "Thread not in expected state");
 
   ReplicateNotifyClosure rnc{};
+  Handshake::execute_live(&rnc);
+
   printf("thread %p sends handshake\n", (void*)self);
-  Handshake::execute(&rnc);  // requires state == _thread_in_vm
-  // JavaThreadIteratorWithHandle jtiwh;
-  // int number_of_threads_issued = 0;
-  // for (JavaThread* target = jtiwh.next(); target != NULL; target = jtiwh.next()) {
-  //   if (target->is_exiting() ||
-  //       target->is_hidden_from_external_view())  {
-  //     // skip terminating threads and hidden threads
-  //     continue;
-  //   }
 
-  //   if (target == self) {
-  //     continue;
-  //   }
-
-  //   assert(target->is_Java_thread(), "must be");
-  //   assert(!target->is_exiting(), "must be");
-  //   assert(!target->is_hidden_from_external_view(), "must be");
-  //   ReplicateNotifyClosure rnc{};
-  //   Handshake::execute(&rnc, target);
-  // }
 }
 
 unsigned hash_for_oop(const oop& k) {

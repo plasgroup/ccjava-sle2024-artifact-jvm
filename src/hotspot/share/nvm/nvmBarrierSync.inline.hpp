@@ -5,6 +5,7 @@
 
 #include "nvm/nvmBarrierSync.hpp"
 #include "oops/oop.inline.hpp"
+#include "runtime/interfaceSupport.inline.hpp"
 
 inline void NVMBarrierSync::lock() {
   pthread_mutex_t* mutex = &NVMBarrierSync::_mtx;
@@ -194,6 +195,13 @@ inline void NVMBarrierSync::sync() {
 
   // wait for other threads
   while (sync_count != 0) {
+    {
+      JavaThread* self = JavaThread::current();
+      ThreadInVMForHandshake th{self};
+      if (SafepointMechanism::should_process(self)) {
+        ThreadBlockInVM tbivm(self);
+      }
+    }
     NVMBarrierSync::lock();
     leader = this->leader();
     sync_count = leader->sync_count();

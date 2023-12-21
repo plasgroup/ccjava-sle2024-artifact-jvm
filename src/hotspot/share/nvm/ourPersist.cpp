@@ -115,6 +115,8 @@ public:
   }
 
 protected:
+  // TODO:
+  // confirm we should skip or not when !OurPersist::is_target(v->klass())
   void try_push(oop v) {
     assert(_st != nullptr, "must be");
     if (v == nullptr || v->nvm_header().recoverable() || !OurPersist::is_target(v->klass())) {
@@ -130,7 +132,65 @@ protected:
     _st->insert(v);
 
     assert(_st->contains(v), "must be");
-  } 
+  }
+
+  // Iterate function for instance classes
+  // TODO: try obj->iterate_oop
+  void push_for_instance_class(oop obj, Klass* klass) {
+    using Parent =  CardTableBarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP, NVMCardTableBarrierSet>;
+
+    for (InstanceKlass* ik = (InstanceKlass*)klass; ik != nullptr; ik = (InstanceKlass*)ik->super()) {
+      int field_count = ik->java_fields_count();
+      for (int i = 0; i < field_count; i++) {
+        if (accessFlags_from(ik->field_access_flags(i)).is_static()) {
+          continue;
+        }
+        Symbol* field_signature = ik->field_signature(i);
+        BasicType field_type = Signature::basic_type(field_signature);
+
+        if (is_reference_type(field_type)) {
+          int field_offset = ik->field_offset(i);
+
+          oop child = Parent::oop_load_in_heap_at(obj, field_offset);
+          assert(oopDesc::is_oop_or_null(child, true), "must be");
+          try_push(child);
+        }
+      }
+    }
+  }
+
+    // Iterate function for arrays
+  void push_for_obj_array(oop obj, Klass* klass) {
+    using Parent =  CardTableBarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP | IS_ARRAY, NVMCardTableBarrierSet>;
+
+    auto array_klass = static_cast<ObjArrayKlass*>(klass);
+    BasicType array_type = array_klass->element_type();
+    assert(is_reference_type(array_type), "must be");
+    auto array_obj = static_cast<objArrayOop>(obj);
+    int array_length = array_obj->length();
+
+    for (int i = 0; i < array_length; i++) {
+      ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
+      oop child = Parent::oop_load_in_heap_at(obj, field_offset);
+      // Handle h(_thr, child);
+      assert(oopDesc::is_oop_or_null(child, true), "must be");
+      try_push(child);
+    }
+  }
+
+  void push_oop_fields(oop obj) {
+    Klass* klass = obj->klass();
+    if (klass->is_instance_klass()) {
+      push_for_instance_class(obj, klass);
+    } else if (klass->is_objArray_klass()) {
+      push_for_obj_array(obj, klass);
+    } else if (klass->is_typeArray_klass()) {
+      // no oop field
+    } else {
+      assert(false, "modify code");
+    }
+  }
+
 
   Stack<Handle, mtInternal> _worklist;
   Thread*  _thr;
@@ -170,17 +230,7 @@ private:
     if (!try_shade(obj)) {
       return;
     }
-
-    Klass* klass = obj->klass();
-    if (klass->is_instance_klass()) {
-      iterate_instance_class(obj, klass);
-    } else if (klass->is_objArray_klass()) {
-      iterate_obj_array(obj, klass);
-    } else if (klass->is_typeArray_klass()) {
-      // no oop field
-    } else {
-      assert(false, "modify code");
-    }
+    push_oop_fields(obj);
   }
   
   // true if v is gray and shaded by this thread, 
@@ -216,51 +266,6 @@ private:
     }
   }
 
-
-  // Iterate function for instance classes
-  // TODO: try obj->iterate_oop
-  void iterate_instance_class(oop obj, Klass* klass) {
-    using Parent =  CardTableBarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP, NVMCardTableBarrierSet>;
-
-    for (InstanceKlass* ik = (InstanceKlass*)klass; ik != nullptr; ik = (InstanceKlass*)ik->super()) {
-      int field_count = ik->java_fields_count();
-      for (int i = 0; i < field_count; i++) {
-        if (accessFlags_from(ik->field_access_flags(i)).is_static()) {
-          continue;
-        }
-        Symbol* field_signature = ik->field_signature(i);
-        BasicType field_type = Signature::basic_type(field_signature);
-
-        if (is_reference_type(field_type)) {
-          int field_offset = ik->field_offset(i);
-
-          oop child = Parent::oop_load_in_heap_at(obj, field_offset);
-          assert(oopDesc::is_oop_or_null(child, true), "must be");
-          try_push(child);
-        }
-      }
-    }
-  }
-
-    // Iterate function for arrays
-  void iterate_obj_array(oop obj, Klass* klass) {
-    using Parent =  CardTableBarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP | IS_ARRAY, NVMCardTableBarrierSet>;
-
-    auto array_klass = static_cast<ObjArrayKlass*>(klass);
-    BasicType array_type = array_klass->element_type();
-    assert(is_reference_type(array_type), "must be");
-    auto array_obj = static_cast<objArrayOop>(obj);
-    int array_length = array_obj->length();
-
-    for (int i = 0; i < array_length; i++) {
-      ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
-      oop child = Parent::oop_load_in_heap_at(obj, field_offset);
-      // Handle h(_thr, child);
-      assert(oopDesc::is_oop_or_null(child, true), "must be");
-      try_push(child);
-    }
-  }
-
   private:
   int _n_shaded;
 
@@ -289,31 +294,41 @@ public:
   }
 
 private:
-  // copying all fields and pushing all oop fields
+  // 1. obj.responsible_thread == _thr:
+  //    copy all fields and push all oop fields
+  // 2. obj.responsible_thread != _thr:
+  //    push all oop fields
   void visit(oop obj)  {
     assert(obj->nvm_header().fwd() != nullptr, "must be");
     
-    // repeat copying till success
-    Klass* klass = obj->klass();
-    do {
-      if (klass->is_instance_klass()) {
-        iterate_instance_class(obj, klass);
-      } else if (klass->is_objArray_klass()) {
-        iterate_obj_array(obj, klass);
-      } else if (klass->is_typeArray_klass()) {
-        copy_type_array(obj, klass);
-      } else {
-        assert(false, "modify code");
-      }
+    if (obj->nvm_header().fwd()->responsible_thread() == _thr) {
+      // repeat copying till success
+      Klass* klass = obj->klass();
+      do {
+        if (klass->is_instance_klass()) {
+          iterate_instance_class(obj, klass);
+        } else if (klass->is_objArray_klass()) {
+          iterate_obj_array(obj, klass);
+        } else if (klass->is_typeArray_klass()) {
+          copy_type_array(obj, klass);
+        } else {
+          assert(false, "modify code");
+        }
 
-      OrderAccess::fence();
+        OrderAccess::fence();
 
-      // write back & sfence
-      NVM_FLUSH_LOOP(obj->nvm_header().fwd(), obj->size() * HeapWordSize);
+        // write back & sfence
+        NVM_FLUSH_LOOP(obj->nvm_header().fwd(), obj->size() * HeapWordSize);
 
-    } while (!OurPersist::copy_object_verify_step(obj, obj->nvm_header().fwd(), klass));
-
-    assert(OurPersist::copy_object_verify_step(obj, obj->nvm_header().fwd(), klass), "sanity check");
+      } while (!OurPersist::copy_object_verify_step(obj, obj->nvm_header().fwd(), klass));
+      
+      assert(OurPersist::copy_object_verify_step(obj, obj->nvm_header().fwd(), klass), "sanity check");
+    } else {
+      // obj for which this current is not responsible
+      // may point to some objects for which this thread is responsbile
+      push_oop_fields(obj);
+    }
+    
   }
 
   void copy_type_array(oop obj, Klass* klass) {
@@ -359,13 +374,12 @@ private:
       Raw::oop_store_in_heap_at((oop)o_rep, offset, (oop)v_rep);
     }
 
-    if (v_rep != nullptr) {
-      if(v_rep->responsible_thread() == _thr) {
-        try_push(v);
-      } else if (v_rep->responsible_thread() != _thr) {
-        _barrier_sync->add(v, v_rep, _thr);
-      }
+
+    if (v_rep != nullptr && v_rep->responsible_thread() != _thr) {
+      _barrier_sync->add(v, v_rep, _thr);
     }
+    try_push(v);
+
   } 
 
   // Iterate function for instance classes

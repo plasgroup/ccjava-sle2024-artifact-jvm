@@ -67,7 +67,7 @@ void OurPersist::handshake() {
   ReplicateNotifyClosure rnc{};
   Handshake::execute_live(&rnc);
 
-  printf("thread %p sends handshake\n", (void*)self);
+  // printf("thread %p sends handshake\n", (void*)self);
 
 }
 
@@ -303,6 +303,7 @@ private:
     
     if (obj->nvm_header().fwd()->responsible_thread() == _thr) {
       // repeat copying till success
+      nvmHeader::lock(obj);
       Klass* klass = obj->klass();
       do {
         if (klass->is_instance_klass()) {
@@ -321,8 +322,9 @@ private:
         NVM_FLUSH_LOOP(obj->nvm_header().fwd(), obj->size() * HeapWordSize);
 
       } while (!OurPersist::copy_object_verify_step(obj, obj->nvm_header().fwd(), klass));
+
+      nvmHeader::unlock(obj);
       
-      assert(OurPersist::copy_object_verify_step(obj, obj->nvm_header().fwd(), klass), "sanity check");
     } else {
       // obj for which this current is not responsible
       // may point to some objects for which this thread is responsbile

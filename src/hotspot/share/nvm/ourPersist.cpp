@@ -325,7 +325,7 @@ private:
 
       nvmHeader::unlock(obj);
       
-    } else {
+    } else if (obj->nvm_header().fwd()->responsible_thread() != nullptr) {
       // obj for which this current is not responsible
       // may point to some objects for which this thread is responsbile
       push_oop_fields(obj);

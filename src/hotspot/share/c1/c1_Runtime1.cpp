@@ -73,7 +73,11 @@
 #include "utilities/copy.hpp"
 #include "utilities/events.hpp"
 
+#ifdef OUR_PERSIST
 
+#include "nvm/nvmMacro.hpp"
+#include "nvm/ourPersist.hpp"
+#endif
 // Implementation of StubAssembler
 
 StubAssembler::StubAssembler(CodeBuffer* code, const char * name, int stub_id) : C1_MacroAssembler(code) {
@@ -1456,6 +1460,91 @@ JRT_ENTRY(void, Runtime1::predicate_failed_trap(JavaThread* thread))
 
 JRT_END
 
+#ifdef OUR_PERSIST
+
+JRT_BLOCK_ENTRY(void, Runtime1::lagged_synchronization(JavaThread *thread, oopDesc* obj, oopDesc** addr, oopDesc* value))
+  if (obj == nullptr) {
+    return;
+  }
+  assert(Thread::current() == thread, "must be");
+  assert(oopDesc::is_oop_or_null(obj, true), "must be");
+  assert(oopDesc::is_oop_or_null(value, true), "must be");
+
+  HandleMark hm(thread);
+  Handle h_obj = Handle(thread, obj);
+  Handle h_value = Handle(thread, value);
+
+  nvmOop replica = h_obj()->nvm_header().fwd();
+  if (replica != nullptr) {
+    // store in NVM
+    oop nvm_val = nullptr;
+
+    if (h_value() != nullptr && OurPersist::is_target(h_value()->klass())) {
+      if(!h_value()->nvm_header().recoverable()) {
+        OurPersist::ensure_recoverable(h_value);
+      }
+      nvm_val = oop(h_value()->nvm_header().fwd());
+    }
+
+    ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(obj)));
+
+    oop* nvm_field_addr = reinterpret_cast<oop*>(AccessInternal::field_addr(oop(replica), offset));
+    *nvm_field_addr = nvm_val;
+    NVM_WRITEBACK(nvm_field_addr);
+
+  }
+JRT_END
+
+JRT_BLOCK_ENTRY(void, Runtime1::lagged_synchronization_volatile(JavaThread *thread, oopDesc* obj, oopDesc** addr, oopDesc* value))
+
+  // 10, 13, 18, 29
+  using Parent = CardTableBarrierSet::AccessBarrier<537142272ULL, NVMCardTableBarrierSet>;
+
+  if (obj == nullptr) {
+    Parent::oop_store_in_heap<oop>((oop*)addr, value);
+    return;
+  }
+
+  const ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(obj)));
+
+  assert(Thread::current() == thread, "must be");
+  assert(oopDesc::is_oop_or_null(obj, true), "must be");
+  assert(oopDesc::is_oop_or_null(value, true), "must be");
+
+  HandleMark hm(thread);
+  Handle h_obj = Handle(thread, obj);
+  Handle h_value = Handle(thread, value);
+
+  nvmOop replica = h_obj()->nvm_header().fwd();
+  if (replica != nullptr) {
+    oop nvm_val = nullptr;
+    // persist value if necessary
+    if (h_value() != nullptr && OurPersist::is_target(h_value()->klass())) {
+      if(!h_value()->nvm_header().recoverable()) {
+        OurPersist::ensure_recoverable(h_value);
+      }
+      nvm_val = oop(h_value()->nvm_header().fwd());
+    }
+
+    
+    nvmHeader::lock(h_obj());
+
+    // store in NVM
+    oop* nvm_field_addr = reinterpret_cast<oop*>(AccessInternal::field_addr(oop(replica), offset));
+    *nvm_field_addr = nvm_val;
+    NVM_WRITEBACK(nvm_field_addr);
+    // store in DRAM
+    Parent::oop_store_in_heap_at(h_obj(), offset, h_value());
+          
+    nvmHeader::unlock(h_obj());
+
+  } else {
+    Parent::oop_store_in_heap_at(h_obj(), offset, h_value());
+  }
+JRT_END
+
+
+#endif
 #ifndef PRODUCT
 void Runtime1::print_statistics() {
   tty->print_cr("C1 Runtime statistics:");

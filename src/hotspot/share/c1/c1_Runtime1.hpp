@@ -71,6 +71,8 @@ class StubAssembler;
   stub(fpu2long_stub)                \
   stub(counter_overflow)             \
   stub(predicate_failed_trap)        \
+  stub(lagged_synchronization)       \
+  stub(lagged_synchronization_volatile)       /* special version for volatile oop field */ \
   last_entry(number_of_ids)
 
 #define DECLARE_STUB_ID(x)       x ## _id ,
@@ -169,6 +171,11 @@ class Runtime1: public AllStatic {
 
   static void patch_code(JavaThread* thread, StubID stub_id);
 
+#ifdef OUR_PERSIST
+  static void lagged_synchronization(JavaThread* thread, oopDesc* obj, oopDesc** addr, oopDesc* value);
+  static void lagged_synchronization_volatile(JavaThread* thread, oopDesc* obj, oopDesc** addr, oopDesc* value);
+#endif
+  
  public:
   // initialization
   static void initialize(BufferBlob* blob);

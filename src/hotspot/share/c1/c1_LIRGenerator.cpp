@@ -1649,7 +1649,7 @@ void LIRGenerator::do_StoreField(StoreField* x) {
 #ifdef OUR_PERSIST
   // check if we need double update write barrier
   // if yes, set the decorator
-  [x, this, &decorators] {
+  [x, this, &decorators, &info] {
     bool is_mirror = x->field()->holder()->is_mirror();
     bool is_durable = x->field()->is_durable();
     // no need to double update
@@ -1658,8 +1658,14 @@ void LIRGenerator::do_StoreField(StoreField* x) {
     }
     if (x->needs_wupd()) {
       decorators |= OURPERSIST_NEEDS_WUPD;
+      if (info == nullptr) {
+        info = this->state_for(x, x->state_before());
+      }
     }
   }();  // invoke immediately
+  if ((decorators & OURPERSIST_NEEDS_WUPD) != 0) {
+    assert(!is_reference_type(field_type) || (is_reference_type(field_type) && (info != nullptr)), "double update barrier requires valid info: {is_reference_type = %d, info = %p}\n", is_reference_type(field_type), (void*)info);
+  }
 #endif
   access_store_at(decorators, field_type, object, LIR_OprFact::intConst(x->offset()),
                   value.result(), info != NULL ? new CodeEmitInfo(info) : NULL, info);
@@ -1730,9 +1736,13 @@ void LIRGenerator::do_StoreIndexed(StoreIndexed* x) {
   if (x->needs_wupd()) {
     decorators |= OURPERSIST_NEEDS_WUPD;
   }
-#endif
+  assert(range_check_info != nullptr, "sanity check");
+  access_store_at(decorators, x->elt_type(), array, index.result(), value.result(),
+                  NULL, new CodeEmitInfo(range_check_info));
+#else
   access_store_at(decorators, x->elt_type(), array, index.result(), value.result(),
                   NULL, null_check_info);
+#endif
 }
 
 void LIRGenerator::access_load_at(DecoratorSet decorators, BasicType type,
@@ -2328,7 +2338,12 @@ void LIRGenerator::do_UnsafePutObject(UnsafePutObject* x) {
     decorators |= MO_SEQ_CST;
   }
   #ifdef OUR_PERSIST
-    decorators |= OURPERSIST_NEEDS_WUPD;
+  decorators |= OURPERSIST_NEEDS_WUPD;
+  if (is_reference_type(type)) {
+    puts("unsafe put object bailouts");
+    bailout("no code emit info");
+    return;
+  }
   #endif
   access_store_at(decorators, type, src, off.result(), data.result());
 }

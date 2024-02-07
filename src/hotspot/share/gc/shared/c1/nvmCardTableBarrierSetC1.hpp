@@ -4,6 +4,7 @@
 #define SHARE_GC_SHARED_C1_NVMCARDTABLEBARRIERSETC1_HPP
 
 #include "c1/c1_CodeStubs.hpp"
+#include "c1/c1_Runtime1.hpp"
 #include "gc/shared/c1/cardTableBarrierSetC1.hpp"
 #include <map>
 #include <utility>
@@ -17,19 +18,26 @@ class NVMCardTableWriteBarrierStub : public CodeStub {
   LIR_Opr _value;
   address      _runtime_stub;
   BasicType _type;
+  CodeEmitInfo* _info;
+  bool _needs_sync;
 
  public:
   // addr (the address of the object head) and value must be registers.
-  NVMCardTableWriteBarrierStub(LIR_Opr obj, LIR_Opr addr, LIR_Opr value,
-                              address runtime_stub, BasicType type)
+  NVMCardTableWriteBarrierStub(LIR_Opr obj, LIR_Opr addr, LIR_Opr value, address runtime_stub, BasicType type, CodeEmitInfo* info, bool needs_sync)
       : _obj(obj),
         _addr(addr),
         _value(value),
         _runtime_stub(runtime_stub),
-        _type(type) {
+        _type(type),
+        _info(nullptr),
+        _needs_sync(needs_sync) {
           assert(value->is_register(), "value should be register");
           assert(addr->is_register(), "addr should be register");
           assert(obj->is_register(), "obj should be register");
+          // clone
+          if (info != nullptr) {
+            _info = new CodeEmitInfo(info);
+          }
         }
 
   LIR_Opr obj() const { return _obj; }
@@ -38,11 +46,15 @@ class NVMCardTableWriteBarrierStub : public CodeStub {
   address runtime_stub() const { return _runtime_stub; }
   // DecoratorSet decorators() const { return _decorators; }
   BasicType type() const { return _type; }
-
+  CodeEmitInfo* info() const { return _info; }
+  bool needs_sync() const { return _needs_sync; }
   virtual void emit_code(LIR_Assembler* ce);
   virtual void visit(LIR_OpVisitState* visitor) {
-    // don't pass in the code emit info since it's processed in the fast path
-    visitor->do_slow_case();
+    if (_info != nullptr) {
+      visitor->do_slow_case(_info);
+    } else {
+      visitor->do_slow_case();
+    }
     visitor->do_input(_obj);
     visitor->do_input(_addr);
     visitor->do_input(_value);
@@ -120,7 +132,11 @@ public:
     runtime_stubs[idx] = stub;
 
   }
-  address get_runtime_stub(DecoratorSet decorators, BasicType type) {
+  address get_runtime_stub(DecoratorSet decorators, BasicType type, bool needs_sync, bool is_volatile) {
+    if (needs_sync) {
+      assert(is_reference_type(type), "only reference type may need sync");
+      return is_volatile ? Runtime1::entry_for(Runtime1::lagged_synchronization_volatile_id) : Runtime1::entry_for(Runtime1::lagged_synchronization_id);
+    }
     int idx = get_runtime_stub_index(decorators, type);
     assert(runtime_stubs[idx] != nullptr, "should not be nullptr");
     return runtime_stubs[idx];

@@ -170,57 +170,56 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
     template <typename T>
     static void c1_store_in_heap(oop base, T* addr, T value) {
+
       if (base == nullptr) {
-        #ifdef ASSERT
-        // puts("empty base");
-        #endif
-        Parent::template store_in_heap(addr, value);
+        if constexpr ((decorators & MO_SEQ_CST) != 0) {
+          Parent::store_in_heap(addr, value);
+        }
         return;
       }
 
       ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
+      assert(offset >= 0, "must be");
+      
+      nvmOop replica = base->nvm_header().fwd();
       
       if constexpr ((decorators & MO_SEQ_CST) != 0) {  // volatile
-        nvmHeader::lock(base);
-
-        nvmOop before_fwd = base->nvm_header().fwd();
-        if (before_fwd != nullptr) {
-            // Store in NVM.
-          Raw::store_in_heap_at(oop(before_fwd), offset, value);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          OrderAccess::fence();
+        if (replica != nullptr) {
+          nvmHeader::lock(base);
+          
+          Raw::store_in_heap_at(oop(replica), offset, value);
+          NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
+          Parent::store_in_heap(addr, value);
+          
+          nvmHeader::unlock(base);
+        } else {
+          // Store only in DRAM.
+          // this also works: Parent::store_in_heap_at(base, offset, value);
+          Parent::store_in_heap(addr, value);
         }
-        // Store in DRAM.
-        Parent::store_in_heap(addr, value);
-        nvmHeader::unlock(base);
       } else {
-        // Store in DRAM.
-        // this also works: Parent::store_in_heap_at(base, offset, value);
-        Parent::store_in_heap(addr, value);
-
-        OrderAccess::fence();
-        nvmOop replica = base->nvm_header().fwd();
-        if (replica == nullptr) {
-          return;
+        
+        if (replica != nullptr) {
+          // Store in NVM.
+          Raw::store_in_heap_at(oop(replica), offset, value);
+          NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
         }
-        // Store in NVM.
-        Raw::store_in_heap_at(oop(replica), offset, value);
-        NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
       }
 
     }
     
     static void c1_limited_oop_store_in_heap(oop base, oop* addr, oop value) {
+
+      assert(false, "not now");
       if (base == nullptr) {
-        #ifdef ASSERT
-        // puts("empty base");
-        #endif
-        Parent::template oop_store_in_heap(addr, value);
         return;
       }
       ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
 
       if constexpr ((decorators & MO_SEQ_CST) != 0) {
+        // TODO: rewrite when incorporating analysis
+
+        assert(false, " ");
         nvmHeader::lock(base);
 
         nvmOop before_fwd = base->nvm_header().fwd();
@@ -241,8 +240,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         Parent::template oop_store_in_heap(addr, value);
         nvmHeader::unlock(base);
       } else {
-        Parent::template oop_store_in_heap(addr, value);
-
+        // TODO: rewrite when incorporating analysis
         nvmOop before_fwd = base->nvm_header().fwd();
 
         if (before_fwd != nullptr) {

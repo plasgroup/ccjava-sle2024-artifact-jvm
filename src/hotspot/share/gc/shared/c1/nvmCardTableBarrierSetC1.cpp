@@ -84,8 +84,19 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
 void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr value) {
   LIRGenerator* gen = access.gen();
   bool is_array = (access.decorators() & IS_ARRAY) != 0;
+  bool is_volatile = (access.decorators() & MO_SEQ_CST) != 0;
+  bool needs_sync {access.is_oop()};
 
-  const address runtime_stub = get_runtime_stub(access.decorators(), access.type());
+
+  // if (is_volatile && access.is_oop()) {
+  //   assert((access.decorators() & ON_UNKNOWN_OOP_REF) == 0, " ");
+  //   access.gen()->bailout("unsupported");
+  //   return;
+  // }
+  if (!is_volatile) {
+    parent::store_at_resolved(access, value);
+  }
+
   // object
   LIRItem& base = access.base().item();
   // field address
@@ -102,10 +113,13 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
     addr = ptr;
   }
   assert(addr->is_register(), "must be a register at this point");
+
   // value
   value = ensure_in_register(gen, value, is_subword_type(access.type()) ? T_INT : access.type());
-
-  CodeStub* const slow = new NVMCardTableWriteBarrierStub(base.result(), addr, value, runtime_stub, access.type());
+  // runtime stub
+  const address runtime_stub = get_runtime_stub(access.decorators(), access.type(), needs_sync, is_volatile);
+  
+  CodeStub* const slow = new NVMCardTableWriteBarrierStub(base.result(), addr, value, runtime_stub, access.type(), access.access_emit_info(), needs_sync);
 
   __ branch(lir_cond_always, slow);
 

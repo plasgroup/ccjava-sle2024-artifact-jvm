@@ -1601,6 +1601,37 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         __ jump(RuntimeAddress(deopt_blob->unpack_with_reexecution()));
       }
       break;
+    case lagged_synchronization_id:
+      {
+        StubFrame f(sasm, "lagged_synchronization", dont_gc_arguments);
+        OopMap* map = save_live_registers(sasm, 4);
+        
+        f.load_argument(0, c_rarg1);  // obj
+        f.load_argument(1, c_rarg2);  // addr
+        f.load_argument(2, c_rarg3);  // value
+        int call_offset = __ call_RT(noreg, noreg, CAST_FROM_FN_PTR(address, lagged_synchronization), c_rarg1, c_rarg2, c_rarg3);
+        oop_maps = new OopMapSet();
+        oop_maps->add_gc_map(call_offset, map);
+        restore_live_registers(sasm);
+      }
+      break;
+    case lagged_synchronization_volatile_id:
+      {
+        // C++ func differs
+        StubFrame f(sasm, "lagged_synchronization_volatile", dont_gc_arguments);
+        OopMap* map = save_live_registers(sasm, 4);
+        
+        f.load_argument(0, c_rarg1);  // obj
+        f.load_argument(1, c_rarg2);  // addr
+        f.load_argument(2, c_rarg3);  // value
+        int call_offset = __ call_RT(noreg, noreg, CAST_FROM_FN_PTR(address, lagged_synchronization_volatile), c_rarg1, c_rarg2, c_rarg3);
+        oop_maps = new OopMapSet();
+        oop_maps->add_gc_map(call_offset, map);
+        restore_live_registers(sasm);
+      }
+      break;
+
+
 
     default:
       { StubFrame f(sasm, "unimplemented entry", dont_gc_arguments);

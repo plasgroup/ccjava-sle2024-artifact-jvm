@@ -855,7 +855,7 @@ void NVMCardTableBarrierSetAssembler::generate_c1_write_barrier_runtime_stub(Stu
   __ save_live_registers_no_oop_map(true);
 
   int offset_in_words = 0;  // 0 is obj, 1 is addr
-  // Setup arguments  
+  // // Setup arguments  
   __ load_parameter(offset_in_words, c_rarg0); offset_in_words++;
   __ load_parameter(offset_in_words, c_rarg1); offset_in_words++;
   switch (type) {
@@ -878,7 +878,7 @@ void NVMCardTableBarrierSetAssembler::generate_c1_write_barrier_runtime_stub(Stu
   if (type == T_FLOAT || type == T_DOUBLE) {
     __ call_VM_leaf(NVMCardTableBarrierSetRuntime::write_nvm_field_post_entry(decorators, type), c_rarg0, c_rarg1 /*xmm0*/);
   } else {
-  __ call_VM_leaf(NVMCardTableBarrierSetRuntime::write_nvm_field_post_entry(decorators, type), c_rarg0, c_rarg1, c_rarg2);
+    __ call_VM_leaf(NVMCardTableBarrierSetRuntime::write_nvm_field_post_entry(decorators, type), c_rarg0, c_rarg1, c_rarg2);
   }
   
   __ restore_live_registers(true);
@@ -896,6 +896,7 @@ void NVMCardTableBarrierSetAssembler::gen_write_barrier_stub(LIR_Assembler* ce, 
   NVMCardTableBarrierSetC1* bs =
       reinterpret_cast<NVMCardTableBarrierSetC1*>(BarrierSet::barrier_set()->barrier_set_c1());
 
+  
   // Stub entry
   __ bind(*stub->entry());
   
@@ -945,6 +946,14 @@ void NVMCardTableBarrierSetAssembler::gen_write_barrier_stub(LIR_Assembler* ce, 
   }
 
   __ call(RuntimeAddress(stub->runtime_stub()));
+
+  if (stub->needs_sync()) {
+    assert(__ rsp_offset() == 0, "frame size should be fixed");
+    assert(stub->runtime_stub() == Runtime1::entry_for(Runtime1::lagged_synchronization_id) || stub->runtime_stub() == Runtime1::entry_for(Runtime1::lagged_synchronization_volatile_id), "sanity check");
+    assert(is_reference_type(stub->type()), "sanity check");
+    ce->add_call_info_here(stub->info());
+    ce->verify_oop_map(stub->info());
+  }
 
   __ jmp(*stub->continuation());
 }

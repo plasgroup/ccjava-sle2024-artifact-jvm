@@ -233,16 +233,7 @@ DEBUG_ONLY(Thread* Thread::_starting_thread = NULL;)
 
 Thread::Thread() {
 
-#ifdef OUR_PERSIST
-  set_nvm_work_list(new NVMWorkListStack());
-  set_nvm_barrier_sync(new NVMBarrierSync());
-  set_dependent_obj_list_head(NULL);
-  set_dependent_obj_list_tail(NULL);
-#ifdef USE_NVTLAB_BUMP
-  set_nvtlab_bump_head(NULL);
-  set_nvtlab_bump_size(0);
-#endif // USE_NVTLAB_BUMP
-#endif // OUR_PERSIST
+
 
   NVM_COUNTER_ONLY(_nvm_counter = new NVMCounter(DEBUG_ONLY(this));)
 
@@ -265,6 +256,16 @@ Thread::Thread() {
   set_last_handle_mark(NULL);
   DEBUG_ONLY(_missed_ic_stub_refill_verifier = NULL);
 
+  #ifdef OUR_PERSIST
+    set_nvm_work_list(new (ResourceObj::C_HEAP, mtThread) NVMWorkListStack());
+    set_nvm_barrier_sync(new NVMBarrierSync());
+    set_dependent_obj_list_head(NULL);
+    set_dependent_obj_list_tail(NULL);
+  #ifdef USE_NVTLAB_BUMP
+    set_nvtlab_bump_head(NULL);
+    set_nvtlab_bump_size(0);
+  #endif // USE_NVTLAB_BUMP
+  #endif // OUR_PERSIST
   // Initial value of zero ==> never claimed.
   _threads_do_token = 0;
   _threads_hazard_ptr = NULL;

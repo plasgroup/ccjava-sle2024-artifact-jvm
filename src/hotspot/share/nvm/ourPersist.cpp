@@ -105,6 +105,7 @@ public:
   MakePersistentBase() = delete;
   MakePersistentBase(Thread* thread, int round, GrowableArray<Handle>* objs_marked):
     _thr{thread},
+    _worklist{thread->nvm_work_list()},
     _barrier_sync{thread->nvm_barrier_sync()},
     _round{round},
     _st{nullptr},
@@ -132,7 +133,7 @@ protected:
       return;
     }
 
-    _worklist.push(v);
+    _worklist->push(v);
     _st->insert(v);
 
     assert(_st->contains(v), "must be");
@@ -196,8 +197,8 @@ protected:
   }
 
 
-  Stack<oop, mtInternal> _worklist;
   Thread*  _thr;
+  NVMWorkListStack* _worklist;
   NVMBarrierSync* _barrier_sync;
   int _round;
   OopSet* _st;
@@ -220,11 +221,11 @@ public:
     _n_shaded = 0;
     
     try_push(obj);
-    while (!_worklist.is_empty()) {
-        oop v = _worklist.pop();
+    while (!_worklist->is_empty()) {
+        oop v = _worklist->pop();
         visit(v);
     }
-    assert(_worklist.is_empty() && _n_shaded >= 0, "must be");
+    assert(_worklist->is_empty() && _n_shaded >= 0, "must be");
 
     return _n_shaded;
   }

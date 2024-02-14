@@ -258,6 +258,7 @@ Thread::Thread() {
 
   #ifdef OUR_PERSIST
     set_nvm_work_list(new (ResourceObj::C_HEAP, mtThread) NVMWorkListStack());
+    set_marked_objects_list(new (ResourceObj::C_HEAP, mtThread) GrowableArray<Handle>(0, mtThread));
     set_nvm_barrier_sync(new NVMBarrierSync());
     set_dependent_obj_list_head(NULL);
     set_dependent_obj_list_tail(NULL);

@@ -156,6 +156,7 @@ class Thread: public ThreadShadow {
 
 #ifdef OUR_PERSIST
  private:
+  GrowableArray<Handle>* _marked_objects_list;
   NVMWorkListStack* _nvm_work_list;
   NVMBarrierSync*   _nvm_barrier_sync;
   nvmOop _dependent_obj_list_head;
@@ -167,6 +168,7 @@ class Thread: public ThreadShadow {
 
  public:
   NVMWorkListStack* nvm_work_list()  { return _nvm_work_list; }
+  GrowableArray<Handle>* marked_objects_list()  { return _marked_objects_list; }
   NVMBarrierSync* nvm_barrier_sync() { return _nvm_barrier_sync; }
   nvmOop dependent_obj_list_head() { return _dependent_obj_list_head; }
   nvmOop dependent_obj_list_tail() { return _dependent_obj_list_tail; }
@@ -179,6 +181,7 @@ class Thread: public ThreadShadow {
 
  private:
   void set_nvm_work_list(NVMWorkListStack* val)  { _nvm_work_list = val; }
+  void set_marked_objects_list(GrowableArray<Handle>* val)  { _marked_objects_list = val; }
   void set_nvm_barrier_sync(NVMBarrierSync* val) { _nvm_barrier_sync = val; }
 
  public:

@@ -103,13 +103,13 @@ class MakePersistentBase {
 
 public:
   MakePersistentBase() = delete;
-  MakePersistentBase(Thread* thread, int round, GrowableArray<Handle>* objs_marked):
+  MakePersistentBase(Thread* thread, int round):
     _thr{thread},
     _worklist{thread->nvm_work_list()},
     _barrier_sync{thread->nvm_barrier_sync()},
     _round{round},
     _st{nullptr},
-    _objs_marked{objs_marked} {
+    _objs_marked{thread->marked_objects_list()} {
     }
 
   void record(oop v) {
@@ -209,8 +209,9 @@ protected:
 
 class MakePersistentMarkPhase: public MakePersistentBase {
 public:
-  MakePersistentMarkPhase(GrowableArray<Handle>* objs_marked): 
-    MakePersistentBase{Thread::current(), 0, objs_marked} {
+  MakePersistentMarkPhase(): 
+    MakePersistentBase{Thread::current(), 0} {
+      assert(_objs_marked->length() == 0, "must be");
     }
   int process(oop obj) {
     OopSet _has_been_visited {1024 * 8};
@@ -283,14 +284,17 @@ private:
 class MakePersistentCopyPhase: public MakePersistentBase {
 public:
   MakePersistentCopyPhase() = delete;
-  MakePersistentCopyPhase(int marker_round, GrowableArray<Handle>* objs_marked):
-    MakePersistentBase{Thread::current(), marker_round + 1, objs_marked} {
+  MakePersistentCopyPhase(int marker_round):
+    MakePersistentBase{Thread::current(), marker_round + 1} {
+      assert(_objs_marked->length() > 0, "must be");
     }
 
   void process() {
     for (GrowableArrayIterator<Handle> it = _objs_marked->begin(); it != _objs_marked->end(); ++it) {
       visit((*it)());
     }
+
+    _objs_marked->clear();
   }
 
 private:
@@ -458,14 +462,11 @@ void OurPersist::ensure_recoverable(Handle h_obj) {
   
   BarrierSyncMark bsm;
 
-  GrowableArray<Handle> objs_marked;
-  assert(objs_marked.length() == 0, "sanity check");
+  MakePersistentMarkPhase marker{};
 
-  MakePersistentMarkPhase marker{&objs_marked};
-
-  marker.process(h_obj());
+  int n_shaded = marker.process(h_obj());
   
-  if (objs_marked.length() == 0) {
+  if (n_shaded == 0) {
     return;
   }
 
@@ -473,7 +474,7 @@ void OurPersist::ensure_recoverable(Handle h_obj) {
     handshake();
   } while (marker.process(h_obj()) > 0);
 
-  MakePersistentCopyPhase copier{marker.round(), &objs_marked};
+  MakePersistentCopyPhase copier{marker.round()};
   copier.process();
 }
 

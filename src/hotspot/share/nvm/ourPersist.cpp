@@ -103,13 +103,17 @@ class MakePersistentBase {
 
 public:
   MakePersistentBase() = delete;
-  MakePersistentBase(Thread* thread, int round):
+  MakePersistentBase(Thread* thread, int round, GrowableArray<Handle>* objs_marked):
     _thr{thread},
     _barrier_sync{thread->nvm_barrier_sync()},
     _round{round},
-    _st{nullptr} {
+    _st{nullptr},
+    _objs_marked{objs_marked} {
     }
 
+  void record(oop v) {
+    _objs_marked->push(Handle(_thr, v));
+  }
   int round() {
     return _round;
   }
@@ -197,14 +201,15 @@ protected:
   NVMBarrierSync* _barrier_sync;
   int _round;
   OopSet* _st;
+  GrowableArray<Handle>* _objs_marked;
 
 };
 
 
 class MakePersistentMarkPhase: public MakePersistentBase {
 public:
-  MakePersistentMarkPhase(): 
-    MakePersistentBase{Thread::current(), 0} {
+  MakePersistentMarkPhase(GrowableArray<Handle>* objs_marked): 
+    MakePersistentBase{Thread::current(), 0, objs_marked} {
     }
   int process(oop obj) {
     OopSet _has_been_visited {1024 * 8};
@@ -246,6 +251,8 @@ private:
         _n_shaded++;
         replica = v->nvm_header().fwd();
         assert(replica != nullptr && replica->responsible_thread() == _thr, "must be");
+        // shaded v successfully, copy v later
+        record(v);
         OurPersist::add_dependent_obj_list(replica, _thr);
         return true;
       } else {
@@ -275,22 +282,14 @@ private:
 class MakePersistentCopyPhase: public MakePersistentBase {
 public:
   MakePersistentCopyPhase() = delete;
-  MakePersistentCopyPhase(int marker_round):
-    MakePersistentBase{Thread::current(), marker_round + 1} {
+  MakePersistentCopyPhase(int marker_round, GrowableArray<Handle>* objs_marked):
+    MakePersistentBase{Thread::current(), marker_round + 1, objs_marked} {
     }
 
-  void process(oop obj) {
-    OopSet _has_been_visited {1024 * 8};
-    _st = &_has_been_visited;
-
-    visit(obj);
-
-    while (!_worklist.is_empty()) {
-      oop v = _worklist.pop()();
-      visit(v);
+  void process() {
+    for (GrowableArrayIterator<Handle> it = _objs_marked->begin(); it != _objs_marked->end(); ++it) {
+      visit((*it)());
     }
-    assert(_worklist.is_empty(), "must be");
-
   }
 
 private:
@@ -299,37 +298,35 @@ private:
   // 2. obj.responsible_thread != _thr:
   //    push all oop fields
   void visit(oop obj)  {
+    assert(obj != nullptr, "must be");
     assert(obj->nvm_header().fwd() != nullptr, "must be");
-    
-    if (obj->nvm_header().fwd()->responsible_thread() == _thr) {
-      // repeat copying till success
-      nvmHeader::lock(obj);
-      Klass* klass = obj->klass();
-      do {
-        if (klass->is_instance_klass()) {
-          iterate_instance_class(obj, klass);
-        } else if (klass->is_objArray_klass()) {
-          iterate_obj_array(obj, klass);
-        } else if (klass->is_typeArray_klass()) {
-          copy_type_array(obj, klass);
-        } else {
-          assert(false, "modify code");
-        }
+    assert(obj->nvm_header().fwd()->responsible_thread() == _thr, "must be");
 
-        OrderAccess::fence();
+   
+    // repeat copying till success
+    nvmHeader::lock(obj);
+    Klass* klass = obj->klass();
 
-        // write back & sfence
-        NVM_FLUSH_LOOP(obj->nvm_header().fwd(), obj->size() * HeapWordSize);
+    do {
+      if (klass->is_instance_klass()) {
+        iterate_instance_class(obj, klass);
+      } else if (klass->is_objArray_klass()) {
+        iterate_obj_array(obj, klass);
+      } else if (klass->is_typeArray_klass()) {
+        copy_type_array(obj, klass);
+      } else {
+        assert(false, "modify code");
+      }
 
-      } while (!OurPersist::copy_object_verify_step(obj, obj->nvm_header().fwd(), klass));
+      OrderAccess::fence();
 
-      nvmHeader::unlock(obj);
+      // write back & sfence
+      NVM_FLUSH_LOOP(obj->nvm_header().fwd(), obj->size() * HeapWordSize);
+
+    } while (!OurPersist::copy_object_verify_step(obj, obj->nvm_header().fwd(), klass));
+
+    nvmHeader::unlock(obj);
       
-    } else if (obj->nvm_header().fwd()->responsible_thread() != nullptr) {
-      // obj for which this current is not responsible
-      // may point to some objects for which this thread is responsbile
-      push_oop_fields(obj);
-    }
     
   }
 
@@ -352,7 +349,7 @@ private:
     Copy::aligned_disjoint_words(from, to, obj->size() - base_offset_in_words);
   }
 
-  void copy_oop_and_push(oop obj, oop o_rep, int offset, oop v, bool is_array) {
+  void copy_oop(oop obj, oop o_rep, int offset, oop v, bool is_array) {
 
     nvmOop v_rep = [](oop v) -> nvmOop {
       if (v == nullptr || !OurPersist::is_target(v->klass())) {
@@ -377,10 +374,6 @@ private:
     }
 
 
-    if (v_rep != nullptr && v_rep->responsible_thread() != _thr) {
-      _barrier_sync->add(v, v_rep, _thr);
-    }
-    try_push(v);
 
   } 
 
@@ -406,7 +399,7 @@ private:
         if (is_reference_type(field_type)) {
           oop child = Parent::oop_load_in_heap_at(obj, field_offset);
           assert(oopDesc::is_oop_or_null(child, true), "must be");
-          copy_oop_and_push(obj, (oop)o_rep, field_offset, child, false);
+          copy_oop(obj, (oop)o_rep, field_offset, child, false);
         } else {
           // copy this field
           OurPersist::copy_dram_to_nvm(obj, (oop)o_rep, field_offset, field_type);
@@ -433,7 +426,7 @@ private:
       ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
       oop child = Parent::oop_load_in_heap_at(obj, field_offset);
       assert(oopDesc::is_oop_or_null(child, true), "must be");
-      copy_oop_and_push(obj, (oop)o_rep, field_offset, child, true);
+      copy_oop(obj, (oop)o_rep, field_offset, child, true);
     }
   }
 
@@ -459,12 +452,19 @@ class BarrierSyncMark {
 
 void OurPersist::ensure_recoverable(Handle h_obj) {
   assert(!h_obj()->nvm_header().recoverable() && OurPersist::is_target(h_obj()->klass()), "condition to enter the function");
+
+  ResourceMark rm;
   
   BarrierSyncMark bsm;
 
-  MakePersistentMarkPhase marker;
-  int n_marked = marker.process(h_obj());
-  if (n_marked == 0) {
+  GrowableArray<Handle> objs_marked;
+  assert(objs_marked.length() == 0, "sanity check");
+
+  MakePersistentMarkPhase marker{&objs_marked};
+
+  marker.process(h_obj());
+  
+  if (objs_marked.length() == 0) {
     return;
   }
 
@@ -472,8 +472,8 @@ void OurPersist::ensure_recoverable(Handle h_obj) {
     handshake();
   } while (marker.process(h_obj()) > 0);
 
-  MakePersistentCopyPhase copier{marker.round()};
-  copier.process(h_obj());
+  MakePersistentCopyPhase copier{marker.round(), &objs_marked};
+  copier.process();
 }
 
 

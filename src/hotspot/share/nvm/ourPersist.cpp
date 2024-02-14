@@ -132,7 +132,7 @@ protected:
       return;
     }
 
-    _worklist.push(Handle(_thr, v));
+    _worklist.push(v);
     _st->insert(v);
 
     assert(_st->contains(v), "must be");
@@ -196,7 +196,7 @@ protected:
   }
 
 
-  Stack<Handle, mtInternal> _worklist;
+  Stack<oop, mtInternal> _worklist;
   Thread*  _thr;
   NVMBarrierSync* _barrier_sync;
   int _round;
@@ -221,7 +221,7 @@ public:
     
     try_push(obj);
     while (!_worklist.is_empty()) {
-        oop v = _worklist.pop()();
+        oop v = _worklist.pop();
         visit(v);
     }
     assert(_worklist.is_empty() && _n_shaded >= 0, "must be");

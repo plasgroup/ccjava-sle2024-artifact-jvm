@@ -1470,23 +1470,22 @@ JRT_BLOCK_ENTRY(void, Runtime1::lagged_synchronization(JavaThread *thread, oopDe
   assert(oopDesc::is_oop_or_null(obj, true), "must be");
   assert(oopDesc::is_oop_or_null(value, true), "must be");
 
-  HandleMark hm(thread);
-  Handle h_obj = Handle(thread, obj);
-  Handle h_value = Handle(thread, value);
 
-  nvmOop replica = h_obj()->nvm_header().fwd();
+  nvmOop replica = obj->nvm_header().fwd();
   if (replica != nullptr) {
-    // store in NVM
+    // to store in NVM
+    ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(obj)));
     oop nvm_val = nullptr;
 
-    if (h_value() != nullptr && OurPersist::is_target(h_value()->klass())) {
-      if(!h_value()->nvm_header().recoverable()) {
+    if (value != nullptr && OurPersist::is_target(value->klass())) {
+      if(!(value->nvm_header().recoverable())) {
+        HandleMark hm(thread);
+        Handle h_value = Handle(thread, value);
         OurPersist::ensure_recoverable(h_value);
+        value = h_value();
       }
-      nvm_val = oop(h_value()->nvm_header().fwd());
+      nvm_val = oop(value->nvm_header().fwd());
     }
-
-    ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(obj)));
 
     oop* nvm_field_addr = reinterpret_cast<oop*>(AccessInternal::field_addr(oop(replica), offset));
     *nvm_field_addr = nvm_val;
@@ -1505,41 +1504,45 @@ JRT_BLOCK_ENTRY(void, Runtime1::lagged_synchronization_volatile(JavaThread *thre
     return;
   }
 
-  const ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(obj)));
 
   assert(Thread::current() == thread, "must be");
   assert(oopDesc::is_oop_or_null(obj, true), "must be");
   assert(oopDesc::is_oop_or_null(value, true), "must be");
 
-  HandleMark hm(thread);
-  Handle h_obj = Handle(thread, obj);
-  Handle h_value = Handle(thread, value);
 
-  nvmOop replica = h_obj()->nvm_header().fwd();
+  nvmOop replica = obj->nvm_header().fwd();
   if (replica != nullptr) {
+    const ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(obj)));
     oop nvm_val = nullptr;
     // persist value if necessary
-    if (h_value() != nullptr && OurPersist::is_target(h_value()->klass())) {
-      if(!h_value()->nvm_header().recoverable()) {
+    if (value != nullptr && OurPersist::is_target(value->klass())) {
+      if(!(value->nvm_header().recoverable())) {
+        HandleMark hm(thread);
+        Handle h_obj = Handle(thread, obj);
+        Handle h_value = Handle(thread, value);
         OurPersist::ensure_recoverable(h_value);
+        // update
+        obj = h_obj();
+        value = h_value();
       }
-      nvm_val = oop(h_value()->nvm_header().fwd());
+
+      nvm_val = oop(value->nvm_header().fwd());
     }
 
+    oop* nvm_field_addr = reinterpret_cast<oop*>(AccessInternal::field_addr(oop(replica), offset));
     
-    nvmHeader::lock(h_obj());
+    nvmHeader::lock(obj);
 
     // store in NVM
-    oop* nvm_field_addr = reinterpret_cast<oop*>(AccessInternal::field_addr(oop(replica), offset));
     *nvm_field_addr = nvm_val;
     NVM_WRITEBACK(nvm_field_addr);
     // store in DRAM
-    Parent::oop_store_in_heap_at(h_obj(), offset, h_value());
+    Parent::oop_store_in_heap_at(obj, offset, value);
           
-    nvmHeader::unlock(h_obj());
+    nvmHeader::unlock(obj);
 
   } else {
-    Parent::oop_store_in_heap_at(h_obj(), offset, h_value());
+    Parent::oop_store_in_heap(addr, value);
   }
 JRT_END
 

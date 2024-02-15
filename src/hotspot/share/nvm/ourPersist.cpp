@@ -103,20 +103,16 @@ class MakePersistentBase {
 
 public:
   MakePersistentBase() = delete;
-  MakePersistentBase(Thread* thread, int round):
+  MakePersistentBase(Thread* thread):
     _thr{thread},
     _worklist{thread->nvm_work_list()},
     _barrier_sync{thread->nvm_barrier_sync()},
-    _round{round},
     _st{nullptr},
     _objs_marked{thread->marked_objects_list()} {
     }
 
   void record(oop v) {
     _objs_marked->push(Handle(_thr, v));
-  }
-  int round() {
-    return _round;
   }
 
 protected:
@@ -200,7 +196,6 @@ protected:
   Thread*  _thr;
   NVMWorkListStack* _worklist;
   NVMBarrierSync* _barrier_sync;
-  int _round;
   OopSet* _st;
   GrowableArray<Handle>* _objs_marked;
 
@@ -210,15 +205,13 @@ protected:
 class MakePersistentMarkPhase: public MakePersistentBase {
 public:
   MakePersistentMarkPhase(): 
-    MakePersistentBase{Thread::current(), 0} {
+    MakePersistentBase{Thread::current()} {
       assert(_objs_marked->length() == 0, "must be");
     }
   int process(oop obj) {
     OopSet _has_been_visited {1024 * 8};
     _st = &_has_been_visited;
 
-    _round++;
-    assert(_round < 6, "too many rounds");
     _n_shaded = 0;
     
     try_push(obj);
@@ -283,9 +276,8 @@ private:
 
 class MakePersistentCopyPhase: public MakePersistentBase {
 public:
-  MakePersistentCopyPhase() = delete;
-  MakePersistentCopyPhase(int marker_round):
-    MakePersistentBase{Thread::current(), marker_round + 1} {
+  MakePersistentCopyPhase():
+    MakePersistentBase{Thread::current()} {
       assert(_objs_marked->length() > 0, "must be");
     }
 
@@ -474,7 +466,7 @@ void OurPersist::ensure_recoverable(Handle h_obj) {
     handshake();
   } while (marker.process(h_obj()) > 0);
 
-  MakePersistentCopyPhase copier{marker.round()};
+  MakePersistentCopyPhase copier{};
   copier.process();
 }
 

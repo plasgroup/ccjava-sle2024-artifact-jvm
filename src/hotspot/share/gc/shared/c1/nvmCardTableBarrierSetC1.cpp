@@ -82,23 +82,29 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
 }
 
 void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr value) {
+
   LIRGenerator* gen = access.gen();
   bool is_array = (access.decorators() & IS_ARRAY) != 0;
   bool is_volatile = (access.decorators() & MO_SEQ_CST) != 0;
   bool needs_sync {access.is_oop()};
-
-
-  // if (is_volatile && access.is_oop()) {
-  //   assert((access.decorators() & ON_UNKNOWN_OOP_REF) == 0, " ");
-  //   access.gen()->bailout("unsupported");
-  //   return;
-  // }
+  
   if (!is_volatile) {
     parent::store_at_resolved(access, value);
   }
 
   // object
   LIRItem& base = access.base().item();
+
+  // replica
+  LabelObj* done = new LabelObj();
+  LIR_Opr replica = gen->new_register(T_ADDRESS);
+  LIR_Address* replica_addr = new LIR_Address(base.result(), oopDesc::nvm_header_offset_in_bytes(), T_ADDRESS);
+  __ move(replica_addr, replica);
+  // clear last three bits
+  __ logical_and(replica, LIR_OprFact::intConst(~0b111), replica);
+  __ cmp(lir_cond_equal, replica, LIR_OprFact::intptrConst(NULL_WORD));
+  __ branch(lir_cond_equal, done->label());
+
   // field address
   if (addr->is_address()) {
     LIR_Address* address = addr->as_address_ptr();
@@ -122,9 +128,15 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
   CodeStub* const slow = new NVMCardTableWriteBarrierStub(base.result(), addr, value, runtime_stub, access.type(), access.access_emit_info(), needs_sync);
 
   __ branch(lir_cond_always, slow);
-
-  __ branch_destination(slow->continuation());
-
+    
+  __ branch_destination(done->label());
+  
+  if (!is_volatile) {
+    __ branch_destination(slow->continuation());
+  } else {
+    parent::store_at_resolved(access, value);
+    __ branch_destination(slow->continuation());
+  }
 }
 
 class NVMWriteBarrierRuntimeStubCodeGenClosure : public StubAssemblerCodeGenClosure {

@@ -85,20 +85,31 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
   LIRGenerator* gen = access.gen();
   bool is_array = (access.decorators() & IS_ARRAY) != 0;
 
-  bool is_volatile = {(access.decorators() & MO_SEQ_CST) != 0};
+  bool is_volatile {(access.decorators() & MO_SEQ_CST) != 0};
 
-  // if (is_volatile) {
-  //   gen->bailout("not now"); return;
-  // }
+  // object
+  LIRItem& base = access.base().item();
+
+  LabelObj* done = new LabelObj();
+
   if (!is_volatile) {
+    // for non-volatile field, codestub can be skipped if replica == nullptr
     // for volatile field, everything is done in C++ functions
     parent::store_at_resolved(access, value);
     __ membar();
+    // replica
+    LIR_Opr replica = gen->new_register(T_ADDRESS);
+    LIR_Address* replica_addr = new LIR_Address(base.result(), oopDesc::nvm_header_offset_in_bytes(), T_ADDRESS);
+    __ move(replica_addr, replica);
+    // clear last three bits
+    __ logical_and(replica, LIR_OprFact::intConst(~0b111), replica);
+    // LIR_OprFact::intptrConst(NULL_WORD) does not work in this branch
+    __ cmp(lir_cond_equal, replica, LIR_OprFact::intConst(0));
+    __ branch(lir_cond_equal, done->label());
   }
 
   const address runtime_stub = get_runtime_stub(access.decorators(), access.type());
-  // object
-  LIRItem& base = access.base().item();
+  
   // field address
   if (addr->is_address()) {
     LIR_Address* address = addr->as_address_ptr();
@@ -119,9 +130,12 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
   CodeStub* const slow = new NVMCardTableWriteBarrierStub(base.result(), addr, value, runtime_stub, access.type());
 
   __ branch(lir_cond_always, slow);
-
+    
+  if (!is_volatile) {
+    __ branch_destination(done->label());
+  }
+  
   __ branch_destination(slow->continuation());
-
 }
 
 class NVMWriteBarrierRuntimeStubCodeGenClosure : public StubAssemblerCodeGenClosure {

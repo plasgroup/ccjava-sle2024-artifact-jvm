@@ -184,9 +184,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         nvmHeader::unlock(base);
       } else {
         nvmOop replica = base->nvm_header().fwd();
-        if (replica == nullptr) {
-          return;
-        }
+        assert(replica != nullptr, "precondition");
+
         // Store in NVM.
         Raw::store_in_heap_at(oop(replica), offset, value);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
@@ -218,20 +217,20 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         Parent::template oop_store_in_heap(addr, value);
         nvmHeader::unlock(base);
       } else {
-        nvmOop before_fwd = base->nvm_header().fwd();
+        nvmOop replica = base->nvm_header().fwd();
+        assert(replica != nullptr, "precondition");
+        assert(nvmHeader::is_fwd(replica), "");
 
-        if (before_fwd != nullptr) {
-          assert(nvmHeader::is_fwd(before_fwd), "");
-
-          // Store in NVM.
-          oop nvm_val = nullptr;
-          if (value != nullptr && OurPersist::is_target(value->klass())) {
-            OurPersist::ensure_recoverable(value);
-            nvm_val = oop(value->nvm_header().fwd());
-          }
-          Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
+        // Store in NVM.
+        oop nvm_val = nullptr;
+        if (value != nullptr && OurPersist::is_target(value->klass())) {
+          OurPersist::ensure_recoverable(value);
+          nvm_val = oop(value->nvm_header().fwd());
         }
+        // Store in NVM.
+        Raw::store_in_heap_at(oop(replica), offset, nvm_val);
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
+
       }
     }
     

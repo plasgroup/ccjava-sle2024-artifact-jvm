@@ -165,14 +165,9 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
     template <typename T>
     static void c1_store_in_heap(oop base, T* addr, T value) {
-      if (base == nullptr) {
-        #ifdef ASSERT
-        puts("empty base");
-        #endif
-        Parent::template store_in_heap(addr, value);
-        return;
-      }
 
+      assert(base != nullptr, "sanity check");
+      
       ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
       
       if constexpr ((decorators & MO_SEQ_CST) != 0) {  // volatile

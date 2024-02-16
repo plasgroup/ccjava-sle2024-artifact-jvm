@@ -2328,7 +2328,9 @@ void LIRGenerator::do_UnsafePutObject(UnsafePutObject* x) {
     decorators |= MO_SEQ_CST;
   }
   #ifdef OUR_PERSIST
-    decorators |= OURPERSIST_NEEDS_WUPD;
+  decorators |= OURPERSIST_NEEDS_WUPD;
+  bailout("NVM update is difficult since base object is null");
+  return;
   #endif
   access_store_at(decorators, type, src, off.result(), data.result());
 }

@@ -2339,11 +2339,8 @@ void LIRGenerator::do_UnsafePutObject(UnsafePutObject* x) {
   }
   #ifdef OUR_PERSIST
   decorators |= OURPERSIST_NEEDS_WUPD;
-  if (is_reference_type(type)) {
-    puts("unsafe put object bailouts");
-    bailout("no code emit info");
-    return;
-  }
+  bailout("NVM update is difficult since base object is null");
+  return;
   #endif
   access_store_at(decorators, type, src, off.result(), data.result());
 }

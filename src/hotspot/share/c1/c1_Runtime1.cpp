@@ -1463,11 +1463,9 @@ JRT_END
 #ifdef OUR_PERSIST
 
 JRT_BLOCK_ENTRY(void, Runtime1::lagged_synchronization(JavaThread *thread, oopDesc* obj, oopDesc** addr, oopDesc* value))
-  if (obj == nullptr) {
-    return;
-  }
+  assert(obj != nullptr, "sanity check");
   assert(Thread::current() == thread, "must be");
-  assert(oopDesc::is_oop_or_null(obj, true), "must be");
+  assert(oopDesc::is_oop(obj, true), "must be");
   assert(oopDesc::is_oop_or_null(value, true), "must be");
 
 
@@ -1499,14 +1497,10 @@ JRT_BLOCK_ENTRY(void, Runtime1::lagged_synchronization_volatile(JavaThread *thre
   // 10, 13, 18, 29
   using Parent = CardTableBarrierSet::AccessBarrier<537142272ULL, NVMCardTableBarrierSet>;
 
-  if (obj == nullptr) {
-    Parent::oop_store_in_heap<oop>((oop*)addr, value);
-    return;
-  }
-
+  assert(obj != nullptr, "sanity check");
 
   assert(Thread::current() == thread, "must be");
-  assert(oopDesc::is_oop_or_null(obj, true), "must be");
+  assert(oopDesc::is_oop(obj, true), "must be");
   assert(oopDesc::is_oop_or_null(value, true), "must be");
 
 

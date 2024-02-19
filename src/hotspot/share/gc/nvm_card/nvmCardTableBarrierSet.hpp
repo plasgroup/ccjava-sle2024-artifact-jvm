@@ -232,7 +232,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         nvmHeader::unlock(base);
       } else {
         Parent::template oop_store_in_heap(addr, value);
-
+        
+        OrderAccess::fence();
         nvmOop before_fwd = base->nvm_header().fwd();
 
         if (before_fwd != nullptr) {

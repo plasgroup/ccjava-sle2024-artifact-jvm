@@ -178,7 +178,6 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
             // Store in NVM.
           Raw::store_in_heap_at(oop(replica), offset, value);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
-          OrderAccess::fence();
         }
         // Store in DRAM.
         Parent::store_in_heap(addr, value);
@@ -214,7 +213,6 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
           }
           Raw::oop_store_in_heap_at(oop(replica), offset, nvm_val);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
-          OrderAccess::fence();
         }
         // Store in DRAM.
         Parent::template oop_store_in_heap(addr, value);

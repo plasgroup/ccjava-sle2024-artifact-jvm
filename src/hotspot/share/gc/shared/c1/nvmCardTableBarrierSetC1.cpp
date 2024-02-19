@@ -85,6 +85,17 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
   LIRGenerator* gen = access.gen();
   bool is_array = (access.decorators() & IS_ARRAY) != 0;
 
+  bool is_volatile = {(access.decorators() & MO_SEQ_CST) != 0};
+
+  // if (is_volatile) {
+  //   gen->bailout("not now"); return;
+  // }
+  if (!is_volatile) {
+    // for volatile field, everything is done in C++ functions
+    parent::store_at_resolved(access, value);
+    __ membar();
+  }
+
   const address runtime_stub = get_runtime_stub(access.decorators(), access.type());
   // object
   LIRItem& base = access.base().item();

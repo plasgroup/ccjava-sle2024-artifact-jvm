@@ -171,11 +171,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
       assert(base != nullptr, "sanity check");
       
-      ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
-      assert(offset >= 0, "must be");
       
       nvmOop replica = base->nvm_header().fwd();
-      
 
       if constexpr ((decorators & MO_SEQ_CST) != 0) {  // volatile
         // assert(false, "must be");
@@ -184,6 +181,9 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
           Parent::store_in_heap(addr, value);
           return;
         }
+        // Store in NVM.
+        ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
+
 
         assert(replica != nullptr, "must be");
         nvmHeader::lock(base);
@@ -197,6 +197,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         assert(replica != nullptr, "precondition");
 
         // Store in NVM.
+        ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
+
         Raw::store_in_heap_at(oop(replica), offset, value);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
       }
@@ -207,17 +209,17 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       ShouldNotReachHere();
       // only called when value is thread local
       assert(base != nullptr, " ");
-      ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
+
+      nvmOop replica = base->nvm_header().fwd();
 
       if constexpr ((decorators & MO_SEQ_CST) != 0) {
-        // TODO: rewrite when incorporating analysis
 
-        nvmOop replica = base->nvm_header().fwd();
         if (replica == nullptr) {
           // write to DRAM, done
           Parent::oop_store_in_heap(addr, value);
           return;
         }
+        ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
 
         assert(nvmHeader::is_fwd(replica), "");
 
@@ -233,13 +235,13 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         Raw::oop_store_in_heap_at(oop(replica), offset, nvm_val);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
         Parent::template oop_store_in_heap(addr, value);
+
         nvmHeader::unlock(base);
       } else {
-        // TODO: rewrite when incorporating analysis
-        nvmOop replica = base->nvm_header().fwd();
         assert(replica != nullptr, "precondition");
 
         assert(nvmHeader::is_fwd(replica), "");
+        ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
 
         // Store in NVM.
         oop nvm_val = nullptr;
@@ -248,6 +250,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
             OurPersist::ensure_recoverable_thread_local(value);
             nvm_val = oop(value->nvm_header().fwd());
           }
+        // Store in NVM.
         Raw::oop_store_in_heap_at(oop(replica), offset, nvm_val);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
       }

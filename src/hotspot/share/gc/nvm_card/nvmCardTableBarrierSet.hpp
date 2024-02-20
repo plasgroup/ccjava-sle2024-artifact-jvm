@@ -176,9 +176,16 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       
       nvmOop replica = base->nvm_header().fwd();
       
-      assert(replica != nullptr, "precondition");
 
       if constexpr ((decorators & MO_SEQ_CST) != 0) {  // volatile
+        // assert(false, "must be");
+        if (replica == nullptr) {
+          // write to DRAM, done
+          Parent::store_in_heap(addr, value);
+          return;
+        }
+
+        assert(replica != nullptr, "must be");
         nvmHeader::lock(base);
         
         Raw::store_in_heap_at(oop(replica), offset, value);
@@ -187,6 +194,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         
         nvmHeader::unlock(base);
       } else {
+        assert(replica != nullptr, "precondition");
+
         // Store in NVM.
         Raw::store_in_heap_at(oop(replica), offset, value);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));

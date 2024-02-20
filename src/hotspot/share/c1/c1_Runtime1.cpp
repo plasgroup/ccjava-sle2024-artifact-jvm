@@ -1504,8 +1504,14 @@ JRT_BLOCK_ENTRY(void, Runtime1::lagged_synchronization_volatile(JavaThread *thre
   assert(oopDesc::is_oop_or_null(value, true), "must be");
 
   nvmOop replica = obj->nvm_header().fwd();
-  assert(replica != nullptr, "precondition");
 
+  if (replica == nullptr) {
+    // write to DRAM, done
+    Parent::oop_store_in_heap(addr, value);
+    return;
+  }
+
+  assert(replica != nullptr, "must be");
   const ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(obj)));
   oop nvm_val = nullptr;
   // persist value if necessary

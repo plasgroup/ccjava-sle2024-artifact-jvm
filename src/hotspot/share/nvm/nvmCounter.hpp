@@ -7,6 +7,8 @@
 #include "runtime/atomic.hpp"
 #include "utilities/ostream.hpp"
 #include "interpreter/interp_masm.hpp"
+
+#include <atomic>
 class Klass;
 class Method;
 class MacroAssembler;
@@ -30,6 +32,14 @@ class MacroAssembler;
 #define NVMCOUNTER_PREFIX "[NVMCounter] "
 
 class NVMCounter: public CHeapObj<mtNone> {
+  private:
+    inline static std::atomic<int> _n_handshake {0};
+  public:
+    inline static void inc_handshake() {
+      ++_n_handshake;
+    }
+
+
  private:
   static const int _access_n = 1 << 6;
 

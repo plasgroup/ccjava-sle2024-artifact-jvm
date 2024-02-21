@@ -279,6 +279,7 @@ void NVMCounter::print() {
   tty->print_cr(NVMCOUNTER_PREFIX "_volatile_fields_g: %lu", _volatile_fields_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_clwb_g:            %lu", _clwb_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_call_ensure_recoverable_g: %lu", _call_ensure_recoverable_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "handshake count: %u", _n_handshake.load());
 }
 
 class CountObjectSnapshotDuringGC : public ObjectClosure {

@@ -40,6 +40,7 @@
 
 #ifdef OUR_PERSIST
 #include "nvm/nvmBarrierSync.inline.hpp"
+#include "nvm/nvmCounter.hpp"
 #endif
 class HandshakeOperation : public CHeapObj<mtThread> {
   friend class HandshakeState;
@@ -206,6 +207,13 @@ void VM_Handshake::handle_timeout() {
 }
 
 static void log_handshake_info(jlong start_time_ns, const char* name, int targets, int emitted_handshakes_executed, const char* extra = NULL) {
+  #ifdef ASSERT
+  #ifdef OUR_PERSIST
+  #ifdef NVM_COUNTER
+  NVMCounter::inc_handshake();
+  #endif
+  #endif
+  #endif
   if (log_is_enabled(Info, handshake)) {
     jlong completion_time = os::javaTimeNanos() - start_time_ns;
     log_info(handshake)("Handshake \"%s\", Targeted threads: %d, Executed by requesting thread: %d, Total completion time: " JLONG_FORMAT " ns%s%s",

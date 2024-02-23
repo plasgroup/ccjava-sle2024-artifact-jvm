@@ -195,6 +195,46 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       }
 
     }
+
+    template <typename T>
+    static int c1_atomic_cmpxchg_in_heap(oop base, T* addr, T compare_value, T new_value) {
+      assert(base != nullptr, "sanity check");
+      
+      assert(decorators == 805577728ULL, "sanity check");
+
+      nvmHeader::lock(base);
+
+      if (*addr != compare_value) {
+        nvmHeader::unlock(base);
+        return 0;
+      }
+
+      ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
+      assert(offset >= 0, "must be");
+
+      if (offset == oopDesc::mark_offset_in_bytes()) {
+        int result = compare_value == Parent::atomic_cmpxchg_in_heap_at(base, offset, compare_value, new_value);
+        nvmHeader::unlock(base);
+        assert(result == 1, "must be");
+        return result;
+      }
+  
+      nvmOop replica = base->nvm_header().fwd();
+      if (replica != NULL && OurPersist::needs_wupd(base, offset, decorators, false)) {
+        assert(nvmHeader::is_fwd(replica), "");
+        // Store in NVM.
+        Raw::store_in_heap_at(oop(replica), offset, new_value);
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
+      }
+      // Store in DRAM.
+      Parent::store_in_heap_at(base, offset, new_value);
+
+      nvmHeader::unlock(base);
+
+      return 1;
+    }
+
+
     
     static void c1_limited_oop_store_in_heap(oop base, oop* addr, oop value) {
       assert(base != nullptr, "must be");
@@ -237,6 +277,40 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
 
       }
+    }
+
+    static int c1_oop_atomic_cmpxchg_in_heap(oop base, oop* addr, oop compare_value, oop new_value) {
+      assert(base != nullptr, "sanity check");
+      
+      assert(decorators == 805577728ULL, "sanity check");
+
+      nvmHeader::lock(base);
+      if (*addr != compare_value) {
+        nvmHeader::unlock(base);
+        return 0;
+      }
+
+      ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
+      assert(offset >= 0, "must be");
+
+      nvmOop replica = base->nvm_header().fwd();
+      if (replica != NULL && OurPersist::needs_wupd(base, offset, decorators, true)) {
+        assert(nvmHeader::is_fwd(replica), "");
+
+        // Store in NVM.
+        oop nvm_val = NULL;
+        if (new_value != NULL && OurPersist::is_target(new_value->klass())) {
+          OurPersist::ensure_recoverable(new_value);
+          nvm_val = oop(new_value->nvm_header().fwd());
+        }
+        Raw::oop_store_in_heap_at(oop(replica), offset, nvm_val);
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
+      }
+      // Store in DRAM.
+      Parent::oop_store_in_heap_at(base, offset, new_value);
+
+      nvmHeader::unlock(base);
+      return 1;
     }
     
     template <typename T>

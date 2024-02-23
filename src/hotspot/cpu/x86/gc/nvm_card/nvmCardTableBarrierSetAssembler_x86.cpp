@@ -882,6 +882,29 @@ void NVMCardTableBarrierSetAssembler::generate_c1_write_barrier_runtime_stub(Stu
   __ epilogue();
 }
 
+void NVMCardTableBarrierSetAssembler::generate_c1_write_barrier_atomic_runtime_stub(StubAssembler* sasm, DecoratorSet decorators, BasicType type) const {
+  __ prologue("nvm_write_barrier_atomic", false);
+
+  __ save_live_registers_no_oop_map(true);
+
+  int offset_in_words = 0;  // 0 is obj, 1 is addr
+  // Setup arguments  
+  __ load_parameter(offset_in_words, c_rarg0); offset_in_words++;
+  __ load_parameter(offset_in_words, c_rarg1); offset_in_words++;
+  __ load_parameter(offset_in_words, c_rarg2);  offset_in_words++;
+  __ load_parameter(offset_in_words, c_rarg3);  offset_in_words++;
+
+  // Call VM
+
+  __ super_call_VM_leaf(NVMCardTableBarrierSetRuntime::write_nvm_field_post_entry(decorators, type), c_rarg0, c_rarg1, c_rarg2, c_rarg3);
+
+  __ restore_live_registers_except_rax(true);
+
+  __ epilogue();
+}
+
+
+
 #undef __
 #define __ ce->masm()->
 void NVMCardTableBarrierSetAssembler::gen_write_barrier_stub(LIR_Assembler* ce, NVMCardTableWriteBarrierStub* stub) {
@@ -941,6 +964,61 @@ void NVMCardTableBarrierSetAssembler::gen_write_barrier_stub(LIR_Assembler* ce, 
   }
 
   __ call(RuntimeAddress(stub->runtime_stub()));
+
+  __ jmp(*stub->continuation());
+}
+
+void NVMCardTableBarrierSetAssembler::gen_write_barrier_atomic_stub(LIR_Assembler* ce, NVMCardTableWriteBarrierAtomicStub* stub) {
+
+  NVMCardTableBarrierSetC1* bs =
+      reinterpret_cast<NVMCardTableBarrierSetC1*>(BarrierSet::barrier_set()->barrier_set_c1());
+  Register res = stub->res()->as_register();
+
+  // __ push(rax);
+  // Stub entry
+  __ bind(*stub->entry());
+  
+  int offset_in_words = 0;
+  // pass obj
+  ce->store_parameter(stub->obj()->as_register(), offset_in_words);
+  offset_in_words += T_OBJECT_size;
+  // pass addr
+  ce->store_parameter(stub->addr()->as_pointer_register(), offset_in_words);
+  offset_in_words += 1;
+  // compare and swap
+  LIR_Opr value = stub->value();
+  LIR_Opr cmp = stub->cmp();
+  switch (stub->type()) {
+    // pass compare value
+    case T_LONG: {
+      ce->store_parameter(cmp->as_register_lo(), offset_in_words);
+      offset_in_words += 1;
+      ce->store_parameter(value->as_register_lo(), offset_in_words);
+      offset_in_words += 1;
+      break;
+    }
+    case T_OBJECT:
+    case T_ARRAY:
+    case T_INT: {
+      ce->store_parameter(cmp->as_register(), offset_in_words);
+      offset_in_words++;
+      ce->store_parameter(value->as_register(), offset_in_words);
+      offset_in_words++;
+      break;
+    }
+
+    default: {
+      ShouldNotReachHere();
+    }
+  }
+
+  __ call(RuntimeAddress(stub->runtime_stub()));
+
+  // Move result into place
+  if (res != rax) {
+    __ movptr(res, rax);
+  }
+  // __ pop(rax);
 
   __ jmp(*stub->continuation());
 }

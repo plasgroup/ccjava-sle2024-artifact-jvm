@@ -9,7 +9,7 @@
 
 
 address NVMCardTableBarrierSetRuntime::write_nvm_field_post_entry(DecoratorSet decorators, BasicType type) {
-  assert((decorators == 537142272ULL) || (decorators == 537141312ULL) || (decorators == 537273344ULL) || (decorators == 538189888ULL) || (decorators == 805577728ULL) , " unknown decorator base");
+  assert((decorators == 537142272ULL) || (decorators == 537141312ULL) || (decorators == 537273344ULL) || (decorators == 538189888ULL) || (decorators == 805577728ULL) || (decorators == 1100317205504), " unknown decorator base");
 
   if (decorators == 537142272ULL) {
     if (type == T_BOOLEAN) return reinterpret_cast<address>(CallRuntimeBarrierSet::c1_call_runtime_store_in_heap<537142272ULL, jboolean>);
@@ -59,6 +59,9 @@ address NVMCardTableBarrierSetRuntime::write_nvm_field_post_entry(DecoratorSet d
     // compare and swap
     if (type == T_INT) return reinterpret_cast<address>(CallRuntimeBarrierSet::c1_call_runtime_atomic_cmpxchg_in_heap<805577728ULL, jint>);
     else if (type == T_LONG) return reinterpret_cast<address>(CallRuntimeBarrierSet::c1_call_runtime_atomic_cmpxchg_in_heap<805577728ULL, jlong>);
+  } else if (decorators == 1100317205504ULL) {
+    if (type == T_INT) return reinterpret_cast<address>(CallRuntimeBarrierSet::c1_call_runtime_atomic_add_at_in_heap<1100317205504ULL, jint>);
+    else if (type == T_LONG) return reinterpret_cast<address>(CallRuntimeBarrierSet::c1_call_runtime_atomic_add_at_in_heap<1100317205504ULL, jlong>);
   }
 
   

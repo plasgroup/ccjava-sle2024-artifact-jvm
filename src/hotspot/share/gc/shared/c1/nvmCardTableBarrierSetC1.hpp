@@ -69,6 +69,7 @@ class NVMCardTableWriteBarrierAtomicStub : public CodeStub {
   friend class NVMCardTableBarrierSetC1;
 
  private:
+  LIR_Code _code;
   LIR_Opr _obj;
   LIR_Opr _addr;
   LIR_Opr _value;
@@ -79,9 +80,10 @@ class NVMCardTableWriteBarrierAtomicStub : public CodeStub {
 
  public:
   // addr (the address of the object head) and value must be registers.
-  NVMCardTableWriteBarrierAtomicStub(LIR_Opr obj, LIR_Opr addr, LIR_Opr value,
+  NVMCardTableWriteBarrierAtomicStub(LIR_Code code, LIR_Opr obj, LIR_Opr addr, LIR_Opr value,
                               address runtime_stub, BasicType type, LIR_Opr cmp, LIR_Opr res)
-      : _obj(obj),
+      : _code(code),
+        _obj(obj),
         _addr(addr),
         _value(value),
         _runtime_stub(runtime_stub),
@@ -91,10 +93,11 @@ class NVMCardTableWriteBarrierAtomicStub : public CodeStub {
           assert(value->is_register(), "value should be register");
           assert(addr->is_register(), "addr should be register");
           assert(obj->is_register(), "obj should be register");
-          assert(cmp->is_register(), "cmp should be register");
+          assert((cmp->is_valid() && cmp->is_register()) || (!cmp->is_valid()), "cmp should be register or illegal");
           assert(res->is_register(), "res should be register");
         }
 
+  LIR_Code code() const { return _code; }
   LIR_Opr obj() const { return _obj; }
   LIR_Opr addr() const { return _addr; }
   LIR_Opr value() const { return _value; }
@@ -110,7 +113,10 @@ class NVMCardTableWriteBarrierAtomicStub : public CodeStub {
     visitor->do_input(_obj);
     visitor->do_input(_addr);
     visitor->do_input(_value);
-    visitor->do_input(_cmp);
+    if (_cmp != LIR_OprFact::illegalOpr) {
+      assert(_code != lir_xadd, "sanity check");
+      visitor->do_input(_cmp);
+    }
     visitor->do_output(_res);
   }
 #ifndef PRODUCT
@@ -124,11 +130,11 @@ class NVMCardTableBarrierSetC1 : public CardTableBarrierSetC1 {
   using parent = CardTableBarrierSetC1;
 private:
   // a mark
-  constexpr static int decorator_base_sz_ {5};
+  constexpr static int decorator_base_sz_ {6};
   // ['10, 13, 18, 29', '6, 13, 18, 29', '10, 13, 17, 18, 29', '6, 13, 18, 20, 29']
   // [537142272, 537141312, 537273344, 538189888]
   // 805577728: atomic cas. 10 ,13, 18, 28, 29
-  const DecoratorSet decorators_[decorator_base_sz_] = {537141312ULL,538189888ULL, 537142272ULL, 537273344ULL, 805577728ULL};
+  const DecoratorSet decorators_[decorator_base_sz_] = {537141312ULL,538189888ULL, 537142272ULL, 537273344ULL, 805577728ULL, 1100317205504ULL};
   const int runtime_stubs_sz_ {256};
   address runtime_stubs[256];
 
@@ -144,6 +150,9 @@ private:
     
     // TODO: clear our decorators
 
+    if (decorators == decorators_[5]) {
+      return idx | (5 << 4);
+    }
     if (decorators == decorators_[4]) {
       return idx | (4 << 4);
     }

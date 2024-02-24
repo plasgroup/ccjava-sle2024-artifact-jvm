@@ -892,11 +892,18 @@ void NVMCardTableBarrierSetAssembler::generate_c1_write_barrier_atomic_runtime_s
   __ load_parameter(offset_in_words, c_rarg0); offset_in_words++;
   __ load_parameter(offset_in_words, c_rarg1); offset_in_words++;
   __ load_parameter(offset_in_words, c_rarg2);  offset_in_words++;
-  __ load_parameter(offset_in_words, c_rarg3);  offset_in_words++;
+
+  if (decorators != 1100317205504ULL) {
+    // atomic cas
+    __ load_parameter(offset_in_words, c_rarg3);  offset_in_words++;
+    __ super_call_VM_leaf(NVMCardTableBarrierSetRuntime::write_nvm_field_post_entry(decorators, type), c_rarg0, c_rarg1, c_rarg2, c_rarg3);
+  } else {
+    // atomic add at
+    __ call_VM_leaf(NVMCardTableBarrierSetRuntime::write_nvm_field_post_entry(decorators, type), c_rarg0, c_rarg1, c_rarg2);
+  }
 
   // Call VM
 
-  __ super_call_VM_leaf(NVMCardTableBarrierSetRuntime::write_nvm_field_post_entry(decorators, type), c_rarg0, c_rarg1, c_rarg2, c_rarg3);
 
   __ restore_live_registers_except_rax(true);
 
@@ -989,10 +996,11 @@ void NVMCardTableBarrierSetAssembler::gen_write_barrier_atomic_stub(LIR_Assemble
   LIR_Opr value = stub->value();
   LIR_Opr cmp = stub->cmp();
   switch (stub->type()) {
-    // pass compare value
     case T_LONG: {
-      ce->store_parameter(cmp->as_register_lo(), offset_in_words);
-      offset_in_words += 1;
+      if (stub->code() != lir_xadd) {
+        ce->store_parameter(cmp->as_register_lo(), offset_in_words);
+        offset_in_words += 1;
+      }
       ce->store_parameter(value->as_register_lo(), offset_in_words);
       offset_in_words += 1;
       break;
@@ -1000,8 +1008,10 @@ void NVMCardTableBarrierSetAssembler::gen_write_barrier_atomic_stub(LIR_Assemble
     case T_OBJECT:
     case T_ARRAY:
     case T_INT: {
-      ce->store_parameter(cmp->as_register(), offset_in_words);
-      offset_in_words++;
+      if (stub->code() != lir_xadd) {
+        ce->store_parameter(cmp->as_register(), offset_in_words);
+        offset_in_words += 1;
+      }
       ce->store_parameter(value->as_register(), offset_in_words);
       offset_in_words++;
       break;

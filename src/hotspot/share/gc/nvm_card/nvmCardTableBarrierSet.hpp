@@ -235,6 +235,35 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
     }
 
 
+    template <typename T>
+    static T c1_atomic_add_at_in_heap(oop base, T* addr, T value) {
+      assert(base != nullptr, "sanity check");
+      
+      assert(decorators == 1100317205504ULL, "sanity check");
+
+      nvmHeader::lock(base);
+
+      T result = *addr + value;
+
+      ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
+      assert(offset >= 0, "must be");
+
+      nvmOop replica = base->nvm_header().fwd();
+      if (replica != NULL && OurPersist::needs_wupd(base, offset, decorators, false)) {
+        assert(nvmHeader::is_fwd(replica), "");
+        // Store in NVM.
+        Raw::store_in_heap_at(oop(replica), offset, value);
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
+      }
+      // Store in DRAM.
+      Parent::store_in_heap_at(base, offset, value);
+
+      nvmHeader::unlock(base);
+
+      return result;
+    }
+
+
     
     static void c1_limited_oop_store_in_heap(oop base, oop* addr, oop value) {
       assert(base != nullptr, "must be");

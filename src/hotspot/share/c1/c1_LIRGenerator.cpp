@@ -1661,6 +1661,9 @@ void LIRGenerator::do_StoreField(StoreField* x) {
       if (info == nullptr) {
         info = this->state_for(x, x->state_before());
       }
+      if (x->needs_sync()) {
+        decorators |= OURPERSIST_NEEDS_SYNC;
+      }
     }
   }();  // invoke immediately
   if ((decorators & OURPERSIST_NEEDS_WUPD) != 0) {
@@ -1735,6 +1738,9 @@ void LIRGenerator::do_StoreIndexed(StoreIndexed* x) {
   // if yes, set the decorator
   if (x->needs_wupd()) {
     decorators |= OURPERSIST_NEEDS_WUPD;
+    if (x->needs_sync()) {
+      decorators |= OURPERSIST_NEEDS_SYNC;
+    }
   }
   assert(range_check_info != nullptr, "sanity check");
   access_store_at(decorators, x->elt_type(), array, index.result(), value.result(),

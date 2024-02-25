@@ -204,52 +204,52 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
     }
     
     static void c1_limited_oop_store_in_heap(oop base, oop* addr, oop value) {
-
-      assert(false, "not now");
-      if (base == nullptr) {
-        return;
-      }
+      ShouldNotReachHere();
+      // only called when value is thread local
+      assert(base != nullptr, " ");
       ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
 
       if constexpr ((decorators & MO_SEQ_CST) != 0) {
         // TODO: rewrite when incorporating analysis
 
-        assert(false, " ");
+        nvmOop replica = base->nvm_header().fwd();
+        if (replica == nullptr) {
+          // write to DRAM, done
+          Parent::oop_store_in_heap(addr, value);
+          return;
+        }
+
+        assert(nvmHeader::is_fwd(replica), "");
+
+        // Store in NVM.
+        oop nvm_val = nullptr;
+        if (value != nullptr && OurPersist::is_target(value->klass())) {
+          assert(!(value->nvm_header().recoverable()), "sanity check");
+          OurPersist::ensure_recoverable_thread_local(value);
+          nvm_val = oop(value->nvm_header().fwd());
+        }
         nvmHeader::lock(base);
 
-        nvmOop before_fwd = base->nvm_header().fwd();
-        if (before_fwd != nullptr) {
-          assert(nvmHeader::is_fwd(before_fwd), "");
-
-          // Store in NVM.
-          oop nvm_val = nullptr;
-          if (value != nullptr && OurPersist::is_target(value->klass())) {
-            OurPersist::ensure_recoverable(value);
-            nvm_val = oop(value->nvm_header().fwd());
-          }
-          Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-          OrderAccess::fence();
-        }
-        // Store in DRAM.
+        Raw::oop_store_in_heap_at(oop(replica), offset, nvm_val);
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
         Parent::template oop_store_in_heap(addr, value);
         nvmHeader::unlock(base);
       } else {
         // TODO: rewrite when incorporating analysis
-        nvmOop before_fwd = base->nvm_header().fwd();
+        nvmOop replica = base->nvm_header().fwd();
+        assert(replica != nullptr, "precondition");
 
-        if (before_fwd != nullptr) {
-          assert(nvmHeader::is_fwd(before_fwd), "");
+        assert(nvmHeader::is_fwd(replica), "");
 
-          // Store in NVM.
-          oop nvm_val = nullptr;
-          if (value != nullptr && OurPersist::is_target(value->klass())) {
-            OurPersist::ensure_recoverable(value);
+        // Store in NVM.
+        oop nvm_val = nullptr;
+        if (value != nullptr && OurPersist::is_target(value->klass())) {
+            assert(!(value->nvm_header().recoverable()), "sanity check");
+            OurPersist::ensure_recoverable_thread_local(value);
             nvm_val = oop(value->nvm_header().fwd());
           }
-          Raw::oop_store_in_heap_at(oop(before_fwd), offset, nvm_val);
-          NVM_WRITEBACK(AccessInternal::field_addr(oop(before_fwd), offset));
-        }
+        Raw::oop_store_in_heap_at(oop(replica), offset, nvm_val);
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
       }
     }
     

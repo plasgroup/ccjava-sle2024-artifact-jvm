@@ -53,31 +53,32 @@ class EscapeInfo{
   EscapeInfo(const EscapeInfo&) = delete;
   EscapeInfo& operator=(const EscapeInfo&) = delete;
 
-  auto need_wupd(const char* const class_name, const char* const method_name, const char* const signature, const int bci) -> bool {
+
+  // 0: needs whole write barrier
+  // 1: needs half write barrier, i.e., no handshake
+  // 2: needs no write barrier
+  auto get_analysis_result(const char* const class_name, const char* const method_name, const char* const signature, const int bci) -> int {
     strcpy(_buf, class_name);
     strcat(_buf, ".");
     strcat(_buf, method_name);
     strcat(_buf, signature);
-    // puts(_buf);
-    // index of bcis
-    std::variant<bool, GrowableArray<int>*> *pvalue = _table.lookup(_buf);
+
+    int* mi = _name2mi.lookup(_buf);
 
     // method is not analyzed
-    if (pvalue == nullptr) {
-      return true;
+    if (mi == nullptr) {
+      return 0;
     }
 
-    return std::visit([bci](auto&& arg) {
-      using T = std::decay_t<decltype(arg)>;
-      // no bci or 'G'
-      if constexpr (std::is_same_v<T, bool>) {
-          return arg;
-      } else if constexpr (std::is_same_v<T, GrowableArray<int>*>) {
-          assert(arg != nullptr, "must be");
-          return arg->contains(bci);
-      }
-    }, *pvalue);
-    
+    if (_escape_info->contains({*mi, bci}) || _escape_info->contains({*mi, -1})) {
+      return 0;
+    }
+
+    if (_rhs_info->contains({*mi, bci}) || _rhs_info->contains({*mi, -1})) {
+      return 1;
+    }
+
+    return 2;
   }
 private:
   // constructor is private
@@ -89,13 +90,15 @@ private:
 
     strcpy(_mi_file, dir);
     strcpy(_escape_info_file, dir);
+    strcpy(_rhs_info_file, dir);
     strcat(_mi_file, "mi.txt");
     strcat(_escape_info_file, "escapeInfo.txt");
+    strcat(_rhs_info_file, "rhsInfo.txt");
     #ifdef ASSERT
-    printf("methodIndex file == %s\nescapeInfo file == %s\n", _mi_file, _escape_info_file);
+    printf("methodIndex file == %s\nescapeInfo file == %s\nrhs_info_file == %s\n", _mi_file, _escape_info_file, _rhs_info_file);
     #endif
     read_method_names();
-    read_pair();
+    read_pairs();
   }
   ~EscapeInfo() {
     // TODO: fill the function
@@ -127,24 +130,31 @@ private:
     assert(readsize == filesize, "should be");
     chararray[filesize] = '\0';
 
-    _names = new (ResourceObj::C_HEAP, mtCode) GrowableArray<const char *>(1024, mtCode);
-
-    _names->append(chararray);
+    fclose(file);
+    
+    int method_id = 0;
+    _name2mi.add(chararray, ++method_id);
     for (int i = 1; i< filesize; i++) {
       if (chararray[i] == '\n') {
         chararray[i] = '\0';
-        _names->append(chararray + i + 1);
+        _name2mi.add(chararray + i + 1, ++method_id);
       }
     }
-    #ifdef ASSERT  // debug info
-    // for (auto it = _names->begin(); it != _names->end(); ++it) {
-    //   printf("\n\nmethod name: %s\n\n", *it);
-    // }
+    #ifdef ASSERT
+    class NamesPrinter {
+      public:
+      bool do_entry(const char *name, const int * id) {
+        printf("%s-%d\n", name, *id);
+        return true;
+      }
+    };
+    printf("\n\n = = = = = =\nmethod names:\n");
+    NamesPrinter iterator;
+    _name2mi.iterate(&iterator);
     #endif
-    fclose(file);
   }
 
-  void read_pair() {
+  void read_pairs() {
     // The text file should have the following format:
     // methodindex-bytecodeindex_or_G\n
     // methodindex-bytecodeindex_or_G\n
@@ -162,67 +172,45 @@ private:
             perror("Error opening file while reading escape info");
             exit(EXIT_FAILURE);
           }
-          readNext();
         }
         ~FileReader() {
           fclose(_file);
         }
-        auto operator ()(int index) -> std::variant<bool, GrowableArray<int> *> {
-          if (_method_idx > index) {
-            return false;
-          }
-          if (!_has_next) {
-            return false;
-          }
-          assert(_method_idx == index, "must");
-          
-          if (_g) {
-            readNext();
-            return true;
-          }
+        GrowableArray<std::pair<int, int> >*  readAll() {
+          char line[256];
+          int method_idx, bytecode_idx;
+          auto* pairs = new (ResourceObj::C_HEAP, mtCode) GrowableArray<std::pair<int, int> >(2, mtCode);
 
-          GrowableArray<int> * bcis = new (ResourceObj::C_HEAP, mtCode) GrowableArray<int>(2, mtCode);
-
-          do {
-            bcis->append(_bytecode_idx);
-          } while (readNext() && _method_idx == index);
-          
-          return bcis;
-        } 
-
-      private:
-        auto readNext() -> bool {
-          if (!_has_next) {
-            return false;
+          while (fgets(line, sizeof(line), _file) != nullptr) {
+            if (sscanf(line, "%d-%d", &method_idx, &bytecode_idx) == 2) {
+              pairs->append({method_idx, bytecode_idx});
+            } else if (sscanf(line, "%d-G", &method_idx) == 1) {
+              pairs->append({method_idx, -1});
+            } else {
+              ShouldNotReachHere();
+            }
           }
-          _has_next = (fgets(_line, sizeof(_line), _file) != nullptr);
-          if (sscanf(_line, "%d-%d", &_method_idx, &_bytecode_idx) != 2) {
-            sscanf(_line, "%d-G", &_method_idx);
-          }
-          // the txt file is 1-indexed
-          // but the array is 0-indexed
-          _method_idx -= 1;
-          return _has_next;
+          return pairs;
+
         }
-        int _method_idx{-1};
-        int _bytecode_idx{-1};
-        bool _has_next{true};
-        char _g{false};
-        char _line[256];
         FILE* _file{nullptr};
     };
+    
 
-    FileReader BCIs_of_method{_escape_info_file};
-
-    for (int index = 0; index < _names->length(); index++) {
-      _table.add(_names->at(index), BCIs_of_method(index));
-    }
+    FileReader escape_reader{_escape_info_file};
+    FileReader rhs_reader{_rhs_info_file};
+    _escape_info = escape_reader.readAll();
+    _rhs_info = rhs_reader.readAll();
   }
-  KVHashtable<const char*, std::variant<bool, GrowableArray<int> *>, mtCode, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _table {1024}; 
-  GrowableArray<const char *>* _names {nullptr};
+
+  // KVHashtable<const char*, std::variant<bool, GrowableArray<int> *>, mtCode, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _table {1024}; 
+  KVHashtable<const char*, int, mtCode, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _name2mi {1024}; 
+  GrowableArray<std::pair<int, int> >* _escape_info {nullptr};
+  GrowableArray<std::pair<int, int> >* _rhs_info {nullptr};
   char _buf[1024];
   char _mi_file[256];
   char _escape_info_file[256];
+  char _rhs_info_file[256];
 };
 #endif
 class GraphBuilder {
@@ -364,20 +352,46 @@ class GraphBuilder {
   // notice it's private
   // to code easier, return the parameter itself
 
-  auto check(StoreField* sf) const -> StoreField* {
-    if (sf->is_static()) {
-      sf->set_needs_wupd_true();
-    } else if (EscapeInfo::getInstance().need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), method()->signature()->as_symbol()->as_utf8(), bci())) {
-      sf->set_needs_wupd_true();
+  // T in [StoreField, StoreIndexed]
+  template<typename T>
+  auto check(T* t) -> T* {
+    int analysis_result = EscapeInfo::getInstance().get_analysis_result(
+        method()->holder()->name()->as_utf8(),
+        method()->name()->as_utf8(),
+        method()->signature()->as_symbol()->as_utf8(),
+        bci());
+
+    switch (analysis_result) {
+      case 0:
+          // whole write barrier
+          t->set_needs_wupd_true();
+          t->set_needs_sync_true();
+          assert(t->needs_wupd(), "sanity check");
+          assert(t->needs_sync(), "sanity check");
+          break;
+      case 1:
+          // write barrier without handshake
+          t->set_needs_wupd_true();
+          assert(t->needs_wupd(), "sanity check");
+          assert(!t->needs_sync(), "sanity check");
+          break;
+      case 2:
+          // no write barrier
+          assert(!t->needs_wupd(), "sanity check");
+          assert(!t->needs_sync(), "sanity check");
+          break;
     }
-    return sf;
-  } 
-  auto check(StoreIndexed* si) const -> StoreIndexed* {
-    if (EscapeInfo::getInstance().need_wupd(method()->holder()->name()->as_utf8(), method()->name()->as_utf8(), method()->signature()->as_symbol()->as_utf8(), bci())) {
-      si->set_needs_wupd_true();
+
+    // Check if T is StoreField and call is_static() only in that case
+    if constexpr (std::is_same_v<T, StoreField>) {
+      if (t->is_static()) {
+        assert(t->needs_wupd(), "sanity check");
+      }
     }
-    return si;
-  } 
+
+    return t;
+  }
+ 
 #endif
   // for all GraphBuilders
   static bool       _can_trap[Bytecodes::number_of_java_codes];

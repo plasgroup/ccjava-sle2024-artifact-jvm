@@ -86,7 +86,12 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
   LIRGenerator* gen = access.gen();
   bool is_array = (access.decorators() & IS_ARRAY) != 0;
   bool is_volatile = (access.decorators() & MO_SEQ_CST) != 0;
-  bool needs_sync {access.is_oop()};
+  bool needs_sync {access.is_oop() && ((access.decorators() & OURPERSIST_NEEDS_SYNC) != 0)};
+
+  access.clear_decorators(OURPERSIST_NEEDS_SYNC);
+
+  assert(!access.is_oop() || (access.is_oop() && needs_sync), "for now");
+
 
   LabelObj* done = nullptr;
   // object

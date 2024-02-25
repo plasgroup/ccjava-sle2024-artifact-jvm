@@ -32,8 +32,12 @@ class OurPersist : AllStatic {
   inline static nvmOop allocate_nvm(int size, Thread* thr = NULL);
 
   static void copy_object(oop obj);
+  static void copy_object_thread_local(oop obj);
   static void copy_object_copy_step(oop obj, nvmOop nvm_obj, Klass* klass,
                                     NVMWorkListStack* worklist, NVMBarrierSync* barrier_sync,
+                                    Thread* cur_thread);
+  static void copy_object_copy_step_thread_local(oop obj, nvmOop nvm_obj, Klass* klass,
+                                    NVMWorkListStack* worklist,
                                     Thread* cur_thread);
 
 #ifdef ASSERT
@@ -66,6 +70,7 @@ class OurPersist : AllStatic {
   inline static bool is_durableroot(oop klass_obj, ptrdiff_t offset, DecoratorSet ds);
   inline static bool needs_wupd(oop obj, ptrdiff_t offset, DecoratorSet ds, bool is_oop);
 
+  static void ensure_recoverable_thread_local(oop obj);
   static void ensure_recoverable(oop obj);
   static void ensure_recoverable(Handle obj);
   static void handshake();

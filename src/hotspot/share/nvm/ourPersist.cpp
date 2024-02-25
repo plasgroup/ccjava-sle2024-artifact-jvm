@@ -541,6 +541,166 @@ void OurPersist::ensure_recoverable(oop obj) {
 //   OurPersist::clear_responsible_thread(cur_thread);
 }
 
+
+void OurPersist::ensure_recoverable_thread_local(oop obj) {
+  assert(!obj->nvm_header().recoverable(), "precondition");
+  assert(OurPersist::is_target(obj->klass()), "precondition");
+  auto thread = Thread::current();
+
+#ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
+  ShouldNotReachHere();
+#endif // OURPERSIST_DURABLEROOTS_ALL_FALSE
+
+  Thread* cur_thread = Thread::current();
+  NVMWorkListStack* worklist = cur_thread->nvm_work_list();
+
+  bool success = OurPersist::shade(obj, cur_thread);
+  assert(success, "must be since thread-local");
+  nvmOop nvm_obj = obj->nvm_header().fwd();
+  assert(nvm_obj != NULL, "");
+  assert(nvm_obj == obj->nvm_header().fwd(),
+         "nvm_obj: %p, fwd: %p", nvm_obj, obj->nvm_header().fwd());
+  assert(nvm_obj->responsible_thread() == Thread::current(),
+         "fwd: %p", obj->nvm_header().fwd());
+  worklist->add(obj);
+
+  NVM_COUNTER_ONLY(cur_thread->nvm_counter()->inc_call_ensure_recoverable();)
+
+  while (worklist->is_empty() == false) {
+    oop cur_obj = worklist->pop();
+    nvmOop cur_nvm_obj = cur_obj->nvm_header().fwd();
+
+    NVM_COUNTER_ONLY(cur_thread->nvm_counter()->inc_persistent_obj(cur_obj->size());)
+
+    OurPersist::add_dependent_obj_list(cur_nvm_obj, cur_thread);
+    OurPersist::copy_object_thread_local(cur_obj);
+  }
+
+  // sfence
+  NVM_FENCE
+
+  OurPersist::clear_responsible_thread(cur_thread);
+}
+
+void OurPersist::copy_object_thread_local(oop obj) {
+  // we do not lock or detect dependency or verify here
+  // it is because obj is thread-local
+  assert(obj != NULL, "obj: %p", OOP_TO_VOID(obj));
+  assert(obj->nvm_header().fwd() != NULL, "fwd: %p", obj->nvm_header().fwd());
+  assert(obj->nvm_header().fwd()->responsible_thread() == Thread::current(),
+         "fwd: %p", obj->nvm_header().fwd());
+
+  Klass* klass = obj->klass();
+  nvmOop nvm_obj = obj->nvm_header().fwd();
+  size_t obj_size = obj->size() * HeapWordSize;
+
+  Thread* cur_thread = Thread::current();
+  NVMWorkListStack* worklist = cur_thread->nvm_work_list();
+
+  // copy step
+  OurPersist::copy_object_copy_step_thread_local(obj, nvm_obj, klass, worklist, cur_thread);
+
+  // write back & sfence
+  NVM_FLUSH_LOOP(nvm_obj, obj->size() * HeapWordSize);
+
+    // verify step
+  assert(OurPersist::copy_object_verify_step(obj, nvm_obj, klass), "must pass");
+
+}
+
+void OurPersist::copy_object_copy_step_thread_local(oop obj, nvmOop nvm_obj, Klass* klass,
+                                       NVMWorkListStack* worklist, Thread* cur_thread) {
+  // begin "for f in obj.fields"
+  if (klass->is_instance_klass()) {
+    Klass* cur_k = klass;
+    while (true) {
+      InstanceKlass* ik = (InstanceKlass*)cur_k;
+      int cnt = ik->java_fields_count();
+
+      for (int i = 0; i < cnt; i++) {
+        AccessFlags field_flags = accessFlags_from(ik->field_access_flags(i));
+        Symbol* field_sig = ik->field_signature(i);
+        field_sig->type();
+        BasicType field_type = Signature::basic_type(field_sig);
+        int field_offset = ik->field_offset(i);
+        if (field_flags.is_static()) {
+          continue;
+        }
+
+        if (is_reference_type(field_type)) {
+          const DecoratorSet ds = MO_UNORDERED | AS_NORMAL | IN_HEAP;
+          typedef CardTableBarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet> Parent;
+          typedef BarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet> Raw;
+          oop v = Parent::oop_load_in_heap_at(obj, field_offset);
+          nvmOop nvm_v = NULL;
+
+          if (v != NULL && OurPersist::is_target(v->klass())) {
+            assert(!(v->nvm_header().recoverable()), "sanity check");
+            bool success = OurPersist::shade(v, cur_thread);
+            assert(success, "must be");
+            nvm_v = v->nvm_header().fwd();
+            assert(nvmHeader::is_fwd(nvm_v), "nvm_v: %p", nvm_v);
+            assert(nvm_v->responsible_thread() == Thread::current(), "fwd: %p", nvm_v);
+            worklist->add(v);
+          }
+          Raw::oop_store_in_heap_at((oop)nvm_obj, field_offset, (oop)nvm_v);
+        } else {
+          OurPersist::copy_dram_to_nvm(obj, (oop)nvm_obj, field_offset, field_type);
+        }
+      }
+      cur_k = cur_k->super();
+      if (cur_k == NULL) {
+        break;
+      }
+    }
+  } else if (klass->is_objArray_klass()) {
+    ObjArrayKlass* ak = (ObjArrayKlass*)klass;
+    objArrayOop ao = (objArrayOop)obj;
+    BasicType array_type = ((ArrayKlass*)ak)->element_type();
+    int array_length = ao->length();
+
+    objArrayOop(nvm_obj)->set_length(array_length);
+
+    for (int i = 0; i < array_length; i++) {
+      ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
+      const DecoratorSet ds = MO_UNORDERED | AS_NORMAL | IN_HEAP | IS_ARRAY;
+      typedef CardTableBarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet> Parent;
+      typedef BarrierSet::AccessBarrier<ds, NVMCardTableBarrierSet> Raw;
+      oop v = Parent::oop_load_in_heap_at(obj, field_offset);
+
+      nvmOop nvm_v = NULL;
+      if (v != NULL && OurPersist::is_target(v->klass())) {
+        assert(!(v->nvm_header().recoverable()), "sanity check");
+        bool success = OurPersist::shade(v, cur_thread);
+        assert(success, "must be");
+        nvm_v = v->nvm_header().fwd();
+        assert(nvmHeader::is_fwd(nvm_v), "nvm_v: %p", nvm_v);
+        assert(nvm_v->responsible_thread() == Thread::current(), "fwd: %p", nvm_v);
+        worklist->add(v);
+
+      }
+      Raw::oop_store_in_heap_at((oop)nvm_obj, field_offset, (oop)nvm_v);
+    }
+  } else if (klass->is_typeArray_klass()) {
+    TypeArrayKlass* ak = (TypeArrayKlass*)klass;
+    typeArrayOop ao = (typeArrayOop)obj;
+    BasicType array_type = ((ArrayKlass*)ak)->element_type();
+    int array_length = ao->length();
+
+    typeArrayOop(nvm_obj)->set_length(array_length);
+
+    void* obj_ptr = OOP_TO_VOID(obj);
+    int base_offset_in_bytes = typeArrayOopDesc::base_offset_in_bytes(array_type);
+    int base_offset_in_words = base_offset_in_bytes / HeapWordSize;
+    assert(base_offset_in_bytes % HeapWordSize == 0, "");
+    HeapWord* to   = (HeapWord*)((char*)nvm_obj + base_offset_in_bytes);
+    HeapWord* from = (HeapWord*)((char*)obj_ptr + base_offset_in_bytes);
+    Copy::aligned_disjoint_words(from, to, obj->size() - base_offset_in_words /* word size */);
+  } else {
+    report_vm_error(__FILE__, __LINE__, "Illegal field type.");
+  }
+  // end "for f in obj.fields"
+}
 void OurPersist::copy_object_copy_step(oop obj, nvmOop nvm_obj, Klass* klass,
                                        NVMWorkListStack* worklist, NVMBarrierSync* barrier_sync,
                                        Thread* cur_thread) {

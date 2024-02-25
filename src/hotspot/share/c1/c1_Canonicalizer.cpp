@@ -225,12 +225,16 @@ void Canonicalizer::do_StoreField     (StoreField*      x) {
     if (value != NULL && in_current_block(conv)) {
       #ifdef OUR_PERSIST
       bool nw = x->needs_wupd();
+      bool ns = x->needs_sync();
       set_canonical(new StoreField(x->obj(), x->offset(), x->field(), value, x->is_static(),
                                    x->state_before(), x->needs_patching()));
 
 
       if (nw) {
         canonical()->as_StoreField()->set_needs_wupd_true();
+      }
+      if (ns) {
+        canonical()->as_StoreField()->set_needs_sync_true();
       }
       #else
       set_canonical(new StoreField(x->obj(), x->offset(), x->field(), value, x->is_static(),
@@ -331,11 +335,15 @@ void Canonicalizer::do_StoreIndexed   (StoreIndexed*    x) {
     if (value != NULL && in_current_block(conv)) {
       #ifdef OUR_PERSIST
       bool nw {x->needs_wupd()};
+      bool ns {x->needs_sync()};
       set_canonical(new StoreIndexed(x->array(), x->index(), x->length(),
                                      x->elt_type(), value, x->state_before(),
                                      x->check_boolean()));
       if (nw) {
         canonical()->as_StoreIndexed()->set_needs_wupd_true();
+      }
+      if (ns) {
+        canonical()->as_StoreIndexed()->set_needs_sync_true();
       }
       #else
       set_canonical(new StoreIndexed(x->array(), x->index(), x->length(),

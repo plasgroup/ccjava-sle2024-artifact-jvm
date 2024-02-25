@@ -865,6 +865,8 @@ LEAF(StoreField, AccessField)
 #ifdef OUR_PERSIST
  private:
   bool _needs_wupd{false};
+  bool _needs_sync{false};
+
 
  public:
   void set_needs_wupd_true()                  { 
@@ -872,6 +874,12 @@ LEAF(StoreField, AccessField)
     _needs_wupd = true; 
   }
   auto needs_wupd() -> bool                   { return _needs_wupd; }
+
+  void set_needs_sync_true()                  { 
+    assert(!_needs_sync, "must be false");
+    _needs_sync = true; 
+  }
+  auto needs_sync() -> bool                   { return _needs_sync; }
 #endif
 };
 
@@ -1019,6 +1027,8 @@ LEAF(StoreIndexed, AccessIndexed)
 #ifdef OUR_PERSIST
  private:
   bool _needs_wupd{false};
+  bool _needs_sync{false};
+
 
  public:
   void set_needs_wupd_true()                  { 
@@ -1026,6 +1036,12 @@ LEAF(StoreIndexed, AccessIndexed)
     _needs_wupd = true; 
   }
   auto needs_wupd() -> bool                   { return _needs_wupd; }
+  
+  void set_needs_sync_true()                  { 
+    assert(!_needs_sync, "must be false");
+    _needs_sync = true; 
+  }
+  auto needs_sync() -> bool                   { return _needs_sync; }
 #endif
 };
 

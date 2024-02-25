@@ -302,7 +302,7 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         }
         // Store in NVM.
         ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
-        Raw::store_in_heap_at(oop(replica), offset, nvm_val);
+        Raw::oop_store_in_heap_at(oop(replica), offset, nvm_val);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
 
       }

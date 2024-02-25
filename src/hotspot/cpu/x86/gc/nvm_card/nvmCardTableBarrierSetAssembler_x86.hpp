@@ -9,6 +9,7 @@
 class LIR_Assembler;
 class StubAssembler;
 class NVMCardTableWriteBarrierStub;
+class NVMCardTableWriteBarrierAtomicStub;
 
 class NVMCardTableBarrierSetAssembler: public CardTableBarrierSetAssembler {
  public:
@@ -67,7 +68,9 @@ class NVMCardTableBarrierSetAssembler: public CardTableBarrierSetAssembler {
                           Register tmp1, Register tmp2, Register tmp3, Register tmp4);
   #ifdef COMPILER1
   void generate_c1_write_barrier_runtime_stub(StubAssembler* sasm, DecoratorSet decorators, BasicType type) const;
+  void generate_c1_write_barrier_atomic_runtime_stub(StubAssembler* sasm, DecoratorSet decorators, BasicType type) const;
   void gen_write_barrier_stub(LIR_Assembler* ce, NVMCardTableWriteBarrierStub* stub);
+  void gen_write_barrier_atomic_stub(LIR_Assembler* ce, NVMCardTableWriteBarrierAtomicStub* stub);
   #endif
 };
 

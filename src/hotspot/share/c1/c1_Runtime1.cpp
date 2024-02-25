@@ -1543,6 +1543,68 @@ JRT_BLOCK_ENTRY(void, Runtime1::lagged_synchronization_volatile(JavaThread *thre
 
 JRT_END
 
+JRT_BLOCK_ENTRY(int, Runtime1::lagged_synchronization_atomic_cas(JavaThread *thread, oopDesc* obj, oopDesc** addr, oopDesc* cmp, oopDesc* value))
+
+  // 10, 13, 18, 29
+  using Parent = CardTableBarrierSet::AccessBarrier<805577728ULL, NVMCardTableBarrierSet>;
+
+  // puts("executed");
+
+  assert(obj != nullptr, "sanity check");
+
+  assert(Thread::current() == thread, "must be");
+  assert(oopDesc::is_oop(obj, true), "must be");
+  assert(oopDesc::is_oop_or_null(value, true), "must be");
+
+  nvmOop replica = obj->nvm_header().fwd();
+
+  if (replica == nullptr) {
+    // write to DRAM, done
+    // exchange
+    return cmp == Parent::oop_atomic_cmpxchg_in_heap(addr, cmp, value);
+  }
+  assert(replica != nullptr, "must be");
+
+
+  const ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(obj)));
+  oop nvm_val = nullptr;
+  // persist value if necessary
+  if (value != nullptr && OurPersist::is_target(value->klass())) {
+    if(!(value->nvm_header().recoverable())) {
+      HandleMark hm(thread);
+      Handle h_obj = Handle(thread, obj);
+      Handle h_cmp = Handle(thread, cmp);
+      Handle h_value = Handle(thread, value);
+      OurPersist::ensure_recoverable(h_value);
+      // update
+      obj = h_obj();
+      cmp = h_cmp();
+      value = h_value();
+    }
+
+    nvm_val = oop(value->nvm_header().fwd());
+  }
+
+  nvmHeader::lock(obj);
+
+  if (Parent::oop_load_in_heap_at(obj, offset) != (oop)cmp) {
+    nvmHeader::unlock(obj);
+    return 0; // fail
+  }
+  oop* nvm_field_addr = reinterpret_cast<oop*>(AccessInternal::field_addr(oop(replica), offset));
+  
+
+  // store in NVM
+  *nvm_field_addr = nvm_val;
+  NVM_WRITEBACK(nvm_field_addr);
+  // store in DRAM
+  Parent::oop_store_in_heap_at(obj, offset, value);
+        
+  nvmHeader::unlock(obj);
+  return 1;
+
+JRT_END
+
 
 #endif
 #ifndef PRODUCT

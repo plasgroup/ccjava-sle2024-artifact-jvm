@@ -73,6 +73,7 @@ class StubAssembler;
   stub(predicate_failed_trap)        \
   stub(lagged_synchronization)       \
   stub(lagged_synchronization_volatile)       /* special version for volatile oop field */ \
+  stub(lagged_synchronization_atomic_cas) \
   last_entry(number_of_ids)
 
 #define DECLARE_STUB_ID(x)       x ## _id ,
@@ -174,6 +175,7 @@ class Runtime1: public AllStatic {
 #ifdef OUR_PERSIST
   static void lagged_synchronization(JavaThread* thread, oopDesc* obj, oopDesc** addr, oopDesc* value);
   static void lagged_synchronization_volatile(JavaThread* thread, oopDesc* obj, oopDesc** addr, oopDesc* value);
+  static int lagged_synchronization_atomic_cas(JavaThread *thread, oopDesc* obj, oopDesc** addr, oopDesc* cmp, oopDesc* value);
 #endif
   
  public:

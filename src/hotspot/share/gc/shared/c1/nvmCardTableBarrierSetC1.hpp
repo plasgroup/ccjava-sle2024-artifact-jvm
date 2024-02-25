@@ -64,16 +64,71 @@ class NVMCardTableWriteBarrierStub : public CodeStub {
 #endif // PRODUCT
 };
 
+
+class NVMCardTableWriteBarrierAtomicStub : public CodeStub {
+  friend class NVMCardTableBarrierSetC1;
+
+ private:
+  LIR_Opr _obj;
+  LIR_Opr _addr;
+  LIR_Opr _value;
+  address      _runtime_stub;
+  BasicType _type;
+  LIR_Opr _cmp;
+  LIR_Opr _res;
+
+ public:
+  // addr (the address of the object head) and value must be registers.
+  NVMCardTableWriteBarrierAtomicStub(LIR_Opr obj, LIR_Opr addr, LIR_Opr value,
+                              address runtime_stub, BasicType type, LIR_Opr cmp, LIR_Opr res)
+      : _obj(obj),
+        _addr(addr),
+        _value(value),
+        _runtime_stub(runtime_stub),
+        _type(type),
+        _cmp(cmp),
+        _res(res) {
+          assert(value->is_register(), "value should be register");
+          assert(addr->is_register(), "addr should be register");
+          assert(obj->is_register(), "obj should be register");
+          assert(cmp->is_register(), "cmp should be register");
+          assert(res->is_register(), "res should be register");
+        }
+
+  LIR_Opr obj() const { return _obj; }
+  LIR_Opr addr() const { return _addr; }
+  LIR_Opr value() const { return _value; }
+  address runtime_stub() const { return _runtime_stub; }
+  // DecoratorSet decorators() const { return _decorators; }
+  BasicType type() const { return _type; }
+  LIR_Opr cmp() const { return _cmp; }
+  LIR_Opr res() const { return _res; }
+
+  virtual void emit_code(LIR_Assembler* ce);
+  virtual void visit(LIR_OpVisitState* visitor) {
+    // don't pass in the code emit info since it's processed in the fast path
+    visitor->do_input(_obj);
+    visitor->do_input(_addr);
+    visitor->do_input(_value);
+    visitor->do_input(_cmp);
+    visitor->do_output(_res);
+  }
+#ifndef PRODUCT
+  virtual void print_name(outputStream* out) const { out->print("NVMPostBarrierAtomicStub"); }
+#endif // PRODUCT
+};
+
 class CodeBlob;
 
 class NVMCardTableBarrierSetC1 : public CardTableBarrierSetC1 {
   using parent = CardTableBarrierSetC1;
 private:
   // a mark
-  constexpr static int decorator_base_sz_ {4};
+  constexpr static int decorator_base_sz_ {5};
   // ['10, 13, 18, 29', '6, 13, 18, 29', '10, 13, 17, 18, 29', '6, 13, 18, 20, 29']
   // [537142272, 537141312, 537273344, 538189888]
-  const DecoratorSet decorators_[decorator_base_sz_] = {537141312ULL,538189888ULL, 537142272ULL, 537273344ULL};
+  // 805577728: atomic cas. 10 ,13, 18, 28, 29
+  const DecoratorSet decorators_[decorator_base_sz_] = {537141312ULL,538189888ULL, 537142272ULL, 537273344ULL, 805577728ULL};
   const int runtime_stubs_sz_ {256};
   address runtime_stubs[256];
 
@@ -87,7 +142,12 @@ private:
     //    8
     int idx = type - T_BOOLEAN;
     
-    for (int i = 0; i < decorator_base_sz_; i++) {
+    // TODO: clear our decorators
+
+    if (decorators == decorators_[4]) {
+      return idx | (4 << 4);
+    }
+    for (int i = 0; i < 4; i++) {
       if ((decorators & (decorators_[i])) == decorators_[i]) {
         return idx | (i << 4);
       }
@@ -100,20 +160,11 @@ protected:
 
   virtual void store_at_resolved(LIRAccess& access, LIR_Opr value);
 
-  virtual LIR_Opr atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value) {
-    access.gen()->bailout("not now");
-    return nullptr;
-  }
+  virtual LIR_Opr atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value);
 
-  virtual LIR_Opr atomic_xchg_at_resolved(LIRAccess& access, LIRItem& value) {
-    access.gen()->bailout("not now");
-    return nullptr;
-  }
+  virtual LIR_Opr atomic_xchg_at_resolved(LIRAccess& access, LIRItem& value);
 
-  virtual LIR_Opr atomic_add_at_resolved(LIRAccess& access, LIRItem& value) {
-    access.gen()->bailout("not now");
-    return nullptr;
-  }
+  virtual LIR_Opr atomic_add_at_resolved(LIRAccess& access, LIRItem& value);
   
   virtual void nvm_write_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr value);
 
@@ -132,9 +183,14 @@ public:
     runtime_stubs[idx] = stub;
 
   }
-  address get_runtime_stub(DecoratorSet decorators, BasicType type, bool needs_sync, bool is_volatile) {
+  address get_runtime_stub(DecoratorSet decorators, BasicType type, bool needs_sync, bool is_volatile, bool is_atomic) {
     if (needs_sync) {
+      
       assert(is_reference_type(type), "only reference type may need sync");
+
+      if (is_atomic) {
+        return Runtime1::entry_for(Runtime1::lagged_synchronization_atomic_cas_id);
+      }
       return is_volatile ? Runtime1::entry_for(Runtime1::lagged_synchronization_volatile_id) : Runtime1::entry_for(Runtime1::lagged_synchronization_id);
     }
     int idx = get_runtime_stub_index(decorators, type);

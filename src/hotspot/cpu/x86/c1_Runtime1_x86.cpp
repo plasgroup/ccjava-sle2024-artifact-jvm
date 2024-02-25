@@ -1630,6 +1630,22 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         restore_live_registers(sasm);
       }
       break;
+    case lagged_synchronization_atomic_cas_id:
+      {
+        // C++ func differs
+        StubFrame f(sasm, "lagged_synchronization_atomic_cas", dont_gc_arguments);
+        OopMap* map = save_live_registers(sasm, 5);
+        
+        f.load_argument(0, c_rarg1);  // obj
+        f.load_argument(1, c_rarg2);  // addr
+        f.load_argument(2, c_rarg3);  // cmp
+        f.load_argument(3, c_rarg4);  // value
+        int call_offset = __ call_RT(noreg, noreg, CAST_FROM_FN_PTR(address, lagged_synchronization_atomic_cas), 4);
+        oop_maps = new OopMapSet();
+        oop_maps->add_gc_map(call_offset, map);
+        restore_live_registers_except_rax(sasm);
+      }
+      break;
 
 
 

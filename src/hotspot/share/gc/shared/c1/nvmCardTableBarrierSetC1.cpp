@@ -54,6 +54,11 @@ void NVMCardTableWriteBarrierStub::emit_code(LIR_Assembler* ce) {
   bs->gen_write_barrier_stub(ce, this);
 }
 
+void NVMCardTableWriteBarrierAtomicStub::emit_code(LIR_Assembler* ce) {
+  NVMCardTableBarrierSetAssembler* bs = (NVMCardTableBarrierSetAssembler*)BarrierSet::barrier_set()->barrier_set_assembler();
+  bs->gen_write_barrier_atomic_stub(ce, this);
+}
+
 void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value) {
   // note that 86 64 defined
 
@@ -129,7 +134,7 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
   // value
   value = ensure_in_register(gen, value, is_subword_type(access.type()) ? T_INT : access.type());
   // runtime stub
-  const address runtime_stub = get_runtime_stub(access.decorators(), access.type(), needs_sync, is_volatile);
+  const address runtime_stub = get_runtime_stub(access.decorators(), access.type(), needs_sync, is_volatile, false);
   
   CodeStub* const slow = new NVMCardTableWriteBarrierStub(base.result(), addr, value, runtime_stub, access.type(), access.access_emit_info(), needs_sync);
 
@@ -140,6 +145,102 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
   }
   
   __ branch_destination(slow->continuation());
+}
+
+LIR_Opr NVMCardTableBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value) {
+ 
+
+  LIRGenerator* gen = access.gen();
+  bool needs_sync {access.is_oop()};
+
+  printf("generate stub for atomic: decorator=%ld, type = %s\n", access.decorators(), type2name(access.type()));
+  // object
+  LIRItem& base = access.base().item();
+  const address runtime_stub = get_runtime_stub(access.decorators(), access.type(), needs_sync, false, true);
+  
+  // field address
+  LIR_Opr addr = access.resolved_addr();
+  if (addr->is_address()) {
+    LIR_Address* address = addr->as_address_ptr();
+
+    LIR_Opr ptr = gen->new_pointer_register();
+    if (!address->index()->is_valid() && address->disp() == 0) {
+      __ move(address->base(), ptr);
+    } else {
+      assert(address->disp() != max_jint, "lea doesn't support patched addresses!");
+      __ leal(addr, ptr);
+    }
+    addr = ptr;
+  }
+  assert(addr->is_register(), "must be a register at this point");
+  // value
+  if (access.type() == T_LONG) {
+    cmp_value.load_item_force(FrameMap::long0_opr);
+    new_value.load_item_force(FrameMap::long1_opr);
+  } else {
+    cmp_value.load_item_force(FrameMap::rax_oop_opr);
+    new_value.load_item();
+  }
+
+
+  LIR_Opr result = gen->new_register(T_INT);
+
+  CodeStub* const slow = new NVMCardTableWriteBarrierAtomicStub(base.result(), addr, new_value.result(), runtime_stub, access.type(), cmp_value.result(), result);
+
+  __ branch(lir_cond_always, slow);
+    
+  __ branch_destination(slow->continuation());
+
+  return result;
+  // replica
+  // __ cmove(lir_cond_equal, LIR_OprFact::intConst(1), LIR_OprFact::intConst(0),
+          //  result, T_INT);
+
+  // printf("%ld\n", access.decorators());
+  // puts("executed");
+  // // LIRItem& base = access.base().item();
+  // LIRGenerator* gen = access.gen();
+  // LIRItem& base = access.base().item();
+  // LabelObj* retry = new LabelObj();
+
+  // // replica
+  // LIR_Opr replica = gen->new_register(T_INT);
+  // LIR_Address* replica_addr = new LIR_Address(base.result(), oopDesc::nvm_header_offset_in_bytes(), T_INT);
+  
+  // __ branch_destination(retry->label());
+  // __ move(replica_addr, replica);
+  // LIR_Opr cmp = gen->new_register(T_INT);
+  // LIR_Opr val = gen->new_register(T_INT);
+  // __ move(replica, cmp);
+  // __ move(replica, val);
+  
+  // __ logical_and(cmp, LIR_OprFact::intConst(~0b1), cmp);
+  // __ logical_or(val, LIR_OprFact::intConst(0b1), val);
+
+  
+  // __ cas_int(LIR_OprFact::address(replica_addr), cmp, val, LIR_OprFact::illegalOpr, LIR_OprFact::illegalOpr, LIR_OprFact::illegalOpr);
+
+  // // clear last three bits
+  // // __ logical_and(replica, LIR_OprFact::intConst(~0b111), replica);
+  // // // LIR_OprFact::intptrConst(NULL_WORD) does not work in this branch
+  // // __ cmp(lir_cond_equal, replica, LIR_OprFact::intConst(0));
+  // __ branch(lir_cond_notEqual, retry->label());
+  
+  // return BarrierSetC1::atomic_cmpxchg_at_resolved(access, cmp_value, new_value);
+}
+
+LIR_Opr NVMCardTableBarrierSetC1::atomic_xchg_at_resolved(LIRAccess& access, LIRItem& value) {
+  assert(false, "check");
+  // LIRItem& base = access.base().item();
+  return BarrierSetC1::atomic_xchg_at_resolved(access, value);
+}
+
+LIR_Opr NVMCardTableBarrierSetC1::atomic_add_at_resolved(LIRAccess& access, LIRItem& value) {
+  // this is needed too in lusearch
+  LIRGenerator* gen = access.gen();
+  gen->bailout("not now");
+  return nullptr;
+  // return BarrierSetC1::atomic_add_at_resolved(access, value);
 }
 
 class NVMWriteBarrierRuntimeStubCodeGenClosure : public StubAssemblerCodeGenClosure {
@@ -154,7 +255,13 @@ public:
   virtual OopMapSet* generate_code(StubAssembler* sasm) {
     BarrierSetAssembler* const bsa = BarrierSet::barrier_set()->barrier_set_assembler();
     auto nvm_bsa = reinterpret_cast<NVMCardTableBarrierSetAssembler*>(bsa);
-    nvm_bsa->generate_c1_write_barrier_runtime_stub(sasm, _decorators, _type);
+    if (_decorators == 805577728ULL) {
+      // specially for atomic
+      puts("generate runtime stub for atomic");
+      nvm_bsa->generate_c1_write_barrier_atomic_runtime_stub(sasm, _decorators, _type);
+    } else {
+      nvm_bsa->generate_c1_write_barrier_runtime_stub(sasm, _decorators, _type);
+    }
     return NULL;
   }
 };
@@ -166,11 +273,20 @@ static address generate_c1_runtime_stub(BufferBlob* blob, DecoratorSet decorator
 }
 
 void NVMCardTableBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob) {
-  for (DecoratorSet base : decorators_) {
+  for (int i = 0; i < 4; i++) {
+    DecoratorSet base = decorators_[i];
     for (BasicType type: {T_BOOLEAN, T_CHAR, T_FLOAT,T_DOUBLE, T_BYTE, T_SHORT, T_INT, T_LONG, T_ARRAY, T_OBJECT}) {
       insert_runtime_stub(base, type, generate_c1_runtime_stub(buffer_blob, base, type, ""));
     }
   }
+
+  // atomic compare and swap
+  DecoratorSet base = decorators_[4];
+  for (BasicType type: {T_INT, T_LONG}) {
+    insert_runtime_stub(base, type, generate_c1_runtime_stub(buffer_blob, base, type, ""));
+  }
+
+  // insert_runtime_stub(base, type, generate_c1_runtime_stub(buffer_blob, base, type, ""));
 
 }
 #endif

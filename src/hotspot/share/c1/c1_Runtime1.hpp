@@ -195,7 +195,12 @@ class Runtime1: public AllStatic {
   // method tracing
   static void trace_block_entry(jint block_id);
 
+#ifdef ASSERT
   static void nvm_print(jint id);
+  #ifdef NVM_COUNTER
+  static void do_NVM_statistics(oopDesc* obj, int res);
+  #endif
+#endif
 
 #ifndef PRODUCT
   static address throw_count_address()               { return (address)&_throw_count;             }

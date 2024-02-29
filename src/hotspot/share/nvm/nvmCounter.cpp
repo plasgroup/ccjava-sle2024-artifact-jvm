@@ -280,6 +280,10 @@ void NVMCounter::print() {
   tty->print_cr(NVMCOUNTER_PREFIX "_clwb_g:            %lu", _clwb_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_call_ensure_recoverable_g: %lu", _call_ensure_recoverable_g);
   tty->print_cr(NVMCOUNTER_PREFIX "handshake count: %u", _n_handshake.load());
+  tty->print_cr(NVMCOUNTER_PREFIX "full barrier count: %u", _n_full_barrier.load());
+  tty->print_cr(NVMCOUNTER_PREFIX "half barrier count: %u", _n_half_barrier.load());
+  tty->print_cr(NVMCOUNTER_PREFIX "no barrier count: %u", _n_no_barrier.load());
+  tty->print_cr(NVMCOUNTER_PREFIX "barrier reduction: %f", static_cast<double>(_n_no_barrier.load()) / static_cast<double>(_n_no_barrier.load() + _n_half_barrier.load() + _n_full_barrier.load()));
 }
 
 class CountObjectSnapshotDuringGC : public ObjectClosure {

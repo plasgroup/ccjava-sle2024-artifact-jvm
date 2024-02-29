@@ -57,6 +57,11 @@ public:
 
 
 void OurPersist::handshake() {
+  #ifdef ASSERT
+  #ifdef NVM_COUNTER
+  NVMCounter::inc_handshake();
+  #endif
+  #endif
   assert(Thread::current()->is_Java_thread(), "must be");
 
   JavaThread* self = Thread::current()->as_Java_thread();

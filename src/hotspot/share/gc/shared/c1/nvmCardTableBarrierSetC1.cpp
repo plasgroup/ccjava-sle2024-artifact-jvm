@@ -77,6 +77,37 @@ void NVMCardTableBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr valu
     return;
   }
   
+  #ifdef ASSERT
+    #ifdef NVM_COUNTER
+    bool needs_sync {access.is_oop() && ((access.decorators() & OURPERSIST_NEEDS_SYNC) != 0)};
+    LIRGenerator* gen = access.gen();
+    BasicTypeList signature;
+    signature.append(T_OBJECT); // obj
+    signature.append(T_INT); // int
+    LIR_OprList* args = new LIR_OprList(2);
+    args->append(access.base().opr());
+    int analysis_result = [](DecoratorSet ds, bool is_oop) -> int {
+      if ((ds & OURPERSIST_NEEDS_WUPD) == 0) { 
+        return 2;
+      }
+      if (((ds & OURPERSIST_NEEDS_SYNC) == 0) && is_oop) {
+        return 1;
+      }
+      return 0;
+
+    }(access.decorators(), access.is_oop());
+    
+    args->append(LIR_OprFact::intConst(analysis_result)); 
+    gen->call_runtime(
+      &signature,
+      args,
+      CAST_FROM_FN_PTR(address, Runtime1::do_NVM_statistics),
+      voidType,
+      NULL);
+    
+    #endif // NVM_COUNTER
+  #endif
+
   if (!needs_wupd) {
     parent::store_at_resolved(access, value);
     return;
@@ -95,7 +126,6 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
 
   access.clear_decorators(OURPERSIST_NEEDS_SYNC);
 
-  assert(!access.is_oop() || (access.is_oop() && needs_sync), "for now");
 
 
   LabelObj* done = nullptr;

@@ -74,7 +74,7 @@
 #include "utilities/events.hpp"
 
 #ifdef OUR_PERSIST
-
+#include "oops/nvmHeader.hpp"
 #include "nvm/nvmMacro.hpp"
 #include "nvm/ourPersist.hpp"
 #endif
@@ -338,7 +338,12 @@ const char* Runtime1::name_for_address(address entry) {
   FUNCTION_CASE(entry, SharedRuntime::dtrace_method_exit);
   FUNCTION_CASE(entry, is_instance_of);
   FUNCTION_CASE(entry, trace_block_entry);
+  #ifdef ASSERT
   FUNCTION_CASE(entry, nvm_print);
+  #ifdef NVM_COUNTER
+  FUNCTION_CASE(entry, do_NVM_statistics);
+  #endif
+  #endif
 #ifdef JFR_HAVE_INTRINSICS
   FUNCTION_CASE(entry, JFR_TIME_FUNCTION);
 #endif
@@ -1397,10 +1402,36 @@ JRT_LEAF(void, Runtime1::trace_block_entry(jint block_id))
   tty->print("%d ", block_id);
 JRT_END
 
+#ifdef ASSERT
 JRT_LEAF(void, Runtime1::nvm_print(jint i))
   tty->print("%d ", i);
 JRT_END
 
+#ifdef NVM_COUNTER
+JRT_LEAF(void, Runtime1::do_NVM_statistics(oopDesc* obj, int res))
+  assert(oopDesc::is_oop(obj), "sanity check");
+
+  switch (res) {
+    case 0:
+      // with write barrier, with handshake
+      NVMCounter::inc_full_barrier();
+      break;
+    case 1:
+      // with barrier but no handshake
+      NVMCounter::inc_half_barrier();
+      break;
+    case 2:
+      // no write barrier
+      NVMCounter::inc_no_barrier();
+      break;
+
+    default:
+      ShouldNotReachHere();
+  }
+JRT_END
+
+#endif
+#endif
 
 JRT_LEAF(int, Runtime1::is_instance_of(oopDesc* mirror, oopDesc* obj))
   // had to return int instead of bool, otherwise there may be a mismatch

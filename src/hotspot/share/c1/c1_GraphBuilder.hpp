@@ -58,10 +58,18 @@ class EscapeInfo{
   // 1: needs half write barrier, i.e., no handshake
   // 2: needs no write barrier
   auto get_analysis_result(const char* const class_name, const char* const method_name, const char* const signature, const int bci) -> int {
+
+    if (_name2mi.table_size() == 0) {
+      return 0;
+    }
+    
     strcpy(_buf, class_name);
     strcat(_buf, ".");
     strcat(_buf, method_name);
     strcat(_buf, signature);
+    #ifdef ASSERT
+    // printf("CompiledMethod %s\n", _buf);
+    #endif
 
     int* mi = _name2mi.lookup(_buf);
 
@@ -71,10 +79,11 @@ class EscapeInfo{
     }
 
     if (_escape_info->contains({*mi, bci}) || _escape_info->contains({*mi, -1})) {
-      return 0;
-    }
-
-    if (_rhs_info->contains({*mi, bci}) || _rhs_info->contains({*mi, -1})) {
+      if (_rhs_info->contains({*mi, bci}) || _rhs_info->contains({*mi, -1})) {
+        // need write barrier with handshake
+        return 0;
+      }
+      // need write barrier but no handshake
       return 1;
     }
 
@@ -83,7 +92,7 @@ class EscapeInfo{
 private:
   // constructor is private
   EscapeInfo() {
-    if (strcmp(AnalysisPath, "") == 0) {
+    if (AnalysisPath == nullptr || strcmp(AnalysisPath, "") == 0) {
       return;
     }
     const char* dir = AnalysisPath;
@@ -133,18 +142,35 @@ private:
     fclose(file);
     
     int method_id = 0;
-    _name2mi.add(chararray, ++method_id);
-    for (int i = 1; i< filesize; i++) {
-      if (chararray[i] == '\n') {
-        chararray[i] = '\0';
-        _name2mi.add(chararray + i + 1, ++method_id);
+    // Correct pointer types for iteration
+    char* p = chararray; // Points to the start of a potential string
+    for (char* q = p + 1; q < chararray + filesize; ++q) {
+      if (*q == '\n' || q == chararray + filesize - 1) { // Also handle the last line
+        size_t length = q - p + (*q == '\n' ? 0 : 1); // Do not include '\n' in the length
+        char* str = static_cast<char*>(malloc((length + 1) * sizeof(char)));
+        if (!str) {
+            ShouldNotReachHere();
+        }
+        memcpy(str, p, length);
+        str[length] = '\0'; // Null-terminate the string
+        // if (CompilerToVM::cstring_equals(str, "org/dacapo/parser/SimpleCharStream.readChar()C")) {
+        //   puts("bbbbbbbbbbbbbb");
+
+        // }
+        _name2mi.add(str, ++method_id);
+
+        p = q + 1; // Move to the start of the next string
       }
     }
+
+    free(chararray);
+
+
     #ifdef ASSERT
     class NamesPrinter {
       public:
       bool do_entry(const char *name, const int * id) {
-        printf("%s-%d\n", name, *id);
+        printf("%s  %d\n", name, *id);
         return true;
       }
     };
@@ -204,7 +230,7 @@ private:
   }
 
   // KVHashtable<const char*, std::variant<bool, GrowableArray<int> *>, mtCode, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _table {1024}; 
-  KVHashtable<const char*, int, mtCode, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _name2mi {1024}; 
+  KVHashtable<const char*, int, mtInternal, &CompilerToVM::cstring_hash, &CompilerToVM::cstring_equals> _name2mi {1024}; 
   GrowableArray<std::pair<int, int> >* _escape_info {nullptr};
   GrowableArray<std::pair<int, int> >* _rhs_info {nullptr};
   char _buf[1024];
@@ -382,12 +408,6 @@ class GraphBuilder {
           break;
     }
 
-    // Check if T is StoreField and call is_static() only in that case
-    if constexpr (std::is_same_v<T, StoreField>) {
-      if (t->is_static()) {
-        assert(t->needs_wupd(), "sanity check");
-      }
-    }
 
     return t;
   }

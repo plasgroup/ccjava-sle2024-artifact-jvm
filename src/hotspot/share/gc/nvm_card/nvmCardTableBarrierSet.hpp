@@ -272,7 +272,6 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
     
     static void c1_limited_oop_store_in_heap(oop base, oop* addr, oop value) {
-      ShouldNotReachHere();
       // only called when value is thread local
       assert(base != nullptr, " ");
 

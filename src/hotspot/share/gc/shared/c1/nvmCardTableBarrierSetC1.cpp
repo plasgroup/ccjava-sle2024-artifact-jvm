@@ -181,7 +181,7 @@ LIR_Opr NVMCardTableBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, 
   LIRGenerator* gen = access.gen();
   bool needs_sync {access.is_oop()};
 
-  printf("generate stub for atomic: decorator=%ld, type = %s\n", access.decorators(), type2name(access.type()));
+  printf("generate stub for atomic compare exchange: decorator=%ld, type = %s\n", access.decorators(), type2name(access.type()));
   // object
   LIRItem& base = access.base().item();
   const address runtime_stub = get_runtime_stub(access.decorators(), access.type(), needs_sync, false, true);
@@ -203,17 +203,26 @@ LIR_Opr NVMCardTableBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, 
   assert(addr->is_register(), "must be a register at this point");
   // value
   if (access.type() == T_LONG) {
+    assert(access.access_emit_info() == nullptr, "sanity check");
     cmp_value.load_item_force(FrameMap::long0_opr);
     new_value.load_item_force(FrameMap::long1_opr);
-  } else {
+  } else if (access.type() == T_OBJECT) {
+    assert(needs_sync, "sanity check");
+    assert(access.access_emit_info() != nullptr, "sanity check");
     cmp_value.load_item_force(FrameMap::rax_oop_opr);
     new_value.load_item();
+  } else if (access.type() == T_INT) {
+    assert(access.access_emit_info() == nullptr, "sanity check");
+    cmp_value.load_item_force(FrameMap::rax_opr);
+    new_value.load_item();
+  } else {
+    ShouldNotReachHere();
   }
 
 
   LIR_Opr result = gen->new_register(T_INT);
 
-  CodeStub* const slow = new NVMCardTableWriteBarrierAtomicStub(lir_cas_int /* for cas, we don't need fine-grained code. lir_cas_int is used for object, long too*/, base.result(), addr, new_value.result(), runtime_stub, access.type(), cmp_value.result(), result);
+  CodeStub* const slow = new NVMCardTableWriteBarrierAtomicStub(lir_cas_int /* for cas, we don't need fine-grained code. lir_cas_int is used for object, long too*/, base.result(), addr, new_value.result(), runtime_stub, access.type(), cmp_value.result(), result, access.access_emit_info(),  needs_sync);
 
   __ branch(lir_cond_always, slow);
     
@@ -292,7 +301,7 @@ LIR_Opr NVMCardTableBarrierSetC1::atomic_add_at_resolved(LIRAccess& access, LIRI
 
   __ move(value.result(), result);
   
-  CodeStub* const slow = new NVMCardTableWriteBarrierAtomicStub(lir_xadd, base.result(), addr, result, runtime_stub, access.type(), LIR_OprFact::illegalOpr, result);
+  CodeStub* const slow = new NVMCardTableWriteBarrierAtomicStub(lir_xadd, base.result(), addr, result, runtime_stub, access.type(), LIR_OprFact::illegalOpr, result, nullptr, false);
 
   __ branch(lir_cond_always, slow);
     

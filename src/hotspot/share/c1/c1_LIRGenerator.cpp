@@ -1551,8 +1551,21 @@ void LIRGenerator::do_CompareAndSwap(Intrinsic* x, ValueType* type) {
   assert(cmp.type()->tag() == type->tag(), "invalid type");
   assert(val.type()->tag() == type->tag(), "invalid type");
 
+  #ifdef OUR_PERSIST
+
+  assert(x->state() != nullptr, "must be");
+  
+  CodeEmitInfo* info = nullptr;
+  if (as_BasicType(type) == T_OBJECT) {
+    info = state_for(x, x->state_before());
+  }
+  
+  LIR_Opr result = access_atomic_cmpxchg_at(IN_HEAP, as_BasicType(type),
+                                            obj, offset, cmp, val, info);
+  #else
   LIR_Opr result = access_atomic_cmpxchg_at(IN_HEAP, as_BasicType(type),
                                             obj, offset, cmp, val);
+  #endif
   set_result(x, result);
 }
 
@@ -1787,6 +1800,22 @@ void LIRGenerator::access_store_at(DecoratorSet decorators, BasicType type,
   }
 }
 
+#ifdef OUR_PERSIST
+LIR_Opr LIRGenerator::access_atomic_cmpxchg_at(DecoratorSet decorators, BasicType type,
+                                               LIRItem& base, LIRItem& offset, LIRItem& cmp_value, LIRItem& new_value, CodeEmitInfo* info) {
+  decorators |= ACCESS_READ;
+  decorators |= ACCESS_WRITE;
+  // Atomic operations are SEQ_CST by default
+  decorators |= ((decorators & MO_DECORATOR_MASK) == 0) ? MO_SEQ_CST : 0;
+  LIRAccess access(this, decorators, base, offset, type, nullptr, info);
+  assert(!is_reference_type(type) || access.is_raw() || (is_reference_type(type) && info != nullptr), "sanity check");
+  if (access.is_raw()) {
+    return _barrier_set->BarrierSetC1::atomic_cmpxchg_at(access, cmp_value, new_value);
+  } else {
+    return _barrier_set->atomic_cmpxchg_at(access, cmp_value, new_value);
+  }
+}
+#else
 LIR_Opr LIRGenerator::access_atomic_cmpxchg_at(DecoratorSet decorators, BasicType type,
                                                LIRItem& base, LIRItem& offset, LIRItem& cmp_value, LIRItem& new_value) {
   decorators |= ACCESS_READ;
@@ -1800,6 +1829,8 @@ LIR_Opr LIRGenerator::access_atomic_cmpxchg_at(DecoratorSet decorators, BasicTyp
     return _barrier_set->atomic_cmpxchg_at(access, cmp_value, new_value);
   }
 }
+
+#endif
 
 LIR_Opr LIRGenerator::access_atomic_xchg_at(DecoratorSet decorators, BasicType type,
                                             LIRItem& base, LIRItem& offset, LIRItem& value) {

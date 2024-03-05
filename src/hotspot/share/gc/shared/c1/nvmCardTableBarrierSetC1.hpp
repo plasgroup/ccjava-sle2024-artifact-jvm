@@ -77,11 +77,12 @@ class NVMCardTableWriteBarrierAtomicStub : public CodeStub {
   BasicType _type;
   LIR_Opr _cmp;
   LIR_Opr _res;
-
+  CodeEmitInfo* _info;
+  bool _needs_sync;
  public:
   // addr (the address of the object head) and value must be registers.
   NVMCardTableWriteBarrierAtomicStub(LIR_Code code, LIR_Opr obj, LIR_Opr addr, LIR_Opr value,
-                              address runtime_stub, BasicType type, LIR_Opr cmp, LIR_Opr res)
+                              address runtime_stub, BasicType type, LIR_Opr cmp, LIR_Opr res, CodeEmitInfo* info, bool needs_sync)
       : _code(code),
         _obj(obj),
         _addr(addr),
@@ -89,14 +90,24 @@ class NVMCardTableWriteBarrierAtomicStub : public CodeStub {
         _runtime_stub(runtime_stub),
         _type(type),
         _cmp(cmp),
-        _res(res) {
+        _res(res),
+        _info(nullptr),
+        _needs_sync(needs_sync) {
           assert(value->is_register(), "value should be register");
           assert(addr->is_register(), "addr should be register");
           assert(obj->is_register(), "obj should be register");
           assert((cmp->is_valid() && cmp->is_register()) || (!cmp->is_valid()), "cmp should be register or illegal");
           assert(res->is_register(), "res should be register");
+          // clone
+          assert(!is_reference_type(type) || (is_reference_type(type) && info != nullptr), "sanity check");
+          
+          if (info != nullptr) {
+            _info = new CodeEmitInfo(info);
+          }
+
         }
 
+  CodeEmitInfo* info() const { return _info; }
   LIR_Code code() const { return _code; }
   LIR_Opr obj() const { return _obj; }
   LIR_Opr addr() const { return _addr; }
@@ -106,10 +117,15 @@ class NVMCardTableWriteBarrierAtomicStub : public CodeStub {
   BasicType type() const { return _type; }
   LIR_Opr cmp() const { return _cmp; }
   LIR_Opr res() const { return _res; }
+  bool needs_sync() const { return _needs_sync; }
 
   virtual void emit_code(LIR_Assembler* ce);
   virtual void visit(LIR_OpVisitState* visitor) {
-    // don't pass in the code emit info since it's processed in the fast path
+    if (_info != nullptr) {
+      assert(_code != lir_xadd, "sanity check");
+      assert(_type != T_LONG && _type != T_INT, "sanity check");
+      visitor->do_info(_info);
+    }
     visitor->do_input(_obj);
     visitor->do_input(_addr);
     visitor->do_input(_value);

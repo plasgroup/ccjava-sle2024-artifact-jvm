@@ -298,9 +298,13 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
   void access_load(DecoratorSet decorators, BasicType type,
                    LIR_Opr addr, LIR_Opr result);
 
+  #ifdef OUR_PERSIST
+  LIR_Opr access_atomic_cmpxchg_at(DecoratorSet decorators, BasicType type,
+                                   LIRItem& base, LIRItem& offset, LIRItem& cmp_value, LIRItem& new_value, CodeEmitInfo*  info = nullptr);
+  #else
   LIR_Opr access_atomic_cmpxchg_at(DecoratorSet decorators, BasicType type,
                                    LIRItem& base, LIRItem& offset, LIRItem& cmp_value, LIRItem& new_value);
-
+  #endif
   LIR_Opr access_atomic_xchg_at(DecoratorSet decorators, BasicType type,
                                 LIRItem& base, LIRItem& offset, LIRItem& value);
 

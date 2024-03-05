@@ -1038,6 +1038,14 @@ void NVMCardTableBarrierSetAssembler::gen_write_barrier_atomic_stub(LIR_Assemble
 
   __ call(RuntimeAddress(stub->runtime_stub()));
 
+  if (stub->needs_sync()) {
+    assert(__ rsp_offset() == 0, "frame size should be fixed");
+    assert(stub->runtime_stub() == Runtime1::entry_for(Runtime1::lagged_synchronization_atomic_cas_id), "sanity check");
+    assert(is_reference_type(stub->type()), "sanity check");
+    ce->add_call_info_here(stub->info());
+    ce->verify_oop_map(stub->info());
+  }
+
   // Move result into place
   if (res != rax) {
     __ movptr(res, rax);

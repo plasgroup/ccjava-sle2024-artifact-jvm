@@ -167,12 +167,18 @@ LIR_Opr NVMCardTableBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, 
   }
   assert(addr->is_register(), "must be a register at this point");
   // value
+  assert(access.access_emit_info() == nullptr, "sanity check");
   if (access.type() == T_LONG) {
     cmp_value.load_item_force(FrameMap::long0_opr);
     new_value.load_item_force(FrameMap::long1_opr);
-  } else {
+  } else if (access.type() == T_OBJECT) {
     cmp_value.load_item_force(FrameMap::rax_oop_opr);
     new_value.load_item();
+  } else if (access.type() == T_INT) {
+    cmp_value.load_item_force(FrameMap::rax_opr);
+    new_value.load_item();
+  } else {
+    ShouldNotReachHere();
   }
 
 

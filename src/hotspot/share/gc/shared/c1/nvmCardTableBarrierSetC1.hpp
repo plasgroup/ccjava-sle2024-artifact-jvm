@@ -150,7 +150,8 @@ private:
   // ['10, 13, 18, 29', '6, 13, 18, 29', '10, 13, 17, 18, 29', '6, 13, 18, 20, 29']
   // [537142272, 537141312, 537273344, 538189888]
   // 805577728: atomic cas. 10 ,13, 18, 28, 29
-  const DecoratorSet decorators_[decorator_base_sz_] = {537141312ULL,538189888ULL, 537142272ULL, 537273344ULL, 805577728ULL, 1100317205504ULL};
+  // 2199828833280ULL: atomic add at.
+  const DecoratorSet decorators_[decorator_base_sz_] = {537141312ULL,538189888ULL, 537142272ULL, 537273344ULL, 805577728ULL, 2199828833280ULL};
   const int runtime_stubs_sz_ {256};
   address runtime_stubs[256];
 

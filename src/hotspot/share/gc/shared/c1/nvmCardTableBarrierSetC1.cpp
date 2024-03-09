@@ -181,7 +181,6 @@ LIR_Opr NVMCardTableBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, 
   LIRGenerator* gen = access.gen();
   bool needs_sync {access.is_oop()};
 
-  printf("generate stub for atomic compare exchange: decorator=%ld, type = %s\n", access.decorators(), type2name(access.type()));
   // object
   LIRItem& base = access.base().item();
   const address runtime_stub = get_runtime_stub(access.decorators(), access.type(), needs_sync, false, true);
@@ -219,6 +218,7 @@ LIR_Opr NVMCardTableBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, 
     ShouldNotReachHere();
   }
 
+  printf("generate stub for atomic compare exchange: decorator=%ld, type = %s\n", access.decorators(), type2name(access.type()));
 
   LIR_Opr result = gen->new_register(T_INT);
 
@@ -267,18 +267,21 @@ LIR_Opr NVMCardTableBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, 
 }
 
 LIR_Opr NVMCardTableBarrierSetC1::atomic_xchg_at_resolved(LIRAccess& access, LIRItem& value) {
-  assert(false, "check");
+  ShouldNotReachHere();
   // LIRItem& base = access.base().item();
   return BarrierSetC1::atomic_xchg_at_resolved(access, value);
 }
 
 LIR_Opr NVMCardTableBarrierSetC1::atomic_add_at_resolved(LIRAccess& access, LIRItem& value) {
   LIRGenerator* gen = access.gen();
-
+  // pmd: 2199828833280
+  // xalan: 2199828833280
   printf("generate stub for atomic add at: decorator=%ld, type = %s\n", access.decorators(), type2name(access.type()));
+  gen->bailout("not now"); return nullptr;
   // object
   LIRItem& base = access.base().item();
-  const address runtime_stub = get_runtime_stub(access.decorators(), access.type(), false, false, false);
+  const address runtime_stub = get_runtime_stub(2199828833280ULL, access.type(), false, false, false);
+  // ShouldNotReachHere();
   
   // field address
   LIR_Opr addr = access.resolved_addr();
@@ -322,7 +325,7 @@ public:
   virtual OopMapSet* generate_code(StubAssembler* sasm) {
     BarrierSetAssembler* const bsa = BarrierSet::barrier_set()->barrier_set_assembler();
     auto nvm_bsa = reinterpret_cast<NVMCardTableBarrierSetAssembler*>(bsa);
-    if (_decorators == 805577728ULL || _decorators == 1100317205504ULL) {
+    if (_decorators == 805577728ULL || _decorators == 2199828833280ULL) {
       // specially for atomic
       puts("generate runtime stub for atomic");
       nvm_bsa->generate_c1_write_barrier_atomic_runtime_stub(sasm, _decorators, _type);

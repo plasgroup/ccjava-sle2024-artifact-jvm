@@ -898,7 +898,7 @@ void NVMCardTableBarrierSetAssembler::generate_c1_write_barrier_atomic_runtime_s
   __ load_parameter(offset_in_words, c_rarg1); offset_in_words++;
   __ load_parameter(offset_in_words, c_rarg2);  offset_in_words++;
 
-  if (decorators != 1100317205504ULL) {
+  if (decorators != 2199828833280ULL) {
     // atomic cas
     __ load_parameter(offset_in_words, c_rarg3);  offset_in_words++;
     __ super_call_VM_leaf(NVMCardTableBarrierSetRuntime::write_nvm_field_post_entry(decorators, type), c_rarg0, c_rarg1, c_rarg2, c_rarg3);

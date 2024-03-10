@@ -237,6 +237,9 @@ LIR_Opr NVMCardTableBarrierSetC1::atomic_xchg_at_resolved(LIRAccess& access, LIR
 LIR_Opr NVMCardTableBarrierSetC1::atomic_add_at_resolved(LIRAccess& access, LIRItem& value) {
   LIRGenerator* gen = access.gen();
 
+  // bailout because in benchmark pmd
+  // Execution never ends
+  gen->bailout("not now"); return nullptr;
   printf("generate stub for atomic add at: decorator=%ld, type = %s\n", access.decorators(), type2name(access.type()));
   // object
   LIRItem& base = access.base().item();

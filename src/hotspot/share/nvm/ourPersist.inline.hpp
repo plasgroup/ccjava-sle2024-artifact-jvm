@@ -482,7 +482,10 @@ inline bool OurPersist::cmp_dram_and_nvm(oop dram, oop nvm, ptrdiff_t offset, Ba
           assert(Raw::oop_load_in_heap_at(nvm, offset) == NULL, "should be NULL");
           return true;
         }
-
+        // does the value have replica?
+        if (dram_v != nullptr && dram_v->nvm_header().fwd() == nullptr) {
+          return false;
+        }
         v1.oop_val = oop(dram_v != NULL ? dram_v->nvm_header().fwd() : NULL);
         v2.oop_val = oop(Raw::oop_load_in_heap_at(nvm, offset));
         break;

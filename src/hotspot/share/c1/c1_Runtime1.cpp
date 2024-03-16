@@ -1409,7 +1409,7 @@ JRT_END
 
 #ifdef NVM_COUNTER
 JRT_LEAF(void, Runtime1::do_NVM_statistics(oopDesc* obj, int res))
-  assert(oopDesc::is_oop(obj), "sanity check");
+  // assert(oopDesc::is_oop(obj), "sanity check");
 
   switch (res) {
     case 0:

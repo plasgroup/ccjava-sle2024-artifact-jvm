@@ -2376,6 +2376,7 @@ void LIRGenerator::do_UnsafePutObject(UnsafePutObject* x) {
   }
   #ifdef OUR_PERSIST
   // decorators |= OURPERSIST_NEEDS_WUPD;
+  bailout("not now"); return;
   assert((decorators & OURPERSIST_NEEDS_WUPD) == 0, "don't update NVM for unsafePutObject");
   #endif
   access_store_at(decorators, type, src, off.result(), data.result());

@@ -299,13 +299,15 @@ bool NVMDebug::cmp_dram_and_nvm_val(oop dram_obj, nvmOop nvm_obj, ptrdiff_t offs
         skip = skip || dram_v != NULL && !OurPersist::is_target(dram_v->klass());
         // Is the field not the target?
         skip = skip || !OurPersist::needs_wupd(dram_obj, offset, DECORATORS_NONE, true);
+
+        v1.oop_val = oop(dram_v != NULL ? dram_v->nvm_header().fwd() : NULL);
+        // Is the value being copied?
+        skip = skip || (v1.oop_val != nullptr && nvmOop(v1.oop_val) ->responsible_thread() != nullptr);
+        v2.oop_val = oop(Raw::oop_load_in_heap_at((oop)nvm_obj, offset));
         if (skip) {
           //assert(Raw::oop_load_in_heap_at(nvm_obj, offset) == NULL, "should be NULL");
           return true;
         }
-
-        v1.oop_val = oop(dram_v != NULL ? dram_v->nvm_header().fwd() : NULL);
-        v2.oop_val = oop(Raw::oop_load_in_heap_at((oop)nvm_obj, offset));
 
         if (v1.long_val != v2.long_val) {
           tty->print("dram_obj: %p, is_recoverable: %d, is_target: %d\n",
@@ -335,10 +337,13 @@ bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
     return true;
   }
 
+  if (!dram_obj->nvm_header().recoverable()) {
+    // skip
+    return true;
+  }
   NVMDebug::obj_cnt++;
 
   assert(nvmHeader::is_fwd(nvm_obj), "");
-  assert(dram_obj->nvm_header().recoverable(), "");
 
   Klass* klass = dram_obj->klass();
   bool has_same_field;
@@ -415,6 +420,7 @@ bool NVMDebug::cmp_dram_and_nvm_obj_during_gc(oop dram_obj) {
         char str[100];
         tty->print("oak: doesn't have same field.\n");
         tty->print("oak: name: %s, obj: %p, offset: %ld, size: %d\n", oak->name()->as_C_string(str, 100), OOP_TO_VOID(dram_obj), field_offset, dram_obj->size());
+        tty->print("DRAM address: %p\n", (void*) AccessInternal::field_addr(dram_obj, field_offset));
         return false;
       }
     }

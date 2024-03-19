@@ -320,10 +320,8 @@ private:
         assert(false, "modify code");
       }
 
-      OrderAccess::fence();
-
       // write back & sfence
-      NVM_FLUSH_LOOP(obj->nvm_header().fwd(), obj->size() * HeapWordSize);
+      NVM_WRITEBACK_LOOP(obj->nvm_header().fwd(), obj->size() * HeapWordSize);
 
     } while (!OurPersist::copy_object_verify_step(obj, obj->nvm_header().fwd(), klass));
 

@@ -125,6 +125,46 @@ public:
   }
 
 protected:
+  void copy_type_array(oop obj, Klass* klass) {
+    TypeArrayKlass* ak = (TypeArrayKlass*)klass;
+    typeArrayOop ao = (typeArrayOop)obj;
+    BasicType array_type = ((ArrayKlass*)ak)->element_type();
+    int array_length = ao->length();
+
+    nvmOop o_rep = obj->nvm_header().fwd();
+    assert(o_rep != nullptr, "must be");
+    typeArrayOop(o_rep)->set_length(array_length);
+
+    void* obj_ptr = OOP_TO_VOID(obj);
+    int base_offset_in_bytes = typeArrayOopDesc::base_offset_in_bytes(array_type);
+    int base_offset_in_words = base_offset_in_bytes / HeapWordSize;
+    assert(base_offset_in_bytes % HeapWordSize == 0, "");
+    HeapWord* to   = (HeapWord*)((char*)o_rep + base_offset_in_bytes);
+    HeapWord* from = (HeapWord*)((char*)obj_ptr + base_offset_in_bytes);
+    Copy::aligned_disjoint_words(from, to, obj->size() - base_offset_in_words);
+  }
+
+  void copy_oop(oop obj, oop o_rep, int offset, oop v, bool is_array) {
+
+    nvmOop v_rep = [](oop v) -> nvmOop {
+      if (v == nullptr || !OurPersist::is_target(v->klass())) {
+        return nullptr;
+      }
+      // v shouldn't be white for a long time
+      nvmOop replica = v->nvm_header().fwd();
+      assert(replica != nullptr, "must be");
+      return replica;
+    }(v);
+
+    
+    if (is_array) {
+      using Raw = BarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP | IS_ARRAY, NVMCardTableBarrierSet>;
+      Raw::oop_store_in_heap_at((oop)o_rep, offset, (oop)v_rep);
+    } else {
+      using Raw = BarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP, NVMCardTableBarrierSet>;
+      Raw::oop_store_in_heap_at((oop)o_rep, offset, (oop)v_rep);
+    }
+  }
   Thread*  _thr;
   NVMWorkListStack* _worklist;
   NVMBarrierSync* _barrier_sync;
@@ -168,13 +208,15 @@ private:
     } else if (klass->is_objArray_klass()) {
       iterate_obj_array(obj, klass);
     } else if (klass->is_typeArray_klass()) {
+      #ifdef OUR_PERSIST_SINGLE_FENCE
       copy_type_array(obj, klass);
+      #endif
     } else {
       assert(false, "modify code");
     }
-
+    #ifdef OUR_PERSIST_SINGLE_FENCE
     NVM_FLUSH_LOOP(obj->nvm_header().fwd(), obj->size() * HeapWordSize);
-
+    #endif
   }
   // returns true iff v gets shaded by this thread in this invocation
   // then shade and push its children
@@ -213,27 +255,6 @@ private:
     assert(v->nvm_header().fwd() != nullptr, "sanity check");
   }
 
-  void copy_oop(oop obj, oop o_rep, int offset, oop v, bool is_array) {
-
-    nvmOop v_rep = [](oop v) -> nvmOop {
-      if (v == nullptr || !OurPersist::is_target(v->klass())) {
-        return nullptr;
-      }
-      // v shouldn't be white for a long time
-      nvmOop replica = v->nvm_header().fwd();
-      assert(replica != nullptr, "must be");
-      return replica;
-    }(v);
-
-    
-    if (is_array) {
-      using Raw = BarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP | IS_ARRAY, NVMCardTableBarrierSet>;
-      Raw::oop_store_in_heap_at((oop)o_rep, offset, (oop)v_rep);
-    } else {
-      using Raw = BarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP, NVMCardTableBarrierSet>;
-      Raw::oop_store_in_heap_at((oop)o_rep, offset, (oop)v_rep);
-    }
-  } 
 
   void iterate_instance_class(oop obj, Klass* klass) {
     using Parent =  CardTableBarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP, NVMCardTableBarrierSet>;
@@ -256,11 +277,15 @@ private:
           oop child = Parent::oop_load_in_heap_at(obj, field_offset);
           assert(oopDesc::is_oop_or_null(child, true), "must be");
           try_shade_and_push(child);
+        #ifdef OUR_PERSIST_SINGLE_FENCE
           copy_oop(obj, (oop)o_rep, field_offset, child, false);
         } else {
           // copy this field
           OurPersist::copy_dram_to_nvm(obj, (oop)o_rep, field_offset, field_type);
         }
+        #else
+        }
+        #endif
       }
     }
   }
@@ -284,28 +309,13 @@ private:
       oop child = Parent::oop_load_in_heap_at(obj, field_offset);
       assert(oopDesc::is_oop_or_null(child, true), "must be");
       try_shade_and_push(child);
+      #ifdef OUR_PERSIST_SINGLE_FENCE
       copy_oop(obj, (oop)o_rep, field_offset, child, true);
+      #endif
     }
   }
   
-  void copy_type_array(oop obj, Klass* klass) {
-    TypeArrayKlass* ak = (TypeArrayKlass*)klass;
-    typeArrayOop ao = (typeArrayOop)obj;
-    BasicType array_type = ((ArrayKlass*)ak)->element_type();
-    int array_length = ao->length();
-
-    nvmOop o_rep = obj->nvm_header().fwd();
-    assert(o_rep != nullptr, "must be");
-    typeArrayOop(o_rep)->set_length(array_length);
-
-    void* obj_ptr = OOP_TO_VOID(obj);
-    int base_offset_in_bytes = typeArrayOopDesc::base_offset_in_bytes(array_type);
-    int base_offset_in_words = base_offset_in_bytes / HeapWordSize;
-    assert(base_offset_in_bytes % HeapWordSize == 0, "");
-    HeapWord* to   = (HeapWord*)((char*)o_rep + base_offset_in_bytes);
-    HeapWord* from = (HeapWord*)((char*)obj_ptr + base_offset_in_bytes);
-    Copy::aligned_disjoint_words(from, to, obj->size() - base_offset_in_words);
-  }
+  
   
 
   private:
@@ -344,6 +354,26 @@ private:
     nvmHeader::lock(obj);
     Klass* klass = obj->klass();
 
+    // if we do not use the single-fence version, i.e, we do not copy in mark phase
+    // then we copy in this phase
+    // and we add mfence per object
+    #ifndef OUR_PERSIST_SINGLE_FENCE
+    if (klass->is_instance_klass()) {
+      iterate_instance_class(obj, klass);
+    } else if (klass->is_objArray_klass()) {
+      iterate_obj_array(obj, klass);
+    } else if (klass->is_typeArray_klass()) {
+      copy_type_array(obj, klass);
+    } else {
+      assert(false, "modify code");
+    }
+
+    // clwb & sfence
+    NVM_WRITEBACK_LOOP(obj->nvm_header().fwd(), obj->size() * HeapWordSize);
+
+    #endif
+
+
     if (!OurPersist::copy_object_verify_step(obj, obj->nvm_header().fwd(), klass)) {
       _worklist->push(obj);
       printf("verification fails\n");
@@ -351,6 +381,57 @@ private:
 
     nvmHeader::unlock(obj);
     
+  }
+
+  void iterate_instance_class(oop obj, Klass* klass) {
+    using Parent =  CardTableBarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP, NVMCardTableBarrierSet>;
+
+    nvmOop o_rep = obj->nvm_header().fwd();
+    assert(o_rep != nullptr, "must be");
+
+    for (InstanceKlass* ik = (InstanceKlass*)klass; ik != nullptr; ik = (InstanceKlass*)ik->super()) {
+      int field_count = ik->java_fields_count();
+      for (int i = 0; i < field_count; i++) {
+        if (accessFlags_from(ik->field_access_flags(i)).is_static()) {
+          continue;
+        }
+        Symbol* field_signature = ik->field_signature(i);
+        BasicType field_type = Signature::basic_type(field_signature);
+        int field_offset = ik->field_offset(i);
+
+        
+        if (is_reference_type(field_type)) {
+          oop child = Parent::oop_load_in_heap_at(obj, field_offset);
+          assert(oopDesc::is_oop_or_null(child, true), "must be");
+          copy_oop(obj, (oop)o_rep, field_offset, child, false);
+        } else {
+          // copy this field
+          OurPersist::copy_dram_to_nvm(obj, (oop)o_rep, field_offset, field_type);
+        }
+      }
+    }
+  }
+
+    // Iterate object array
+  void iterate_obj_array(oop obj, Klass* klass) {
+    using Parent =  CardTableBarrierSet::AccessBarrier<MO_UNORDERED | AS_NORMAL | IN_HEAP | IS_ARRAY, NVMCardTableBarrierSet>;
+
+    auto array_klass = static_cast<ObjArrayKlass*>(klass);
+    BasicType array_type = array_klass->element_type();
+    assert(is_reference_type(array_type), "must be");
+    auto array_obj = static_cast<objArrayOop>(obj);
+    int array_length = array_obj->length();
+
+    nvmOop o_rep = obj->nvm_header().fwd();
+    assert(o_rep != nullptr, "must be");
+    objArrayOop(o_rep)->set_length(array_length);
+
+    for (int i = 0; i < array_length; i++) {
+      ptrdiff_t field_offset = objArrayOopDesc::base_offset_in_bytes() + type2aelembytes(array_type) * i;
+      oop child = Parent::oop_load_in_heap_at(obj, field_offset);
+      assert(oopDesc::is_oop_or_null(child, true), "must be");
+      copy_oop(obj, (oop)o_rep, field_offset, child, true);
+    }
   }
 
 };
@@ -392,9 +473,9 @@ void OurPersist::ensure_recoverable(Handle h_obj) {
     if (n_shaded == 0) {
       break;
     }
-
+    #ifdef OUR_PERSIST_SINGLE_FENCE
     NVM_FENCE
-
+    #endif
     handshake();
     copier.process();
     

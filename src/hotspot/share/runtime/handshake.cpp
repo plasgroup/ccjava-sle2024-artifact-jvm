@@ -303,7 +303,7 @@ class VM_HandshakeLiveThreads: public VM_Handshake {
         continue;
       }
 
-
+      // it brings little positive effect
       if (NVMBarrierSync::is_same_group(target, caller)) {
         // threads in the same group will sync later
         continue;

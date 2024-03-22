@@ -284,6 +284,7 @@ void NVMCounter::print() {
   tty->print_cr(NVMCOUNTER_PREFIX "half barrier count: %u", _n_half_barrier.load());
   tty->print_cr(NVMCOUNTER_PREFIX "no barrier count: %u", _n_no_barrier.load());
   tty->print_cr(NVMCOUNTER_PREFIX "barrier reduction: %f", static_cast<double>(_n_no_barrier.load()) / static_cast<double>(_n_no_barrier.load() + _n_half_barrier.load() + _n_full_barrier.load()));
+  tty->print_cr(NVMCOUNTER_PREFIX "verification fail: %d\n", _n_fail.load());
 }
 
 class CountObjectSnapshotDuringGC : public ObjectClosure {

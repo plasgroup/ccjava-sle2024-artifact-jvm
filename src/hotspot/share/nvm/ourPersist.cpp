@@ -376,7 +376,9 @@ private:
 
     if (!OurPersist::copy_object_verify_step(obj, obj->nvm_header().fwd(), klass)) {
       _worklist->push(obj);
-      printf("verification fails\n");
+      #ifdef NVM_COUNTER
+      NVMCounter::inc_fail();
+      #endif
     }
 
     nvmHeader::unlock(obj);

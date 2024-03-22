@@ -41,7 +41,11 @@ class NVMCounter: public CHeapObj<mtNone> {
     inline static std::atomic<int> _n_half_barrier {0};
     // number of write barrier eliminated by the left hand analysis
     inline static std::atomic<int> _n_no_barrier {0};
+    inline static std::atomic<int> _n_fail {0};
   public:
+    inline static void inc_fail() {
+      ++_n_fail;
+    }
     inline static void inc_handshake() {
       ++_n_handshake;
     }

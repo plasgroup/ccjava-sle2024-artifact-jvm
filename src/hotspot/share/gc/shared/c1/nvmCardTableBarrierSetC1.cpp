@@ -146,7 +146,6 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
 LIR_Opr NVMCardTableBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value) {
   LIRGenerator* gen = access.gen();
 
-  printf("generate stub for atomic: decorator=%ld, type = %s\n", access.decorators(), type2name(access.type()));
   // object
   LIRItem& base = access.base().item();
   const address runtime_stub = get_runtime_stub(access.decorators(), access.type());
@@ -240,7 +239,6 @@ LIR_Opr NVMCardTableBarrierSetC1::atomic_add_at_resolved(LIRAccess& access, LIRI
   // bailout because in benchmark pmd
   // Execution never ends
   gen->bailout("not now"); return nullptr;
-  printf("generate stub for atomic add at: decorator=%ld, type = %s\n", access.decorators(), type2name(access.type()));
   // object
   LIRItem& base = access.base().item();
   const address runtime_stub = get_runtime_stub(access.decorators(), access.type());
@@ -289,7 +287,6 @@ public:
     auto nvm_bsa = reinterpret_cast<NVMCardTableBarrierSetAssembler*>(bsa);
     if (_decorators == 805577728ULL || _decorators == 1100317205504ULL) {
       // specially for atomic
-      puts("generate runtime stub for atomic");
       nvm_bsa->generate_c1_write_barrier_atomic_runtime_stub(sasm, _decorators, _type);
     } else {
       nvm_bsa->generate_c1_write_barrier_runtime_stub(sasm, _decorators, _type);

@@ -218,7 +218,6 @@ LIR_Opr NVMCardTableBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, 
     ShouldNotReachHere();
   }
 
-  printf("generate stub for atomic compare exchange: decorator=%ld, type = %s\n", access.decorators(), type2name(access.type()));
 
   LIR_Opr result = gen->new_register(T_INT);
 
@@ -277,8 +276,6 @@ LIR_Opr NVMCardTableBarrierSetC1::atomic_add_at_resolved(LIRAccess& access, LIRI
 
   // bailout because in benchmark pmd
   // Execution never ends
-  gen->bailout("not now"); return nullptr;
-  printf("generate stub for atomic add at: decorator=%ld, type = %s\n", access.decorators(), type2name(access.type()));
   gen->bailout("not now"); return nullptr;
   // object
   LIRItem& base = access.base().item();

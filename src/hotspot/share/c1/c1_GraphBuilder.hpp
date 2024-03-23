@@ -79,12 +79,12 @@ class EscapeInfo{
     }
 
     if (_escape_info->contains({*mi, bci}) || _escape_info->contains({*mi, -1})) {
-      // if (_rhs_info->contains({*mi, bci}) || _rhs_info->contains({*mi, -1})) {
-      //   // need write barrier with handshake
-      //   return 0;
-      // }
+      if (_rhs_info->contains({*mi, bci}) || _rhs_info->contains({*mi, -1})) {
+        // need write barrier with handshake
+        return 0;
+      }
       // need write barrier
-      return 0;
+      return 1;
     }
 
     // no write barrier

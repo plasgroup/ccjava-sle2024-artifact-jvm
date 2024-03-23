@@ -13,6 +13,7 @@
 #include "oops/oop.hpp"
 #include "oops/nvmHeader.hpp"
 
+#include "nvm/nvmCounter.hpp"
 class NVMCardTableBarrierSet: public CardTableBarrierSet {
   friend class VMStructs;
 
@@ -179,6 +180,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
           Raw::store_in_heap_at(oop(replica), offset, value);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
+
+          NVMCounter::inc_write();
         }
         // Store in DRAM.
         Parent::store_in_heap(addr, value);
@@ -192,6 +195,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
         Raw::store_in_heap_at(oop(replica), offset, value);
         NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
+
+        NVMCounter::inc_write();
       }
 
     }
@@ -285,6 +290,8 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
           }
           Raw::oop_store_in_heap_at(oop(replica), offset, nvm_val);
           NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
+
+          NVMCounter::inc_write();
         }
         // Store in DRAM.
         Parent::template oop_store_in_heap(addr, value);
@@ -303,7 +310,9 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         // Store in NVM.
         ptrdiff_t offset = static_cast<ptrdiff_t>(reinterpret_cast<char*>(addr) - reinterpret_cast<char*>(cast_from_oop<oopDesc*>(base)));
         Raw::oop_store_in_heap_at(oop(replica), offset, nvm_val);
-        NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));
+        NVM_WRITEBACK(AccessInternal::field_addr(oop(replica), offset));        
+        
+        NVMCounter::inc_write();
 
       }
     }

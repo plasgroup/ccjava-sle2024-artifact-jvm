@@ -86,7 +86,9 @@ class EscapeInfo{
       // need write barrier
       return 1;
     }
-
+    #ifdef OUR_PERSIST_ALWAYS_BARRIER
+    return 0;
+    #endif
     // no write barrier
     return 2;
   }

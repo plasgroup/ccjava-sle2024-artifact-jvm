@@ -79,6 +79,9 @@ class EscapeInfo{
     }
 
     if (_escape_info->contains({*mi, bci}) || _escape_info->contains({*mi, -1})) {
+      #ifdef OUR_PERSIST_ALWAYS_HANDSHAKE
+      return 0;
+      #endif
       if (_rhs_info->contains({*mi, bci}) || _rhs_info->contains({*mi, -1})) {
         // need write barrier with handshake
         return 0;

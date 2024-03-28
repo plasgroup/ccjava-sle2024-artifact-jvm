@@ -202,6 +202,13 @@ void print_bytecode_count() {
   }
 }
 
+#ifdef NVM_COUNTER
+class NVMCounterThreadClosure: public ThreadClosure {
+  void do_thread(Thread* thread) {
+    thread->nvm_counter()->exit(DEBUG_ONLY(thread));
+  }
+};
+#endif // NVM_COUNTER
 
 // General statistics printing (profiling ...)
 void print_statistics() {
@@ -345,6 +352,15 @@ void print_statistics() {
   if (PrintNMTStatistics) {
     MemTracker::final_report(tty);
   }
+
+#ifdef NVM_COUNTER
+  {
+    MutexLocker ml(Threads_lock);
+    NVMCounterThreadClosure tc;
+    Threads::threads_do(&tc);
+    NVMCounter::print();
+  }
+#endif // NVM_COUNTER
 
   ThreadsSMRSupport::log_statistics();
 }
@@ -525,24 +541,7 @@ void before_exit(JavaThread* thread) {
   #undef BEFORE_EXIT_DONE
 }
 
-#ifdef NVM_COUNTER
-class NVMCounterThreadClosure: public ThreadClosure {
-  void do_thread(Thread* thread) {
-    thread->nvm_counter()->exit(DEBUG_ONLY(thread));
-  }
-};
-#endif // NVM_COUNTER
-
 void vm_exit(int code) {
-  #ifdef NVM_COUNTER
-  {
-    MutexLocker ml(Threads_lock);
-    NVMCounterThreadClosure tc;
-    Threads::threads_do(&tc);
-    NVMCounter::print();
-  }
-#endif // NVM_COUNTER
-
   Thread* thread =
       ThreadLocalStorage::is_initialized() ? Thread::current_or_null() : NULL;
   if (thread == NULL) {

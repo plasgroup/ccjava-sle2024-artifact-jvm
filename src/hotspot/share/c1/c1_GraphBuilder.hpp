@@ -78,22 +78,37 @@ class EscapeInfo{
       return 0;
     }
 
-    if (_escape_info->contains({*mi, bci}) || _escape_info->contains({*mi, -1})) {
-      #ifdef OUR_PERSIST_ALWAYS_HANDSHAKE
-      return 0;
-      #endif
-      if (_rhs_info->contains({*mi, bci}) || _rhs_info->contains({*mi, -1})) {
-        // need write barrier with handshake
-        return 0;
-      }
-      // need write barrier
-      return 1;
+#ifdef ASSERT
+    if (CCJavaEliminateBarrier && CCJavaEliminateHandshake) {
+      if (!_escape_info->contains({*mi, bci}) &&
+          !_escape_info->contains({*mi, -1})))
+          assert(_rhs_info->contains({*mi, bci}) ||
+                 _rhs_info->contains({*mi, -1}),
+                 "both should not be analysed unnecessary");
     }
-    #ifdef OUR_PERSIST_ALWAYS_BARRIER
-    return 0;
-    #endif
-    // no write barrier
-    return 2;
+#endif // ASSERT
+    
+    if (CCJavaEliminateBarrier) {
+      if (!_escape_info->contains({*mi, bci}) &&
+          !_escape_info->contains({*mi, -1})) {
+          if (CCJavaEliminateVerbose)
+            printf("[CCJava] %s.%s at %d => wb eliminated\n", class_name, method_name, bci);
+          return 2;
+      }
+    }
+
+    if (CCJavaEliminateHandshake) {
+      if (!_rhs_info->contains({*mi, bci}) &&
+          !_rhs_info->contains({*mi, -1})) {
+          if (CCJavaEliminateVerbose)
+            printf("[CCJava] %s.%s at %d => hs eliminated\n", class_name, method_name, bci);
+          return 1;
+      }
+    }
+
+    if (CCJavaEliminateVerbose)
+      printf("[CCJava] %s.%s at %d => preserved\n", class_name, method_name, bci);
+    return 0; // preserve write barrier
   }
 private:
   // constructor is private

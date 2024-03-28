@@ -557,8 +557,18 @@ const intx ObjectAlignmentInBytes = 8;
                                                                             \
   product(ccstr, NativeMemoryTracking, "off",                               \
           "Native memory tracking options")                                 \
-  product(ccstr, AnalysisPath, "",                                        \
-          "directory of the analysis results")                                 \
+                                                                            \
+  product(ccstr, AnalysisPath, "",                                          \
+          "directory of the analysis results")                              \
+                                                                            \
+  product(bool, CCJavaEliminateHandshake, false,                            \
+          "Eliminate redundant handshakes in write barriers")               \
+                                                                            \
+  product(bool, CCJavaEliminateBarrier, false,                              \
+          "Eliminate redundant write barriers")                             \
+                                                                            \
+  product(bool, CCJavaEliminateVerbose, false,                              \
+          "Print debug information about redundant write barrier elision")  \
                                                                             \
   product(bool, PrintNMTStatistics, false, DIAGNOSTIC,                      \
           "Print native memory tracking summary data if it is on")          \

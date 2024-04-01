@@ -53,11 +53,12 @@ class EscapeInfo{
   EscapeInfo(const EscapeInfo&) = delete;
   EscapeInfo& operator=(const EscapeInfo&) = delete;
 
+  enum AnalysisResults {
+    KEEP_BARRIER = 0x1,
+    KEEP_SYNC    = 0x2,
+  };
 
-  // 0: needs whole write barrier
-  // 1: needs half write barrier, i.e., no handshake
-  // 2: needs no write barrier
-  auto get_analysis_result(const char* const class_name, const char* const method_name, const char* const signature, const int bci) -> int {
+  int get_analysis_result(const char* class_name, const char* method_name, const char* signature, int bci) {
 
     if (_name2mi.table_size() == 0) {
       return 0;
@@ -88,27 +89,31 @@ class EscapeInfo{
     }
 #endif // ASSERT
     
+    int results = 0;
+
     if (CCJavaEliminateBarrier) {
-      if (!_escape_info->contains({*mi, bci}) &&
-          !_escape_info->contains({*mi, -1})) {
-          if (CCJavaEliminateVerbose)
-            printf("[CCJava] %s.%s at %d => wb eliminated\n", class_name, method_name, bci);
-          return 2;
-      }
-    }
+      if (_escape_info->contains({*mi, bci}) ||
+          _escape_info->contains({*mi, -1}))
+        results |= KEEP_BARRIER;
+      else if (CCJavaEliminateVerbose)
+        printf("[CCJava] %s.%s at %d => wb eliminated\n", class_name, method_name, bci);  
+    } else
+      results |= KEEP_BARRIER;
 
     if (CCJavaEliminateHandshake) {
-      if (!_rhs_info->contains({*mi, bci}) &&
-          !_rhs_info->contains({*mi, -1})) {
-          if (CCJavaEliminateVerbose)
-            printf("[CCJava] %s.%s at %d => hs eliminated\n", class_name, method_name, bci);
-          return 1;
-      }
-    }
+      if (_rhs_info->contains({*mi, bci}) ||
+          _rhs_info->contains({*mi, -1}))
+        results |= KEEP_SYNC;
+      else if (CCJavaEliminateVerbose)
+        printf("[CCJava] %s.%s at %d => hs eliminated\n", class_name, method_name, bci);
+    } else
+      results |= KEEP_SYNC;
 
     if (CCJavaEliminateVerbose)
-      printf("[CCJava] %s.%s at %d => preserved\n", class_name, method_name, bci);
-    return 0; // preserve write barrier
+      if (results == (KEEP_BARRIER | KEEP_SYNC))
+        printf("[CCJava] %s.%s at %d => preserved\n", class_name, method_name, bci);
+
+    return results;
   }
 private:
   // constructor is private
@@ -399,40 +404,39 @@ class GraphBuilder {
   // notice it's private
   // to code easier, return the parameter itself
 
-  // T in [StoreField, StoreIndexed]
-  template<typename T>
-  auto check(T* t) -> T* {
-    int analysis_result = EscapeInfo::getInstance().get_analysis_result(
-        method()->holder()->name()->as_utf8(),
-        method()->name()->as_utf8(),
-        method()->signature()->as_symbol()->as_utf8(),
-        bci());
-
-    switch (analysis_result) {
-      case 0:
-          // whole write barrier
-          t->set_needs_wupd_true();
-          t->set_needs_sync_true();
-          assert(t->needs_wupd(), "sanity check");
-          assert(t->needs_sync(), "sanity check");
-          break;
-      case 1:
-          // write barrier without handshake
-          t->set_needs_wupd_true();
-          assert(t->needs_wupd(), "sanity check");
-          assert(!t->needs_sync(), "sanity check");
-          break;
-      case 2:
-          // no write barrier
-          assert(!t->needs_wupd(), "sanity check");
-          assert(!t->needs_sync(), "sanity check");
-          break;
-    }
-
-
-    return t;
+  int get_analysis_results() {
+    const char* class_name = method()->holder()->name()->as_utf8();
+    const char* method_name = method()->name()->as_utf8();
+    const char* signature = method()->signature()->as_symbol()->as_utf8();
+    EscapeInfo& a = EscapeInfo::getInstance();
+    return a.get_analysis_result(class_name, method_name, signature, bci());
   }
- 
+
+  StoreField* check(StoreField* x) {
+    int results = get_analysis_results();
+
+    if (x->field()->is_static())
+      x->set_needs_wupd_true();
+    else if ((results & EscapeInfo::AnalysisResults::KEEP_BARRIER))
+      x->set_needs_wupd_true();
+    
+    if (results & EscapeInfo::AnalysisResults::KEEP_SYNC)
+      x->set_needs_sync_true();
+
+    return x;
+  }
+
+  StoreIndexed* check(StoreIndexed* x) {
+    int results = get_analysis_results();
+
+    if ((results & EscapeInfo::AnalysisResults::KEEP_BARRIER))
+      x->set_needs_wupd_true();
+    
+    if (results & EscapeInfo::AnalysisResults::KEEP_SYNC)
+      x->set_needs_sync_true();
+
+    return x;
+  }
 #endif
   // for all GraphBuilders
   static bool       _can_trap[Bytecodes::number_of_java_codes];

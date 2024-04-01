@@ -7,7 +7,6 @@
 #include "runtime/atomic.hpp"
 #include "utilities/ostream.hpp"
 #include "interpreter/interp_masm.hpp"
-#include <atomic>
 class Klass;
 class Method;
 class MacroAssembler;
@@ -81,10 +80,6 @@ class NVMCounter: public CHeapObj<mtNone> {
   static bool _countable;
 
  public:
- static inline std::atomic<int> _n_write {0};
- static void inc_write() {
-  _n_write++;
- }
   NVMCounter(DEBUG_ONLY(Thread* cur_thread)) {
     entry(DEBUG_ONLY(cur_thread));
   }

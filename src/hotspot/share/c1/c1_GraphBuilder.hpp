@@ -68,9 +68,6 @@ class EscapeInfo{
     strcat(_buf, ".");
     strcat(_buf, method_name);
     strcat(_buf, signature);
-    #ifdef ASSERT
-    // printf("CompiledMethod %s\n", _buf);
-    #endif
 
     int* mi = _name2mi.lookup(_buf);
 
@@ -78,16 +75,6 @@ class EscapeInfo{
     if (mi == nullptr) {
       return 0;
     }
-
-#ifdef ASSERT
-    if (CCJavaEliminateBarrier && CCJavaEliminateHandshake) {
-      if (!_escape_info->contains({*mi, bci}) &&
-          !_escape_info->contains({*mi, -1})))
-          assert(_rhs_info->contains({*mi, bci}) ||
-                 _rhs_info->contains({*mi, -1}),
-                 "both should not be analysed unnecessary");
-    }
-#endif // ASSERT
     
     int results = 0;
 

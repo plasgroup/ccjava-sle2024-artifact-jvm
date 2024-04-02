@@ -229,7 +229,6 @@ void Canonicalizer::do_StoreField     (StoreField*      x) {
       set_canonical(new StoreField(x->obj(), x->offset(), x->field(), value, x->is_static(),
                                    x->state_before(), x->needs_patching()));
 
-
       if (nw) {
         canonical()->as_StoreField()->set_needs_wupd_true();
       }

@@ -61,7 +61,7 @@ class EscapeInfo{
   int get_analysis_result(const char* class_name, const char* method_name, const char* signature, int bci) {
 
     if (_name2mi.table_size() == 0) {
-      return 0;
+      return KEEP_BARRIER | KEEP_SYNC;
     }
     
     strcpy(_buf, class_name);
@@ -73,7 +73,7 @@ class EscapeInfo{
 
     // method is not analyzed
     if (mi == nullptr) {
-      return 0;
+      return KEEP_BARRIER | KEEP_SYNC;
     }
     
     int results = 0;
@@ -82,8 +82,6 @@ class EscapeInfo{
       if (_escape_info->contains({*mi, bci}) ||
           _escape_info->contains({*mi, -1}))
         results |= KEEP_BARRIER;
-      else if (CCJavaEliminateVerbose)
-        printf("[CCJava] %s.%s at %d => wb eliminated\n", class_name, method_name, bci);  
     } else
       results |= KEEP_BARRIER;
 
@@ -91,14 +89,8 @@ class EscapeInfo{
       if (_rhs_info->contains({*mi, bci}) ||
           _rhs_info->contains({*mi, -1}))
         results |= KEEP_SYNC;
-      else if (CCJavaEliminateVerbose)
-        printf("[CCJava] %s.%s at %d => hs eliminated\n", class_name, method_name, bci);
     } else
       results |= KEEP_SYNC;
-
-    if (CCJavaEliminateVerbose)
-      if (results == (KEEP_BARRIER | KEEP_SYNC))
-        printf("[CCJava] %s.%s at %d => preserved\n", class_name, method_name, bci);
 
     return results;
   }
@@ -402,13 +394,39 @@ class GraphBuilder {
   StoreField* check(StoreField* x) {
     int results = get_analysis_results();
 
-    if (x->field()->is_static())
+    if (x->field()->is_static()) {
       x->set_needs_wupd_true();
-    else if ((results & EscapeInfo::AnalysisResults::KEEP_BARRIER))
+      if (CCJavaEliminateVerbose)
+        printf("[CCJava] %s.%s at %d (putstatic)=> keep wb\n",
+                method()->holder()->name()->as_utf8(),
+                method()->name()->as_utf8(), bci());
+    } else if ((results & EscapeInfo::AnalysisResults::KEEP_BARRIER)) {
       x->set_needs_wupd_true();
+      if (CCJavaEliminateVerbose)
+        printf("[CCJava] %s.%s at %d (putfield)=> keep wb\n",
+                method()->holder()->name()->as_utf8(),
+                method()->name()->as_utf8(), bci());
+    } else {
+      if (CCJavaEliminateVerbose)
+        printf("[CCJava] %s.%s at %d (putfield)=> remove wb\n",
+                method()->holder()->name()->as_utf8(),
+                method()->name()->as_utf8(), bci());
+    }
     
-    if (results & EscapeInfo::AnalysisResults::KEEP_SYNC)
+    if (results & EscapeInfo::AnalysisResults::KEEP_SYNC) {
       x->set_needs_sync_true();
+      if (CCJavaEliminateVerbose)
+        printf("[CCJava] %s.%s at %d (%s)=> keep hs\n",
+                method()->holder()->name()->as_utf8(),
+                method()->name()->as_utf8(), bci(),
+                x->is_static() ? "putstatic" : "putfield");
+    } else {
+      if (CCJavaEliminateVerbose)
+        printf("[CCJava] %s.%s at %d (%s)=> remove hs\n",
+                method()->holder()->name()->as_utf8(),
+                method()->name()->as_utf8(), bci(),
+                x->is_static() ? "putstatic" : "putfield");
+    }
 
     return x;
   }
@@ -416,11 +434,31 @@ class GraphBuilder {
   StoreIndexed* check(StoreIndexed* x) {
     int results = get_analysis_results();
 
-    if ((results & EscapeInfo::AnalysisResults::KEEP_BARRIER))
+    if ((results & EscapeInfo::AnalysisResults::KEEP_BARRIER)) {
       x->set_needs_wupd_true();
+      if (CCJavaEliminateVerbose)
+        printf("[CCJava] %s.%s at %d (aastore)=> keep wb\n",
+                method()->holder()->name()->as_utf8(),
+                method()->name()->as_utf8(), bci());
+    } else {
+      if (CCJavaEliminateVerbose)
+        printf("[CCJava] %s.%s at %d (aastore)=> remove wb\n",
+                method()->holder()->name()->as_utf8(),
+                method()->name()->as_utf8(), bci());
+    }
     
-    if (results & EscapeInfo::AnalysisResults::KEEP_SYNC)
+    if (results & EscapeInfo::AnalysisResults::KEEP_SYNC) {
       x->set_needs_sync_true();
+      if (CCJavaEliminateVerbose)
+        printf("[CCJava] %s.%s at %d (aastore)=> keep hs\n",
+                method()->holder()->name()->as_utf8(),
+                method()->name()->as_utf8(), bci());
+    } else {
+      if (CCJavaEliminateVerbose)
+        printf("[CCJava] %s.%s at %d (aastore)=> remove hs\n",
+                method()->holder()->name()->as_utf8(),
+                method()->name()->as_utf8(), bci());
+    }
 
     return x;
   }

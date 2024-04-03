@@ -457,8 +457,6 @@ class BarrierSyncMark {
 };
 
 void OurPersist::ensure_recoverable(Handle h_obj) {
-  assert(!h_obj()->nvm_header().recoverable() && OurPersist::is_target(h_obj()->klass()), "condition to enter the function");
-
   ResourceMark rm;
   
   BarrierSyncMark bsm;

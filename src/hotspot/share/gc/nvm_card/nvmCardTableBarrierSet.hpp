@@ -312,7 +312,6 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
         // Store in NVM.
         oop nvm_val = nullptr;
         if (value != nullptr && OurPersist::is_target(value->klass())) {
-            assert(!(value->nvm_header().recoverable()), "sanity check");
             OurPersist::ensure_recoverable_thread_local(value);
             nvm_val = oop(value->nvm_header().fwd());
           }

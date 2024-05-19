@@ -556,9 +556,9 @@ void OurPersist::ensure_recoverable(oop obj) {
 
 
 void OurPersist::ensure_recoverable_thread_local(oop obj) {
-  assert(!obj->nvm_header().recoverable(), "precondition");
-  assert(OurPersist::is_target(obj->klass()), "precondition");
-  auto thread = Thread::current();
+  assert(OurPersist::is_target(obj->klass()), "not supported");
+  if (obj->nvm_header().recoverable())
+    return;
 
 #ifdef OURPERSIST_DURABLEROOTS_ALL_FALSE
   ShouldNotReachHere();

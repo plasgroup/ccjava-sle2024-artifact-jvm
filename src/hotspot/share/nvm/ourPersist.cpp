@@ -476,7 +476,9 @@ void OurPersist::ensure_recoverable(Handle h_obj) {
     #ifdef OUR_PERSIST_SINGLE_FENCE
     NVM_FENCE
     #endif
+#ifndef OUR_PERSIST_UNSAFE_NO_HANDSHAKE
     handshake();
+#endif /* OUR_PERSIST_UNSAFE_NO_HANDSHAKE */
     copier.process();
     
   } while (!wl->is_empty());

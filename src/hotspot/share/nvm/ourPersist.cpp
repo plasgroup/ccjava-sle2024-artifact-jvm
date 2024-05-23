@@ -188,6 +188,7 @@ public:
 
     while (!_worklist->is_empty()) {
         oop v = _worklist->pop();
+        NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_persistent_obj(v->size());)
         visit(v);
     }
     assert(_worklist->is_empty() && _n_shaded >= 0, "must be");
@@ -467,12 +468,21 @@ void OurPersist::ensure_recoverable(Handle h_obj) {
   NVMWorkListStack* wl = Thread::current()->nvm_work_list();
   assert(wl->is_empty(), "sanity check");
 
+#ifdef NVM_COUNTER
+  int loop_count = 0;
+#endif // NVM_COUNTER
   do {
     int n_shaded = marker.process(h_obj());
     
     if (n_shaded == 0) {
       break;
     }
+
+#ifdef NVM_COUNTER
+    if (loop_count == 0)
+      Thread::current()->nvm_counter()->inc_call_ensure_recoverable();
+#endif // NVM_COUNTER
+
     #ifdef OUR_PERSIST_SINGLE_FENCE
     NVM_FENCE
     #endif
@@ -480,7 +490,10 @@ void OurPersist::ensure_recoverable(Handle h_obj) {
     handshake();
 #endif /* OUR_PERSIST_UNSAFE_NO_HANDSHAKE */
     copier.process();
-    
+
+#ifdef NVM_COUNTER
+    loop_count++;
+#endif // NVM_COUNTER
   } while (!wl->is_empty());
 
 }

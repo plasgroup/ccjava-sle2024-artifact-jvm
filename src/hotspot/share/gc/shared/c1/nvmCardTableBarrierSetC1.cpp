@@ -101,7 +101,10 @@ void NVMCardTableBarrierSetC1::nvm_write_barrier(LIRAccess& access, LIR_Opr addr
     // for non-volatile field, codestub can be skipped if replica == nullptr
     // for volatile field, everything is done in C++ functions
     parent::store_at_resolved(access, value);
+    NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_mfence_hotpath());
+#ifndef OUR_PERSIST_UNSAFE_NO_MFENCE
     __ membar();
+#endif // OUR_PERSIST_UNSAFE_NO_MFENCE
     // replica
     LIR_Opr replica = gen->new_register(T_ADDRESS);
     LIR_Address* replica_addr = new LIR_Address(base.result(), oopDesc::nvm_header_offset_in_bytes(), T_ADDRESS);

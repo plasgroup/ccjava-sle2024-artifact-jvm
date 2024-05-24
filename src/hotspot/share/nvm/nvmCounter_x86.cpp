@@ -108,4 +108,15 @@ void NVMCounter::inc_clwb(Thread* thr) {
   thr->nvm_counter()->inc_clwb();
 }
 
+void NVMCounter::inc_mfence_hotpath(Thread* thr) {
+  thr->nvm_counter()->inc_mfence_hotpath();
+}
+
+void NVMCounter::inc_mfence_hotpath_asm(MacroAssembler* masm) {
+  __ pusha();
+  address func = CAST_FROM_FN_PTR(address, ((void(*)(Thread*))NVMCounter::inc_mfence_hotpath));
+  __ call_VM_leaf(func, r15_thread);
+  __ popa();
+}
+
 #endif // NVM_COUNTER

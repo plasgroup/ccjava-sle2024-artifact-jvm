@@ -22,6 +22,7 @@ unsigned long NVMCounter::_fields_g = 0;
 unsigned long NVMCounter::_volatile_fields_g = 0;
 unsigned long NVMCounter::_clwb_g = 0;
 unsigned long NVMCounter::_call_ensure_recoverable_g = 0;
+unsigned long NVMCounter::_mfence_hotpath_g = 0;
 
 // for debug
 unsigned long NVMCounter::_thr_create = 0;
@@ -56,6 +57,7 @@ void NVMCounter::entry(DEBUG_ONLY(Thread* cur_thread)) {
   _volatile_fields = 0;
   _clwb = 0;
   _call_ensure_recoverable = 0;
+  _mfence_hotpath = 0;
 
   pthread_mutex_lock(&_mtx);
 #ifdef ASSERT
@@ -135,6 +137,10 @@ void NVMCounter::exit(DEBUG_ONLY(Thread* cur_thread)) {
 
   _call_ensure_recoverable_g += _call_ensure_recoverable;
   _call_ensure_recoverable = 0;
+
+  _mfence_hotpath_g += _mfence_hotpath;
+  _mfence_hotpath = 0;
+
   pthread_mutex_unlock(&_mtx);
 }
 
@@ -279,6 +285,7 @@ void NVMCounter::print() {
   tty->print_cr(NVMCOUNTER_PREFIX "_volatile_fields_g: %lu", _volatile_fields_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_clwb_g:            %lu", _clwb_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_call_ensure_recoverable_g: %lu", _call_ensure_recoverable_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "_mfence_hotpath_g: %lu", _mfence_hotpath_g);
 }
 
 class CountObjectSnapshotDuringGC : public ObjectClosure {

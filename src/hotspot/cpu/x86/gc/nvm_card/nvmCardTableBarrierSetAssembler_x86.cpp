@@ -170,8 +170,11 @@ void NVMCardTableBarrierSetAssembler::interpreter_oop_store_at(MacroAssembler* m
                                                       noreg, noreg, noreg, noreg);
   __ jcc(Assembler::zero, done);
   if (needs_wupd) {
+    NVM_COUNTER_ONLY(NVMCounter::inc_mfence_hotpath_asm(masm));
+#ifndef OUR_PERSIST_UNSAFE_NO_MFENCE
     // fence
     __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
+#endif // OUR_PERSIST_UNSAFE_NO_MFENCE
     // tmp1 = obj->nvm_header().fwd()
     NVMCardTableBarrierSetAssembler::load_nvm_fwd(masm, tmp1, tmp2);
     __ jcc(Assembler::zero, done);

@@ -69,7 +69,10 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       Raw::oop_store_in_heap_at(base, offset, value);
 
       if (OurPersist::needs_wupd(base, offset, decorators, true)) {
+        NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_mfence_hotpath();)
+#ifndef OUR_PERSIST_UNSAFE_NO_MFENCE
         OrderAccess::fence();
+#endif // OUR_PERSIST_UNSAFE_NO_MFENCE
         nvmOop before_fwd = base->nvm_header().fwd();
 
         if (before_fwd != NULL) {
@@ -516,7 +519,10 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
       Parent::oop_store_in_heap_at(base, offset, value);
 
       if (OurPersist::needs_wupd(base, offset, decorators, true)) {
+        NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_mfence_hotpath();)
+#ifndef OUR_PERSIST_UNSAFE_NO_MFENCE
         OrderAccess::fence();
+#endif // OUR_PERSIST_UNSAFE_NO_MFENCE
         nvmOop before_fwd = base->nvm_header().fwd();
 
         if (before_fwd != NULL) {
@@ -632,7 +638,11 @@ class NVMCardTableBarrierSet: public CardTableBarrierSet {
 
       bool needs_wupd = OurPersist::needs_wupd(dst_obj, dst_offset_in_bytes, decorators, true);
       if (needs_wupd) {
+        NVM_COUNTER_ONLY(Thread::current()->nvm_counter()->inc_mfence_hotpath();)
+#ifndef OUR_PERSIST_UNSAFE_NO_MFENCE
         OrderAccess::fence();
+#endif // OUR_PERSIST_UNSAFE_NO_MFENCE
+
         nvmOop before_fwd = dst_obj->nvm_header().fwd();
 
         if (before_fwd != NULL) {

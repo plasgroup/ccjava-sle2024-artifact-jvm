@@ -662,8 +662,7 @@ void OurPersist::copy_object_copy_step_thread_local(oop obj, nvmOop nvm_obj, Kla
           oop v = Parent::oop_load_in_heap_at(obj, field_offset);
           nvmOop nvm_v = NULL;
 
-          if (v != NULL && OurPersist::is_target(v->klass())) {
-            assert(!(v->nvm_header().recoverable()), "sanity check");
+          if (v != NULL && OurPersist::is_target(v->klass()) && !v->nvm_header().recoverable()) {
             nvm_v = v->nvm_header().fwd();
             if (nvm_v == nullptr) {
               bool success = OurPersist::shade(v, cur_thread);
@@ -700,19 +699,16 @@ void OurPersist::copy_object_copy_step_thread_local(oop obj, nvmOop nvm_obj, Kla
       oop v = Parent::oop_load_in_heap_at(obj, field_offset);
 
       nvmOop nvm_v = NULL;
-      if (v != NULL && OurPersist::is_target(v->klass())) {
-        assert(!(v->nvm_header().recoverable()), "sanity check");
+      if (v != NULL && OurPersist::is_target(v->klass()) && !v->nvm_header().recoverable()) {
         nvm_v = v->nvm_header().fwd();
-        if (nvm_v == nullptr) {
+        if (nvm_v == NULL) {
           bool success = OurPersist::shade(v, cur_thread);
           assert(success, "must be");
           nvm_v = v->nvm_header().fwd();
           worklist->add(v);
-
         }
         assert(nvmHeader::is_fwd(nvm_v), "nvm_v: %p", nvm_v);
         assert(nvm_v->responsible_thread() == Thread::current(), "fwd: %p", nvm_v);
-
       }
       Raw::oop_store_in_heap_at((oop)nvm_obj, field_offset, (oop)nvm_v);
     }

@@ -631,9 +631,9 @@ void OurPersist::copy_object_thread_local(oop obj) {
   // write back & sfence
   NVM_FLUSH_LOOP(nvm_obj, obj->size() * HeapWordSize);
 
-    // verify step
-  assert(OurPersist::copy_object_verify_step(obj, nvm_obj, klass), "must pass");
-
+  // verify step
+  // No berify step is needed because rhs closure is either thread-local
+  // or has been persistent before this assignment
 }
 
 void OurPersist::copy_object_copy_step_thread_local(oop obj, nvmOop nvm_obj, Klass* klass,

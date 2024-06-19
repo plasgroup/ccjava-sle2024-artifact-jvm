@@ -634,6 +634,9 @@ void OurPersist::copy_object_thread_local(oop obj) {
   // verify step
   // No berify step is needed because rhs closure is either thread-local
   // or has been persistent before this assignment
+#ifdef OUR_PERSIST_REDUNDANT_VERIFY_RACE_FREE_RHS
+  OurPersist::copy_object_verify_step(obj, nvm_obj, klass);
+#endif // OUR_PERSIST_REDUNDANT_VERIFY_RACE_FREE_RHS
 }
 
 void OurPersist::copy_object_copy_step_thread_local(oop obj, nvmOop nvm_obj, Klass* klass,

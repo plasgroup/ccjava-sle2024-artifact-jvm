@@ -31,12 +31,12 @@ class CallRuntimeBarrierSet : AllStatic {
     NVMCardTableBarrierSet::AccessBarrier<ds>::template c1_store_in_heap<T>(base, addr, value);
   };
 
-  template <DecoratorSet ds>
-  inline static int c1_call_runtime_oop_atomic_cmpxchg_in_heap(oopDesc* base, oopDesc**  addr, oopDesc* cmp, oopDesc* value) {
-    int result = NVMCardTableBarrierSet::AccessBarrier<ds>::c1_oop_atomic_cmpxchg_in_heap(base, reinterpret_cast<oop*>(addr), cmp, value);
-    assert(result == 1 || result == 0, "must be");
-    return result;
-  };
+//  template <DecoratorSet ds>
+//  inline static int c1_call_runtime_oop_atomic_cmpxchg_in_heap(oopDesc* base, oopDesc**  addr, oopDesc* cmp, oopDesc* value) {
+//    int result = NVMCardTableBarrierSet::AccessBarrier<ds>::c1_oop_atomic_cmpxchg_in_heap(base, reinterpret_cast<oop*>(addr), cmp, value);
+//    assert(result == 1 || result == 0, "must be");
+//    return result;
+//  };
 
   template <DecoratorSet ds, typename T>
   inline static T c1_call_runtime_atomic_add_at_in_heap(oopDesc* base, T* addr, T value) {

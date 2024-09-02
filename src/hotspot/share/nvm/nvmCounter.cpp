@@ -22,6 +22,8 @@ unsigned long NVMCounter::_fields_g = 0;
 unsigned long NVMCounter::_volatile_fields_g = 0;
 unsigned long NVMCounter::_clwb_g = 0;
 unsigned long NVMCounter::_call_ensure_recoverable_g = 0;
+unsigned long NVMCounter::_handshake_count_g = 0;
+unsigned long NVMCounter::_handshake_total_processed_threads_g = 0;
 
 // for debug
 unsigned long NVMCounter::_thr_create = 0;
@@ -56,6 +58,9 @@ void NVMCounter::entry(DEBUG_ONLY(Thread* cur_thread)) {
   _volatile_fields = 0;
   _clwb = 0;
   _call_ensure_recoverable = 0;
+
+  _handshake_count = 0;
+  _handshake_total_processed_threads = 0;
 
   pthread_mutex_lock(&_mtx);
 #ifdef ASSERT
@@ -135,6 +140,12 @@ void NVMCounter::exit(DEBUG_ONLY(Thread* cur_thread)) {
 
   _call_ensure_recoverable_g += _call_ensure_recoverable;
   _call_ensure_recoverable = 0;
+
+  _handshake_count_g += _handshake_count;
+  _handshake_count = 0;
+  _handshake_total_processed_threads_g += _handshake_total_processed_threads;
+  _handshake_total_processed_threads = 0;
+
   pthread_mutex_unlock(&_mtx);
 }
 
@@ -279,6 +290,8 @@ void NVMCounter::print() {
   tty->print_cr(NVMCOUNTER_PREFIX "_volatile_fields_g: %lu", _volatile_fields_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_clwb_g:            %lu", _clwb_g);
   tty->print_cr(NVMCOUNTER_PREFIX "_call_ensure_recoverable_g: %lu", _call_ensure_recoverable_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "_handshake_count_g: %lu", _handshake_count_g);
+  tty->print_cr(NVMCOUNTER_PREFIX "_handshake_total_processed_threads_g: %lu", _handshake_total_processed_threads_g);
   tty->print_cr(NVMCOUNTER_PREFIX "handshake count: %lu", _n_handshake.load());
   tty->print_cr(NVMCOUNTER_PREFIX "full barrier count: %lu", _n_full_barrier.load());
   tty->print_cr(NVMCOUNTER_PREFIX "half barrier count: %lu", _n_half_barrier.load());

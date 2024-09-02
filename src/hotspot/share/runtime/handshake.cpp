@@ -315,6 +315,10 @@ class VM_HandshakeLiveThreads: public VM_Handshake {
 
     if (number_of_threads_issued < 1) {
       log_handshake_info(start_time_ns, _op->name(), 0, 0, "no threads alive");
+#ifdef NVM_COUNTER
+    assert(_op->name()[0] == 'R', "must be");  // quick check if name() == "Replicate notify"
+    Thread::current()->nvm_counter()->inc_handshake_count(0);
+#endif // NVM_COUNTER
       return;
     }
     // _op was created with a count == 1 so don't double count.
@@ -353,6 +357,10 @@ class VM_HandshakeLiveThreads: public VM_Handshake {
     OrderAccess::acquire();
 
     log_handshake_info(start_time_ns, _op->name(), number_of_threads_issued, emitted_handshakes_executed);
+#ifdef NVM_COUNTER
+    assert(_op->name()[0] == 'R', "must be");  // quick check if name() == "Replicate notify"
+    Thread::current()->nvm_counter()->inc_handshake_count(number_of_threads_issued - emitted_handshakes_executed);
+#endif // NVM_COUNTER
   }
 
   VMOp_Type type() const { return VMOp_HandshakeLiveThreads; }

@@ -76,6 +76,8 @@ class NVMCounter: public CHeapObj<mtNone> {
   unsigned long _volatile_fields;
   unsigned long _clwb;
   unsigned long _call_ensure_recoverable;
+  unsigned long _handshake_count;
+  unsigned long _handshake_total_processed_threads; // total of threads that processed a handshake request
 
   // global counters
   static unsigned long _alloc_dram_g;
@@ -90,6 +92,8 @@ class NVMCounter: public CHeapObj<mtNone> {
   static unsigned long _volatile_fields_g;
   static unsigned long _clwb_g;
   static unsigned long _call_ensure_recoverable_g;
+  static unsigned long _handshake_count_g;
+  static unsigned long _handshake_total_processed_threads_g;
 
   // for debug
   bool _enable;
@@ -159,7 +163,10 @@ class NVMCounter: public CHeapObj<mtNone> {
   inline void inc_volatile_fields() { add_count(&_volatile_fields, 1); }
   inline void inc_clwb()            { add_count(&_clwb, 1); }
   inline void inc_call_ensure_recoverable() { add_count(&_call_ensure_recoverable, 1); }
-
+  inline void inc_handshake_count(unsigned long processed_threads) {
+     add_count(&_handshake_count, 1);
+     add_count(&_handshake_total_processed_threads, processed_threads);
+  }
   static unsigned long get_access(int is_store, int is_volatile, int is_oop, int is_static,
                                   int is_runtime, int is_atomic);
   inline static int access_bool2flags(bool is_store, bool is_volatile, bool is_oop,

@@ -317,7 +317,7 @@ class VM_HandshakeLiveThreads: public VM_Handshake {
       log_handshake_info(start_time_ns, _op->name(), 0, 0, "no threads alive");
 #ifdef NVM_COUNTER
     assert(_op->name()[0] == 'R', "must be");  // quick check if name() == "Replicate notify"
-    Thread::current()->nvm_counter()->inc_handshake_count(0);
+    Thread::current()->nvm_counter()->inc_handshake_count(0, 0);
 #endif // NVM_COUNTER
       return;
     }
@@ -359,7 +359,7 @@ class VM_HandshakeLiveThreads: public VM_Handshake {
     log_handshake_info(start_time_ns, _op->name(), number_of_threads_issued, emitted_handshakes_executed);
 #ifdef NVM_COUNTER
     assert(_op->name()[0] == 'R', "must be");  // quick check if name() == "Replicate notify"
-    Thread::current()->nvm_counter()->inc_handshake_count(number_of_threads_issued - emitted_handshakes_executed);
+    Thread::current()->nvm_counter()->inc_handshake_count(number_of_threads_issued, number_of_threads_issued - emitted_handshakes_executed);
 #endif // NVM_COUNTER
   }
 
